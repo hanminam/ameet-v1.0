@@ -18,9 +18,6 @@ from .models.discussion import DiscussionLog, AgentSettings
 # [전면 수정] 환경에 따라 올바른 SQLAlchemy 엔진을 생성하는 함수
 async def get_engine():
     """환경에 따라 올바른 비동기 SQLAlchemy 엔진을 생성하여 반환합니다."""
-
-    connect_args = {"init_command": "SET autocommit=1"}
-
     # Cloud Run 환경인지 확인
     if settings.INSTANCE_CONNECTION_NAME:
         logger.info("Cloud Run environment detected. Using async Cloud SQL Connector.")
@@ -42,7 +39,6 @@ async def get_engine():
             engine = create_async_engine(
                 "mysql+aiomysql://",
                 creator=get_conn,
-                connect_args=connect_args,
                 echo=False,
                 future=True
             )
@@ -54,12 +50,7 @@ async def get_engine():
             f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}"
             f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
         )
-        engine = create_async_engine(
-            db_url,
-            connect_args=connect_args,
-            echo=True,
-            future=True
-        )
+        engine = create_async_engine(db_url, echo=True, future=True)
         return engine
 
 # --- 애플리케이션의 다른 부분에서 사용할 변수들 ---
