@@ -39,3 +39,7 @@ steps:
 # 빌드가 완료된 최종 이미지를 명시합니다.
 images:
   - 'gcr.io/$PROJECT_ID/ameet-v1:latest'
+
+# 빌드 로그를 Cloud Storage 버킷 대신 Cloud Logging에만 저장하도록 설정합니다.
+options:
+  logging: CLOUD_LOGGING_ONLY
