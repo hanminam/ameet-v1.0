@@ -18,42 +18,45 @@ from .models.discussion import DiscussionLog, AgentSettings
 # [전면 수정] 환경에 따라 올바른 SQLAlchemy 엔진을 생성하는 함수
 async def get_engine():
     """환경에 따라 올바른 비동기 SQLAlchemy 엔진을 생성하여 반환합니다."""
+
+    # [수정] 문제가 되는 on_connect 이벤트를 비활성화하는 인자
+    connect_args = {"init_command": "SET autocommit=1"}
+
     # Cloud Run 환경인지 확인
     if settings.INSTANCE_CONNECTION_NAME:
         logger.info("Cloud Run environment detected. Using async Cloud SQL Connector.")
         
-        # Connector 객체를 초기화 (컨텍스트 매니저 외부에서)
-        connector = Connector()
+        async with Connector() as connector:
+            async def get_conn():
+                conn = await connector.connect_async(
+                    settings.INSTANCE_CONNECTION_NAME,
+                    "aiomysql",
+                    user=settings.DB_USER,
+                    password=settings.DB_PASSWORD,
+                    db=settings.DB_NAME,
+                )
+                return conn
 
-        # 비동기 연결 생성 함수
-        async def get_conn():
-            # aiomysql를 직접 사용하여 비동기 연결 생성
-            conn = await connector.connect_async(
-                settings.INSTANCE_CONNECTION_NAME,
-                "aiomysql",
-                user=settings.DB_USER,
-                password=settings.DB_PASSWORD,
-                db=settings.DB_NAME,
+            engine = create_async_engine(
+                "mysql+aiomysql://",
+                creator=get_conn,
+                connect_args=connect_args,  # <-- 인자 추가
+                echo=False,
+                future=True
             )
-            # aiomysql의 연결 객체를 반환
-            return conn
-
-        # 비동기 엔진 생성
-        engine = create_async_engine(
-            "mysql+aiomysql://",
-            creator=get_conn,
-            echo=False,
-            future=True
-        )
-        return engine
+            return engine
     else:
         logger.info("Local environment detected. Using Public IP.")
-        # 로컬 환경에서는 기존의 공개 IP 주소 방식을 사용
         db_url = (
             f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}"
             f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
         )
-        engine = create_async_engine(db_url, echo=True, future=True)
+        engine = create_async_engine(
+            db_url,
+            connect_args=connect_args,  # <-- 인자 추가
+            echo=True,
+            future=True
+        )
         return engine
 
 # --- 애플리케이션의 다른 부분에서 사용할 변수들 ---
