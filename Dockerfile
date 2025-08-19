@@ -1,16 +1,12 @@
 # 1. 베이스 이미지 설정
 FROM python:3.11-slim
-
-# 2. 작업 디렉토리 설정
 WORKDIR /app
 
-# 3. 의존성 파일만 먼저 복사
+# 1. 변경이 거의 없는 requirements.txt를 먼저 복사
 COPY requirements.txt .
 
-# 4. [수정] 의존성 설치를 먼저 실행
+# 2. 라이브러리 설치 레이어를 먼저 생성 (이 레이어는 거의 변경되지 않음)
 RUN pip install --no-cache-dir -r requirements.txt
-
-# 5. [수정] 의존성 설치 후 Playwright 브라우저 설치
 RUN playwright install chromium
 
 # 6. src 폴더를 명시적으로 복사
