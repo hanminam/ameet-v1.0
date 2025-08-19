@@ -72,7 +72,7 @@ async def init_db_connections():
 
     await init_beanie(
         database=mongo_client.ameet_db,
-        document_models=[DiscussionLog, AgentSettings, User]
+        document_models=[DiscussionLog, AgentSettings]
     )
     logger.info("MongoDB connection and Beanie initialized.")
 
