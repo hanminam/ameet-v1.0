@@ -17,4 +17,4 @@ COPY ./app /app
 # CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 # 5. 서버 실행 명령어: Gunicorn을 통해 uvicorn 워커를 실행하는 방식으로 변경합니다.
-CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "app.main:app", "--bind", "0.0.0.0:8080"]
+CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "main:app", "--bind", "0.0.0.0:8080"]
