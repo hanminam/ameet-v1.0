@@ -1,0 +1,41 @@
+# cloudbuild.yaml
+
+steps:
+  # 1단계: 이전 빌드에서 생성된 이미지를 가져와 캐시로 사용합니다.
+  # 이미지가 없는 첫 빌드에서는 실패하지 않도록 `|| exit 0`을 추가합니다.
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args: ['-c', 'docker pull gcr.io/$PROJECT_ID/ameet-v1:latest || exit 0']
+
+  # 2단계: Docker 이미지를 빌드합니다.
+  # `--cache-from` 플래그를 사용하여 1단계에서 가져온 이미지를 캐시로 활용합니다.
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--cache-from'
+      - 'gcr.io/$PROJECT_ID/ameet-v1:latest'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/ameet-v1:latest'
+      - '.'
+
+  # 3단계: 빌드된 새 이미지를 Container Registry에 Push합니다.
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/ameet-v1:latest']
+
+  # 4단계: 새 이미지로 Cloud Run 서비스를 배포합니다.
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'ameet-v1-0' # ◀ 여기에 Cloud Run 서비스 이름을 정확히 입력하세요.
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/ameet-v1:latest'
+      - '--region'
+      - 'asia-northeast3' # ◀ 여기에 Cloud Run 서비스의 리전을 정확히 입력하세요.
+      - '--platform'
+      - 'managed'
+
+# 빌드가 완료된 최종 이미지를 명시합니다.
+images:
+  - 'gcr.io/$PROJECT_ID/ameet-v1:latest'

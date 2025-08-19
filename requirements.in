@@ -1,0 +1,32 @@
+# Web Framework & Server
+fastapi
+gunicorn
+uvicorn[standard]
+
+# Pydantic & Settings
+pydantic
+pydantic-settings
+python-dotenv
+
+# Databases & ORM/ODM
+sqlalchemy
+aiomysql
+redis>=4.2
+beanie
+motor
+
+# Google Cloud
+# 버전은 pip-compile이 자동으로 최신 버전을 찾도록 합니다.
+cloud-sql-python-connector
+
+# LangChain & AI
+langchain
+langgraph
+langchain-google-genai
+langchain-openai
+langchain-anthropic
+langchain-community
+
+# Tools & Utilities
+tavily-python
+playwright
