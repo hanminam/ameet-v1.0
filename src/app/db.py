@@ -22,27 +22,30 @@ async def get_engine():
     if settings.INSTANCE_CONNECTION_NAME:
         logger.info("Cloud Run environment detected. Using async Cloud SQL Connector.")
         
-        # 비동기 커넥터 초기화
-        async with Connector() as connector:
-            # get_conn 함수는 커넥터가 DB와 안전한 비동기 연결을 생성하도록 합니다.
-            async def get_conn():
-                conn = await connector.connect_async(
-                    settings.INSTANCE_CONNECTION_NAME,
-                    "aiomysql", # SQLAlchemy 엔진과 동일한 비동기 드라이버 사용
-                    user=settings.DB_USER,
-                    password=settings.DB_PASSWORD,
-                    db=settings.DB_NAME,
-                )
-                return conn
+        # Connector 객체를 초기화 (컨텍스트 매니저 외부에서)
+        connector = Connector()
 
-            # 커넥터를 통해 생성된 비동기 연결을 사용하는 엔진 생성
-            engine = create_async_engine(
-                "mysql+aiomysql://",
-                creator=get_conn,
-                echo=False,
-                future=True
+        # 비동기 연결 생성 함수
+        async def get_conn():
+            # aiomysql를 직접 사용하여 비동기 연결 생성
+            conn = await connector.connect_async(
+                settings.INSTANCE_CONNECTION_NAME,
+                "aiomysql",
+                user=settings.DB_USER,
+                password=settings.DB_PASSWORD,
+                db=settings.DB_NAME,
             )
-            return engine
+            # aiomysql의 연결 객체를 반환
+            return conn
+
+        # 비동기 엔진 생성
+        engine = create_async_engine(
+            "mysql+aiomysql://",
+            creator=get_conn,
+            echo=False,
+            future=True
+        )
+        return engine
     else:
         logger.info("Local environment detected. Using Public IP.")
         # 로컬 환경에서는 기존의 공개 IP 주소 방식을 사용
