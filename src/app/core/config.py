@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     DB_HOST: str = "34.64.212.12"
     DB_PORT: str = "3306"
 
+    # [수정] Cloud Run 환경에서 주입되는 인스턴스 연결 이름
+    # 로컬에서는 이 값이 없으므로 None이 됩니다.
+    INSTANCE_CONNECTION_NAME: str | None = None
+
     REDIS_HOST: str = "10.48.219.179"
     REDIS_PORT: int = 6379
 
@@ -34,8 +38,20 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def DATABASE_URL(self) -> str:
-        # 드라이버 부분을 'mysql+aiomysql'로 변경합니다.
-        return f"mysql+aiomysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        # Cloud Run 환경일 경우 (INSTANCE_CONNECTION_NAME이 설정됨)
+        if self.INSTANCE_CONNECTION_NAME:
+            # Unix Socket을 사용하는 내부 주소 형식을 사용합니다.
+            return (
+                f"mysql+aiomysql://{self.DB_USER}:{self.DB_PASSWORD}@"
+                f"/{self.DB_NAME}?unix_socket=/cloudsql/{self.INSTANCE_CONNECTION_NAME}"
+            )
+        # 로컬 환경일 경우 (INSTANCE_CONNECTION_NAME이 없음)
+        else:
+            # 기존의 공개 IP 주소 형식을 사용합니다.
+            return (
+                f"mysql+aiomysql://{self.DB_USER}:{self.DB_PASSWORD}"
+                f"@{self.DB_HOST}:3306/{self.DB_NAME}"
+            )
 
 # 설정 객체 생성
 settings = Settings()
