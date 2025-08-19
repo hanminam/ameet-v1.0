@@ -19,3 +19,10 @@ tavily-python
 playwright
 
 pydantic-settings
+
+# Database Libraries
+sqlalchemy
+pymysql
+redis>=4.2
+beanie
+motor
