@@ -2,13 +2,13 @@
 
 from fastapi import FastAPI
 from .core.config import settings
-from .db import init_db_connections, close_db_connections, redis_client, mongo_client
+from . import db
 
 app = FastAPI(title=settings.APP_TITLE)
 
 # 이벤트 핸들러는 db 모듈의 함수를 그대로 사용합니다.
-app.add_event_handler("startup", init_db_connections)
-app.add_event_handler("shutdown", close_db_connections)
+app.add_event_handler("startup", db.init_db_connections)
+app.add_event_handler("shutdown", db.close_db_connections)
 
 @app.get("/")
 def read_root():
@@ -19,7 +19,7 @@ async def health_check():
     # Redis 상태 확인
     redis_status = "error"
     try:
-        await redis_client.ping()
+        await db.redis_client.ping()
         redis_status = "ok"
     except Exception:
         pass # 오류 로그는 db.py에서 이미 남김
@@ -27,7 +27,7 @@ async def health_check():
     # [신규] MongoDB 상태 확인
     mongo_status = "error"
     try:
-        await mongo_client.server_info()
+        await db.mongo_client.server_info()
         mongo_status = "ok"
     except Exception:
         pass # 오류 로그는 db.py에서 이미 남김
