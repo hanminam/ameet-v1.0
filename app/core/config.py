@@ -4,8 +4,10 @@ import logging
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    # .env 파일을 읽어 환경 변수를 로드하도록 설정
-    # model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # .env 파일을 읽도록 다시 설정합니다.
+    # 이 설정이 있어도, 시스템(Cloud Run)에 동일한 이름의 환경 변수가 있으면
+    # 시스템의 값을 항상 우선적으로 사용합니다.
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra='ignore')
 
     # .env 파일에 정의된 변수들을 타입과 함께 선언
     APP_TITLE: str = "AMEET v1.0"

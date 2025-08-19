@@ -2,7 +2,7 @@ fastapi
 uvicorn[standard]
 gunicorn
 pydantic
-# python-dotenv
+python-dotenv
 
 # LangChain & LLM Libraries
 langchain
