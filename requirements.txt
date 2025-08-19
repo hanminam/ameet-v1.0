@@ -1,0 +1,20 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+
+# LangChain & LLM Libraries
+langchain
+langgraph
+langchain-google-genai
+langchain-openai
+langchain-anthropic
+langchain-community
+
+# Tools
+tavily-python
+
+# PDF Generation (향후 사용)
+playwright
+
+pydantic-settings
