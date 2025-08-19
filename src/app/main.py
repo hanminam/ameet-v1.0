@@ -13,6 +13,11 @@ app = FastAPI(
     version=settings.APP_VERSION,
 )
 
+@app.get("/api/v1/health-check")
+def health_check():
+    """서버의 기본 상태를 확인하는 API"""
+    return {"status": "ok", "message": "Server is healthy."}
+
 #@app.on_event("startup")
 #async def startup_event():
 #    logger.info("Ameet v1.0 application startup.")
