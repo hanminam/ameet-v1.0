@@ -17,5 +17,9 @@ COPY src .
 ENV PYTHONPATH "${PYTHONPATH}:/app/src"
 
 # 6. 서버 실행 명령어
-# PYTHONPATH가 올바르게 설정되었으므로 이 명령어가 정상적으로 동작합니다.
-CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "app.main:app", "--bind", "0.0.0.0:8080"]
+# 6. 서버가 사용할 포트 지정 (Cloud Run 기본 포트)
+EXPOSE 8080
+
+# 7. [수정] 서버 실행 (Gunicorn을 사용한 프로덕션 방식)
+# Cloud Run이 주입하는 PORT 환경 변수를 사용하도록 수정
+CMD ["gunicorn", "--chdir", "src", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "app.main:app", "--bind", "0.0.0.0:8080"]
