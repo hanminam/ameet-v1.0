@@ -39,7 +39,7 @@ async def init_db_connections():
     logger.info("MariaDB tables checked/created.")
 
 async def close_db_connections():
-    """애플리케E이션 종료 시 DB 연결을 닫습니다."""
+    """애플리케이션 종료 시 DB 연결을 닫습니다."""
     logger.info("Closing database connections...")
     mongo_client.close()
     await redis_client.close()

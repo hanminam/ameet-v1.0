@@ -23,6 +23,7 @@ pydantic-settings
 # Database Libraries
 sqlalchemy
 aiomysql
+# pymysql
 redis>=4.2
 beanie
 motor
