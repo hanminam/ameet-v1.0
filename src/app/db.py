@@ -7,9 +7,9 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-from app.core.config import settings, logger
-from app.models.user import Base
-from app.models.discussion import DiscussionLog, AgentSettings
+from .core.config import settings, logger
+from .models.user import Base
+from .models.discussion import DiscussionLog, AgentSettings
 
 # SQLAlchemy (MariaDB) 설정
 engine = create_async_engine(settings.DATABASE_URL, echo=True, future=True)

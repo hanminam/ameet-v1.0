@@ -3,8 +3,8 @@ from fastapi import FastAPI, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
-from app.core.config import settings, logger
-from app.db import init_db_connections, close_db_connections, AsyncDBSession, redis_client, mongo_client
+from .core.config import settings, logger
+from .db import init_db_connections, close_db_connections, AsyncDBSession, redis_client, mongo_client
 
 # 설정 객체에서 앱 정보를 가져와 FastAPI 앱을 생성
 app = FastAPI(
