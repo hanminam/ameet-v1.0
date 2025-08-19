@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # .env 파일을 읽어 환경 변수를 로드하도록 설정
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     # .env 파일에 정의된 변수들을 타입과 함께 선언
     APP_TITLE: str = "AMEET v1.0"
