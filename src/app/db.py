@@ -8,7 +8,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 from .core.config import settings, logger
-from .models.user import Base
+from .models.base import Base # Base를 새로 만든 base.py에서 가져옵니다.
+from .models.user import User # User 모델을 직접 임포트합니다.
 from .models.discussion import DiscussionLog, AgentSettings
 
 # SQLAlchemy (MariaDB) 설정
