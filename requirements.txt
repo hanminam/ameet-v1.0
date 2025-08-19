@@ -1,29 +1,31 @@
+# Web Framework & Server
 fastapi
 uvicorn[standard]
 gunicorn
+
+# Configuration
 pydantic
+pydantic-settings
 python-dotenv
 
-# LangChain & LLM Libraries
+# Database ORM / Drivers
+sqlalchemy
+aiomysql  # MariaDB (Async)
+redis>=4.2
+beanie    # MongoDB (Async ODM)
+motor     # MongoDB (Async Driver)
+
+# Google Cloud
+cloud-sql-python-connector[asyncio]
+
+# LangChain & Tools (향후 Phase에서 사용)
 langchain
 langgraph
 langchain-google-genai
 langchain-openai
 langchain-anthropic
 langchain-community
-
-# Tools
 tavily-python
 
-# PDF Generation (향후 사용)
+# PDF Generation (향후 Phase에서 사용)
 playwright
-
-pydantic-settings
-
-# Database Libraries
-sqlalchemy
-aiomysql
-# pymysql
-redis>=4.2
-beanie
-motor
