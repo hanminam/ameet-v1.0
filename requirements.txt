@@ -16,7 +16,8 @@ beanie    # MongoDB (Async ODM)
 motor     # MongoDB (Async Driver)
 
 # Google Cloud
-cloud-sql-python-connector[asyncio]
+# cloud-sql-python-connector[asyncio]
+cloud-sql-python-connector==1.18.4
 
 # LangChain & Tools (향후 Phase에서 사용)
 langchain
