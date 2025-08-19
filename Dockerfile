@@ -14,4 +14,7 @@ COPY ./app /app
 
 # 5. 서버 실행 명령어: 컨테이너가 시작될 때 이 명령어를 실행합니다.
 #    Cloud Run은 기본적으로 8080 포트를 사용하므로, uvicorn을 8080 포트에서 실행하도록 설정합니다.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+
+# 5. 서버 실행 명령어: Gunicorn을 통해 uvicorn 워커를 실행하는 방식으로 변경합니다.
+CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "app.main:app", "--bind", "0.0.0.0:8080"]
