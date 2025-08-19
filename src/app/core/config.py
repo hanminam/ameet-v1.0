@@ -15,20 +15,22 @@ class Settings(BaseSettings):
     APP_DESCRIPTION: str = "AI 집단지성 토론 플랫폼"
     APP_VERSION: str = "1.0.0"
 
-    OPENAI_API_KEY: str = "default_key"
-    GOOGLE_API_KEY: str = "default_key"
-    ANTHROPIC_API_KEY: str = "default_key"
+    GOOGLE_API_KEY="AIzaSyDdu2rCchEJEQpT2b46MrnkcWXvul8a3T8"
+    OPENAI_API_KEY="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"
+    ANTHROPIC_API_KEY="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"
+    PERPLEXITY_API_KEY="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"
+    TAVILY_API_KEY="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"
 
     DB_USER: str = "ameet_user"
-    DB_PASSWORD: str = "password"
+    DB_PASSWORD: str = "Kimnc0624!@"
     DB_NAME: str = "ameet_db"
-    DB_HOST: str = "127.0.0.1"
+    DB_HOST: str = "34.64.212.12"
     DB_PORT: str = "3306"
 
-    REDIS_HOST: str = "127.0.0.1"
+    REDIS_HOST: str = "10.48.219.179"
     REDIS_PORT: int = 6379
 
-    MONGO_DB_URL: str = "mongodb://localhost:27017"
+    MONGO_DB_URL: str = "mongodb+srv://root:Kimnc0624!%40@cluster0.6ckqorp.mongodb.net/ameet_db?retryWrites=true&w=majority"
 
     # [추가] SQLAlchemy가 사용할 완전한 데이터베이스 접속 URL 생성
     @computed_field
