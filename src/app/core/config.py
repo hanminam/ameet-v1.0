@@ -1,6 +1,7 @@
 # app/core/config.py
 
 import logging
+from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -17,6 +18,23 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = "default_key"
     GOOGLE_API_KEY: str = "default_key"
     ANTHROPIC_API_KEY: str = "default_key"
+
+    DB_USER: str = "ameet_user"
+    DB_PASSWORD: str = "password"
+    DB_NAME: str = "ameet_db"
+    DB_HOST: str = "127.0.0.1"
+    DB_PORT: str = "3306"
+
+    REDIS_HOST: str = "127.0.0.1"
+    REDIS_PORT: int = 6379
+
+    MONGO_DB_URL: str = "mongodb://localhost:27017"
+
+    # [추가] SQLAlchemy가 사용할 완전한 데이터베이스 접속 URL 생성
+    @computed_field
+    @property
+    def DATABASE_URL(self) -> str:
+        return f"mysql+pymysql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
 # 설정 객체 생성
 settings = Settings()

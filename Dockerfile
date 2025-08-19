@@ -8,11 +8,14 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 4. [수정] 프로젝트 전체를 컨테이너 안으로 복사
-# 이렇게 하면 컨테이너 내에 /app/app, /app/requirements.txt 등의 구조가 생성됩니다.
-COPY . .
+# 4. [수정] src 폴더를 컨테이너 안으로 복사
+# 이제 컨테이너 안에는 /app/src/app/... 구조가 생성됩니다.
+COPY src .
 
-# 5. 서버 실행 명령어
-# 이제 컨테이너 내의 경로가 /app/app/main.py로 올바르기 때문에
-# 이 표준 명령어가 정상적으로 동작합니다.
+# 5. [수정] PYTHONPATH에 /app/src 를 추가
+# 파이썬에게 /app/src 폴더에서 패키지를 찾으라고 명시적으로 알려줍니다.
+ENV PYTHONPATH "${PYTHONPATH}:/app/src"
+
+# 6. 서버 실행 명령어
+# PYTHONPATH가 올바르게 설정되었으므로 이 명령어가 정상적으로 동작합니다.
 CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "app.main:app", "--bind", "0.0.0.0:8080"]
