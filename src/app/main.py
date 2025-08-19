@@ -32,7 +32,7 @@ async def health_check():
         pass
 
     return {
-        "server_status": "ok",
+        "server_status": "ok!",
         "redis_connection": redis_status,
         "mongo_connection": mongo_status
     }
