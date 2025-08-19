@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
 # [신규] Cloud SQL Python Connector 임포트
-from google.cloud.sql.connector import AsyncConnector
+from google.cloud.sql.connector import Connector
 
 from .core.config import settings, logger
 from .models.base import Base
@@ -24,7 +24,7 @@ async def get_engine():
         logger.info("Cloud Run environment detected. Using async Cloud SQL Connector.")
         
         # 비동기 커넥터 초기화
-        async with AsyncConnector() as connector:
+        async with Connector() as connector:
             # get_conn 함수는 커넥터가 DB와 안전한 비동기 연결을 생성하도록 합니다.
             async def get_conn():
                 conn = await connector.connect_async(
