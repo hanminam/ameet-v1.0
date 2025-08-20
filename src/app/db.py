@@ -4,6 +4,8 @@ import redis.asyncio as redis
 
 from motor.motor_asyncio import AsyncIOMotorClient
 
+from typing import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
