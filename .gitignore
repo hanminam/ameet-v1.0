@@ -11,3 +11,5 @@ __pycache__/
 # IDE specific
 .vscode/
 .idea/
+combine_files.bat
+combined_project_files.txt
