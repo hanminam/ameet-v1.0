@@ -51,28 +51,31 @@ async def init_db_connections():
         # Cloud Run 환경인지 확인
         if settings.INSTANCE_CONNECTION_NAME:
             logger.info("Cloud Run environment detected. Using async Cloud SQL Connector.")
-            connector = Connector()
             
-            # 연결 함수 정의
-            def get_conn():
-                # [수정] 드라이버 이름을 'aiomysql'로 변경
-                conn = connector.connect(
-                    settings.INSTANCE_CONNECTION_NAME,
-                    "aiomysql", 
-                    user=settings.DB_USER,
-                    password=settings.DB_PASSWORD,
-                    db=settings.DB_NAME,
-                )
-                return conn
+            # --- [핵심 수정 1] ---
+            # 비동기 커넥터를 사용합니다.
+            async with Connector() as connector:
+                
+                # --- [핵심 수정 2] ---
+                # creator 함수를 `async def`로 정의하고, `connect_async`를 사용합니다.
+                async def get_conn():
+                    conn = await connector.connect_async(
+                        settings.INSTANCE_CONNECTION_NAME,
+                        "aiomysql", 
+                        user=settings.DB_USER,
+                        password=settings.DB_PASSWORD,
+                        db=settings.DB_NAME,
+                    )
+                    return conn
 
-            # [수정] SQLAlchemy 엔진 URL의 드라이버 부분도 'aiomysql'로 변경
-            engine = create_async_engine(
-                "mysql+aiomysql://",
-                creator=get_conn,
-            )
+                # --- [핵심 수정 3] ---
+                # `create_async_engine`에 비동기 creator를 전달합니다.
+                engine = create_async_engine(
+                    "mysql+aiomysql://",
+                    creator=get_conn,
+                )
         else: # 로컬 환경
             logger.info("Local environment detected. Using Public IP.")
-            # [수정] 로컬 DB URL의 드라이버 부분도 'aiomysql'로 변경
             db_url = (
                 f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}"
                 f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
@@ -81,12 +84,10 @@ async def init_db_connections():
         
         logger.info("--- [DB-INIT-STEP-SQL-2] SQL engine created successfully. ---")
         
-        # 테이블 생성
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("--- [DB-INIT-STEP-SQL-3] SQL tables checked/created. ---")
         
-        # 세션메이커 생성
         AsyncDBSession = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     except Exception as e:
