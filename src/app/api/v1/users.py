@@ -10,6 +10,8 @@ from app.db import get_db
 from app.schemas import User, UserCreate, TokenData
 from app.crud.user import get_user_by_email, create_user, get_users, delete_user
 from app.models.user import User as UserModel
+from app.core import security
+from app.db import get_db
 
 router = APIRouter()
 

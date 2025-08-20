@@ -10,6 +10,13 @@ from app import schemas, crud, models
 from app.core import security
 from app.db import get_db
 
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
+
+from app.models.user import User
+from app.schemas import UserCreate
+from app.core.security import get_password_hash
+
 router = APIRouter()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/login/token")
