@@ -4,15 +4,16 @@ from fastapi import FastAPI
 from .core.config import settings
 from . import db
 from sqlalchemy.sql import text
-from .api.v1 import api_router
+from .api.v1 import login, users, setup
 
 app = FastAPI(title=settings.APP_TITLE)
 
 app.add_event_handler("startup", db.init_db_connections)
 app.add_event_handler("shutdown", db.close_db_connections)
 
-# [핵심 수정] v1의 모든 API 라우터를 한 번에 등록합니다.
-app.include_router(api_router, prefix="/api/v1")
+app.include_router(login.router, prefix="/api/v1/login", tags=["login"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
+app.include_router(setup.router, prefix="/api/v1/setup", tags=["setup"])
 
 @app.get("/")
 def read_root():

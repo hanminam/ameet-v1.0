@@ -5,6 +5,8 @@ from typing import List
 from app import crud, schemas
 from app.db import AsyncDBSession
 from app.db import get_db
+from app.crud.user import get_user_by_email, create_user
+from app.schemas import UserCreate
 
 router = APIRouter()
 
@@ -21,7 +23,7 @@ async def create_initial_users(db: AsyncSession = Depends(get_db)):
     admin_user_email = "admin@example.com"
     admin_user_password = "adminpassword"
     
-    admin_user = await crud.get_user_by_email(db, email=admin_user_email)
+    admin_user = await get_user_by_email(db, email=admin_user_email)
     if not admin_user:
         user_in = schemas.UserCreate(
             email=admin_user_email,

@@ -5,6 +5,8 @@ from app import schemas, crud
 from app.core import security
 from app.db import AsyncDBSession
 from app.db import get_db
+from app.crud.user import get_user_by_email
+from app.schemas import Token
 
 router = APIRouter()
 
@@ -13,7 +15,7 @@ async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(), 
     db: AsyncSession = Depends(get_db)
 ):
-    user = await crud.get_user_by_email(db, email=form_data.username)
+    user = await get_user_by_email(db, email=form_data.username)
     if not user or not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

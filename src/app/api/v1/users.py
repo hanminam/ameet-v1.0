@@ -7,6 +7,9 @@ from app import schemas, crud, models
 from app.core import security
 from app.db import AsyncDBSession
 from app.db import get_db
+from app.schemas import User, UserCreate, TokenData
+from app.crud.user import get_user_by_email, create_user, get_users, delete_user
+from app.models.user import User as UserModel
 
 router = APIRouter()
 
@@ -16,7 +19,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/login/token")
 async def get_current_user(
     token: str = Depends(oauth2_scheme), 
     db: AsyncSession = Depends(get_db)
-) -> models.User:
+) -> UserModel:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
