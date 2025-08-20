@@ -7,7 +7,7 @@ from app.db import AsyncDBSession
 
 router = APIRouter()
 
-@router.post("/initial-users", response_model=dict)
+@router.get("/initial-users", response_model=dict)
 async def create_initial_users(db: AsyncSession = Depends(lambda: AsyncDBSession())):
     """
     초기 관리자 및 사용자 계정을 생성합니다.
