@@ -4,7 +4,7 @@ gunicorn
 uvicorn[standard]
 
 # Pydantic & Settings
-pydantic
+pydantic[email]
 pydantic-settings
 python-dotenv
 
@@ -30,3 +30,8 @@ langchain-community
 # Tools & Utilities
 tavily-python
 playwright
+
+# Security
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart

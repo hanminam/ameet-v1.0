@@ -34,6 +34,9 @@ class Settings(BaseSettings):
 
     MONGO_DB_URL: str = "mongodb+srv://root:Kimnc0624!%40@cluster0.6ckqorp.mongodb.net/ameet_db?retryWrites=true&w=majority"
 
+    # [신규] JWT 서명을 위한 시크릿 키 (실제 운영 시에는 .env에서 관리)
+    SECRET_KEY: str = "a_very_secret_key_that_should_be_changed"
+
     # [추가] SQLAlchemy가 사용할 완전한 데이터베이스 접속 URL 생성
     @computed_field
     @property
