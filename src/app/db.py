@@ -17,7 +17,8 @@ engine = None
 AsyncDBSession = None
 
 async def init_db_connections():
-    global redis_client, mongo_client
+    global redis_client, mongo_client, engine, AsyncDBSession
+
     logger.info("--- [DB-INIT-STEP-1] `init_db_connections` function started. ---")
 
     # --- Redis 초기화 ---
@@ -54,23 +55,26 @@ async def init_db_connections():
             
             # 연결 함수 정의
             def get_conn():
+                # [수정] 드라이버 이름을 'aiomysql'로 변경
                 conn = connector.connect(
                     settings.INSTANCE_CONNECTION_NAME,
-                    "asyncmy",
+                    "aiomysql", 
                     user=settings.DB_USER,
                     password=settings.DB_PASSWORD,
                     db=settings.DB_NAME,
                 )
                 return conn
 
+            # [수정] SQLAlchemy 엔진 URL의 드라이버 부분도 'aiomysql'로 변경
             engine = create_async_engine(
-                "mysql+asyncmy://",
+                "mysql+aiomysql://",
                 creator=get_conn,
             )
         else: # 로컬 환경
             logger.info("Local environment detected. Using Public IP.")
+            # [수정] 로컬 DB URL의 드라이버 부분도 'aiomysql'로 변경
             db_url = (
-                f"mysql+asyncmy://{settings.DB_USER}:{settings.DB_PASSWORD}"
+                f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}"
                 f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
             )
             engine = create_async_engine(db_url)

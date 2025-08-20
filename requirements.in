@@ -10,8 +10,7 @@ python-dotenv
 
 # Databases & ORM/ODM
 sqlalchemy
-# aiomysql
-asyncmy
+aiomysql
 redis>=4.2
 beanie
 motor

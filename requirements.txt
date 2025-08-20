@@ -12,6 +12,8 @@ aiohttp==3.12.15
     # via
     #   cloud-sql-python-connector
     #   langchain-community
+aiomysql==0.2.0
+    # via -r requirements.in
 aiosignal==1.4.0
     # via aiohttp
 annotated-types==0.7.0
@@ -25,8 +27,6 @@ anyio==4.10.0
     #   openai
     #   starlette
     #   watchfiles
-asyncmy==0.2.10
-    # via -r requirements.in
 attrs==25.3.0
     # via aiohttp
 beanie==2.0.0
@@ -249,6 +249,8 @@ pymongo==4.14.0
     # via
     #   beanie
     #   motor
+pymysql==1.1.1
+    # via aiomysql
 python-dotenv==1.1.1
     # via
     #   -r requirements.in
