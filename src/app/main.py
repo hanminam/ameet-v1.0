@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from .core.config import settings
 from . import db
+from sqlalchemy.sql import text
 
 app = FastAPI(title=settings.APP_TITLE)
 
@@ -23,7 +24,7 @@ async def health_check():
     except Exception:
         pass
 
-    # [신규] MongoDB 상태 확인
+    # MongoDB 상태 확인
     mongo_status = "error"
     try:
         await db.mongo_client.server_info()
@@ -31,8 +32,22 @@ async def health_check():
     except Exception:
         pass
 
+    # [신규] MySQL 상태 확인
+    sql_status = "error"
+    try:
+        if db.AsyncDBSession:
+            async with db.AsyncDBSession() as session:
+                # 간단한 쿼리를 실행하여 연결 테스트
+                await session.execute(text("SELECT 1"))
+            sql_status = "ok"
+        else:
+            sql_status = "not initialized"
+    except Exception:
+        pass
+
     return {
-        "server_status": "ok!",
+        "server_status": "ok",
         "redis_connection": redis_status,
-        "mongo_connection": mongo_status
+        "mongo_connection": mongo_status,
+        "sql_connection": sql_status
     }
