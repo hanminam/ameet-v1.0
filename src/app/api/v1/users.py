@@ -49,7 +49,7 @@ async def get_current_admin_user(current_user: models.User = Depends(get_current
 
 # --- 관리자 전용 API 엔드포인트 ---
 
-@router.post("/", response_model=schemas.User, status_code=status.HTTP_21_CREATED)
+@router.post("/", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
 async def create_user_by_admin(
     user: schemas.UserCreate,
     db: AsyncSession = Depends(lambda: AsyncDBSession()),
