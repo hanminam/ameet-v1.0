@@ -4,11 +4,12 @@ from typing import List
 
 from app import crud, schemas
 from app.db import AsyncDBSession
+from app.db import get_db
 
 router = APIRouter()
 
 @router.get("/initial-users", response_model=dict)
-async def create_initial_users(db: AsyncSession = Depends(lambda: AsyncDBSession())):
+async def create_initial_users(db: AsyncSession = Depends(get_db)):
     """
     초기 관리자 및 사용자 계정을 생성합니다.
     (주의: 프로덕션 환경에서는 이 엔드포인트를 비활성화하거나 삭제해야 합니다.)

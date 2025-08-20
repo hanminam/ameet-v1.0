@@ -18,6 +18,17 @@ mongo_client = None
 engine = None
 AsyncDBSession = None
 
+# --- FastAPI 의존성 주입용 DB 세션 생성 함수 ---
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """
+    API 요청마다 DB 세션을 생성하고, 요청이 끝나면 자동으로 닫아주는 함수
+    """
+    if AsyncDBSession is None:
+        raise IOError("Database session not initialized")
+
+    async with AsyncDBSession() as session:
+        yield session
+
 async def init_db_connections():
     global redis_client, mongo_client, engine, AsyncDBSession
 

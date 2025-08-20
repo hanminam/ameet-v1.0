@@ -6,6 +6,7 @@ from jose import JWTError
 from app import schemas, crud, models
 from app.core import security
 from app.db import AsyncDBSession
+from app.db import get_db
 
 router = APIRouter()
 
@@ -14,7 +15,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/login/token")
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme), 
-    db: AsyncSession = Depends(lambda: AsyncDBSession())
+    db: AsyncSession = Depends(get_db)
 ) -> models.User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -52,7 +53,7 @@ async def get_current_admin_user(current_user: models.User = Depends(get_current
 @router.post("/", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
 async def create_user_by_admin(
     user: schemas.UserCreate,
-    db: AsyncSession = Depends(lambda: AsyncDBSession()),
+    db: AsyncSession = Depends(get_db),
     admin_user: models.User = Depends(get_current_admin_user)
 ):
     """
