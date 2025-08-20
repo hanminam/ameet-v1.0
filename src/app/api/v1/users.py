@@ -34,7 +34,7 @@ async def get_current_user(
     except JWTError:
         raise credentials_exception
     
-    user = await crud.user.get_user_by_email(db, email=token_data.email)
+    user = await crud.get_user_by_email(db, email=token_data.email)
     if user is None:
         raise credentials_exception
     return user
@@ -59,10 +59,10 @@ async def create_user_by_admin(
     """
     (관리자 전용) 새로운 사용자를 생성합니다.
     """
-    db_user = await crud.user.get_user_by_email(db, email=user.email)
+    db_user = await crud.get_user_by_email(db, email=user.email)
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-    return await crud.user.create_user(db=db, user=user)
+    return await crud.create_user(db=db, user=user)
 
 @router.get("/", response_model=List[schemas.User])
 async def read_users(

@@ -21,7 +21,7 @@ async def create_initial_users(db: AsyncSession = Depends(get_db)):
     admin_user_email = "admin@example.com"
     admin_user_password = "adminpassword"
     
-    admin_user = await crud.user.get_user_by_email(db, email=admin_user_email)
+    admin_user = await crud.get_user_by_email(db, email=admin_user_email)
     if not admin_user:
         user_in = schemas.UserCreate(
             email=admin_user_email,
@@ -44,7 +44,7 @@ async def create_initial_users(db: AsyncSession = Depends(get_db)):
             password=normal_user_password,
             role="user"
         )
-        await crud.user.create_user(db, user_in)
+        await crud.create_user(db, user_in)
         actions_log.append(f"Normal user '{normal_user_email}' created.")
     else:
         actions_log.append(f"Normal user '{normal_user_email}' already exists.")
