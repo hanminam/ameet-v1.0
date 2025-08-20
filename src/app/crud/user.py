@@ -1,9 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
-from ..models.user import User
-from ..schemas import UserCreate
-from ..core.security import get_password_hash
+from app.models.user import User
+from app.schemas import UserCreate
+from app.core.security import get_password_hash
 
 async def get_user_by_email(db: AsyncSession, email: str):
     result = await db.execute(select(User).filter(User.email == email))

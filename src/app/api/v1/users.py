@@ -3,9 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from jose import JWTError
-from ... import schemas, crud, models
-from ...core import security
-from ...db import AsyncDBSession
+from app import schemas, crud, models
+from app.core import security
+from app.db import AsyncDBSession
 
 router = APIRouter()
 
