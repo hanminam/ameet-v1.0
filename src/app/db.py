@@ -7,6 +7,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from google.cloud.sql.connector import Connector
+
 from .core.config import settings, logger
 from .models.base import Base
 from .models.user import User
@@ -48,16 +49,12 @@ async def init_db_connections():
     try:
         logger.info("--- [DB-INIT-STEP-SQL-1] Attempting to create SQL engine... ---")
         
-        # Cloud Run 환경인지 확인
+        # Check if in Cloud Run environment
         if settings.INSTANCE_CONNECTION_NAME:
             logger.info("Cloud Run environment detected. Using async Cloud SQL Connector.")
             
-            # --- [핵심 수정 1] ---
-            # 비동기 커넥터를 사용합니다.
             async with Connector() as connector:
                 
-                # --- [핵심 수정 2] ---
-                # creator 함수를 `async def`로 정의하고, `connect_async`를 사용합니다.
                 async def get_conn():
                     conn = await connector.connect_async(
                         settings.INSTANCE_CONNECTION_NAME,
@@ -68,13 +65,14 @@ async def init_db_connections():
                     )
                     return conn
 
-                # --- [핵심 수정 3] ---
-                # `create_async_engine`에 비동기 creator를 전달합니다.
+                # --- Core Solution ---
+                # Pass an empty dictionary to connect_args to prevent the problematic on_connect event.
                 engine = create_async_engine(
                     "mysql+aiomysql://",
                     creator=get_conn,
+                    connect_args={}  # ◀ This line is the fix
                 )
-        else: # 로컬 환경
+        else: # Local environment
             logger.info("Local environment detected. Using Public IP.")
             db_url = (
                 f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}"
