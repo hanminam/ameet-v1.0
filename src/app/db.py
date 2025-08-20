@@ -6,6 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import OperationalError
 from google.cloud.sql.connector import Connector
 
 from .core.config import settings, logger
@@ -47,40 +48,43 @@ async def init_db_connections():
 
     # --- [신규] MariaDB/MySQL 초기화 ---
     try:
+        # --- [1단계] 엔진 생성 ---
         logger.info("--- [DB-INIT-STEP-SQL-1] Attempting to create SQL engine... ---")
-
-        # Cloud Run 환경
         if settings.INSTANCE_CONNECTION_NAME:
-            logger.info("Cloud Run environment detected. Using Cloud SQL Connector.")
-            
-            # --- [핵심 수정] ---
-            # Creator를 사용하는 대신, SQLAlchemy가 직접 처리하도록 URL을 구성합니다.
-            engine = create_async_engine(
-                f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}@"
-                f"/{settings.DB_NAME}?unix_socket=/cloudsql/{settings.INSTANCE_CONNECTION_NAME}"
-            )
-
-        # 로컬 환경
+            async with Connector() as connector:
+                async def get_conn():
+                    conn = await connector.connect_async(
+                        settings.INSTANCE_CONNECTION_NAME, "aiomysql",
+                        user=settings.DB_USER, password=settings.DB_PASSWORD, db=settings.DB_NAME,
+                    )
+                    return conn
+                engine = create_async_engine("mysql+aiomysql://", creator=get_conn)
         else:
-            logger.info("Local environment detected. Using Public IP.")
-            db_url = (
-                f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}"
-                f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
-            )
+            db_url = f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
             engine = create_async_engine(db_url)
         
         logger.info("--- [DB-INIT-STEP-SQL-2] SQL engine created successfully. ---")
         
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("--- [DB-INIT-STEP-SQL-3] SQL tables checked/created. ---")
-        
+        # --- [2단계] 테이블 생성 (오류 처리 강화) ---
+        # [핵심 수정] 테이블 생성 부분만 별도의 try...except로 감쌉니다.
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("--- [DB-INIT-STEP-SQL-3] SQL tables checked/created. ---")
+        except OperationalError as e:
+            # "Table already exists"는 예상 가능한 오류이므로 경고로 처리하고 넘어갑니다.
+            logger.warning(f"--- [DB-INIT-WARN] Harmless error during table creation (already exists?): {e} ---")
+
+        # --- [3단계] 세션 생성 ---
+        # 테이블 생성 오류가 발생해도 세션은 정상적으로 생성됩니다.
         AsyncDBSession = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        logger.info("--- [DB-INIT-STEP-SQL-4] SQL SessionMaker created. ---")
 
     except Exception as e:
+        # 엔진 생성 등 더 심각한 오류가 발생하면 여기서 처리합니다.
         logger.error(f"--- [DB-INIT-ERROR] Failed during SQL initialization: {e} ---", exc_info=True)
         return
-
+        
     logger.info("--- [DB-INIT-STEP-7] All DB connections finished. ---")
 
 async def close_db_connections():

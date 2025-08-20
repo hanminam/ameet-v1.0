@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = "default_key"
 
     DB_USER: str = "ameet_user"
-    DB_PASSWORD: str = "Kimnc0624!@"
+    DB_PASSWORD: str = "Kimnc0624!"
     DB_NAME: str = "ameet_db"
     DB_HOST: str = "34.64.212.12"
     DB_PORT: str = "3306"
