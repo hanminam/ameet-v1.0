@@ -48,31 +48,20 @@ async def init_db_connections():
     # --- [신규] MariaDB/MySQL 초기화 ---
     try:
         logger.info("--- [DB-INIT-STEP-SQL-1] Attempting to create SQL engine... ---")
-        
-        # Check if in Cloud Run environment
-        if settings.INSTANCE_CONNECTION_NAME:
-            logger.info("Cloud Run environment detected. Using async Cloud SQL Connector.")
-            
-            async with Connector() as connector:
-                
-                async def get_conn():
-                    conn = await connector.connect_async(
-                        settings.INSTANCE_CONNECTION_NAME,
-                        "aiomysql", 
-                        user=settings.DB_USER,
-                        password=settings.DB_PASSWORD,
-                        db=settings.DB_NAME,
-                    )
-                    return conn
 
-                # --- Core Solution ---
-                # Pass an empty dictionary to connect_args to prevent the problematic on_connect event.
-                engine = create_async_engine(
-                    "mysql+aiomysql://",
-                    creator=get_conn,
-                    connect_args={}  # ◀ This line is the fix
-                )
-        else: # Local environment
+        # Cloud Run 환경
+        if settings.INSTANCE_CONNECTION_NAME:
+            logger.info("Cloud Run environment detected. Using Cloud SQL Connector.")
+            
+            # --- [핵심 수정] ---
+            # Creator를 사용하는 대신, SQLAlchemy가 직접 처리하도록 URL을 구성합니다.
+            engine = create_async_engine(
+                f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}@"
+                f"/{settings.DB_NAME}?unix_socket=/cloudsql/{settings.INSTANCE_CONNECTION_NAME}"
+            )
+
+        # 로컬 환경
+        else:
             logger.info("Local environment detected. Using Public IP.")
             db_url = (
                 f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}"
@@ -91,7 +80,7 @@ async def init_db_connections():
     except Exception as e:
         logger.error(f"--- [DB-INIT-ERROR] Failed during SQL initialization: {e} ---", exc_info=True)
         return
-        
+
     logger.info("--- [DB-INIT-STEP-7] All DB connections finished. ---")
 
 async def close_db_connections():
