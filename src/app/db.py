@@ -46,12 +46,11 @@ async def init_db_connections():
 
     logger.info("--- [DB-INIT-STEP-7] All DB connections finished. ---")
 
-    # --- [신규] MariaDB/MySQL 초기화 ---
+    # --- MySQL 초기화 ---
     try:
         # --- 1단계: 엔진 생성 ---
         logger.info("--- [DB-INIT-STEP-SQL-1] Attempting to create SQL engine... ---")
         
-        # [수정] 'coroutine' 오류를 해결했던 Unix 소켓 URL 방식으로 되돌립니다.
         if settings.INSTANCE_CONNECTION_NAME:
             logger.info("Cloud Run environment detected. Using Unix Socket.")
             engine = create_async_engine(
@@ -67,17 +66,8 @@ async def init_db_connections():
             engine = create_async_engine(db_url)
         
         logger.info("--- [DB-INIT-STEP-SQL-2] SQL engine created successfully. ---")
-        
-        # --- 2단계: 테이블 생성 (오류 처리 강화) ---
-        # [수정] 'Table already exists' 오류를 처리하는 로직을 적용합니다.
-        try:
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-            logger.info("--- [DB-INIT-STEP-SQL-3] SQL tables checked/created. ---")
-        except OperationalError as e:
-            logger.warning(f"--- [DB-INIT-WARN] Harmless error during table creation (already exists?): {e} ---")
 
-        # --- 3단계: 세션 생성 ---
+        # --- 2단계: 세션 생성 ---
         AsyncDBSession = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         logger.info("--- [DB-INIT-STEP-SQL-4] SQL SessionMaker created. ---")
 
