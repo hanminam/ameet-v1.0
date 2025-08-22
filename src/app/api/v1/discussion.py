@@ -14,17 +14,17 @@ router = APIRouter()
 async def run_orchestration_pipeline(
     topic: str = Form(...),
     file: Optional[UploadFile] = File(None),
-    current_user: UserModel = Depends(get_current_user) # 요청 시 JWT 인증 필요
+    current_user: UserModel = Depends(get_current_user)
 ):
-    """
-    주제와 파일을 입력받아 '재판 준비' 3단계 파이프라인을 실행하고
-    최종 토론 팀 구성을 반환합니다.
-    """
     try:
-        # 1단계: 사건 분석
-        analysis_report = await orchestrator.analyze_topic(topic)
+        # 1. 설정 파일 미리 로드
+        special_agents = orchestrator._load_agent_configs("app/core/settings/special_agents.json")
+        jury_pool = orchestrator._load_agent_configs("app/core/settings/agents.json")
+
+        # --- 2. 1단계: 사건 분석 함수 호출 시, special_agents 인자 전달 ---
+        analysis_report = await orchestrator.analyze_topic(topic, special_agents)
         
-        # 2단계: 증거 수집
+        # 3. 2단계: 증거 수집
         files_to_process = [file] if file else []
         evidence_briefing = await orchestrator.gather_evidence(
             report=analysis_report, 
@@ -32,13 +32,12 @@ async def run_orchestration_pipeline(
             topic=topic
         )
         
-        # 3단계: 배심원단 선정
-        # (현재 증거 자료집은 배심원단 선정에 직접 사용되지 않지만, 향후 확장성을 위해 전달)
-        debate_team = await orchestrator.select_debate_team(analysis_report)
+        # 4. 3단계: 배심원단 선정
+        debate_team = await orchestrator.select_debate_team(analysis_report, jury_pool, special_agents)
         
         return debate_team
         
     except Exception as e:
-        # 실제 운영 환경에서는 에러 로깅이 필요합니다.
-        print(f"Orchestration Error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"An error occurred during orchestration: {e}")
