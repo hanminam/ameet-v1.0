@@ -1,6 +1,7 @@
 # src/app/tools/search.py
 
-from langchain_community.tools.tavily_search import TavilySearchResults
+import asyncio
+from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper
 from app.core.config import settings
 
 # Tavily API 키가 설정되어 있는지 확인
@@ -8,16 +9,24 @@ if not settings.TAVILY_API_KEY:
     raise ValueError("TAVILY_API_KEY environment variable not set.")
 
 # 검색 도구 인스턴스 생성 (k=5: 최대 5개의 결과 반환)
-tavily_search = TavilySearchResults(k=5, tavily_api_key=settings.TAVILY_API_KEY)
+# --- Tool 대신 API Wrapper 인스턴스를 생성합니다. ---
+tavily_api_wrapper = TavilySearchAPIWrapper(tavily_api_key=settings.TAVILY_API_KEY)
 
 async def perform_web_search(query: str) -> list:
     """
-    주어진 쿼리로 웹 검색을 수행하고 결과 목록을 반환합니다.
+    Tavily API 래퍼를 사용하여 웹 검색을 수행하고,
+    URL과 content가 포함된 사전(dictionary)의 리스트를 반환합니다.
     """
-    print(f"--- [Tool] 웹 검색 수행: {query} ---")
+    print(f"--- [Tool] 웹 검색 수행 (API Wrapper 사용): {query} ---")
     try:
-        # LangChain 도구의 비동기 호출 메서드 'ainvoke' 사용
-        results = await tavily_search.ainvoke(query)
+        # --- 래퍼의 results 메소드는 동기(sync) 방식이므로,
+        # 비동기 환경에서 안전하게 실행하기 위해 asyncio.to_thread를 사용합니다.
+        results = await asyncio.to_thread(
+            tavily_api_wrapper.results,
+            query=query,
+            max_results=5 
+        )
+        # 결과 형식: [{'url': '...', 'content': '...'}, ...]
         return results
     except Exception as e:
         print(f"--- [Tool Error] 웹 검색 중 오류 발생: {e} ---")
