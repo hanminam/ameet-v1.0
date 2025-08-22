@@ -23,7 +23,7 @@ from app.services.document_processor import process_uploaded_file
 from app.services.summarizer import summarize_text
 
 # --- 역할 기반 상수 정의 ---
-JUDGE_AGENT_NAME = "사회자"
+JUDGE_AGENT_NAME = "재판관"
 CRITICAL_AGENT_NAME = "비판적 관점"
 TOPIC_ANALYST_NAME = "Topic Analyst"
 JURY_SELECTOR_NAME = "Jury Selector"
