@@ -5,7 +5,7 @@ from passlib.context import CryptContext
 from ..core.config import settings
 
 # 비밀번호 해싱을 위한 설정
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["scrypt"], deprecated="auto")
 
 # JWT 생성을 위한 설정
 ALGORITHM = "HS256"

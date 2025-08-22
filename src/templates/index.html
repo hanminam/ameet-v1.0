@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMEET - AI Collective Intelligence Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            background-color: #f1f5f9;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .screen { display: none; }
+        .screen.active { display: block; }
+        .screen-card {
+            background-color: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            max-width: 48rem; /* 768px */
+            margin: 2rem;
+            overflow: hidden;
+        }
+        .screen-header {
+            background-color: #f8fafc;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 700;
+            color: #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .screen-body { padding: 2rem; }
+        .text-primary { color: #2563eb; }
+        .btn { border-radius: 0.75rem; font-weight: 700; padding: 0.75rem 1.5rem; transition: all 0.2s ease; cursor: pointer; }
+        .btn-primary { background-color: #2563eb; color: white; }
+        .btn-primary:hover { background-color: #1d4ed8; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+        .btn-primary:disabled { background-color: #93c5fd; cursor: not-allowed; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div id="screen-login" class="screen active screen-card">
+        <div class="screen-body text-center">
+            <h2 class="text-3xl font-bold text-slate-800">AMEET</h2>
+            <p class="text-slate-600 mt-2 mb-8">로그인 후 AI 집단지성 토론을 시작하세요.</p>
+            <div id="login-form" class="max-w-sm mx-auto space-y-4">
+                <input type="email" id="email-input" placeholder="이메일 주소 (user@example.com)" class="w-full p-3 border-slate-300 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="user@example.com">
+                <input type="password" id="password-input" placeholder="비밀번호 (userpassword)" class="w-full p-3 border-slate-300 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="userpassword">
+                <button id="login-button" class="btn btn-primary w-full">로그인</button>
+                <p id="login-error" class="text-sm text-red-500 h-4"></p>
+            </div>
+        </div>
+    </div>
+
+    <div id="screen-topic" class="screen screen-card">
+        <div class="screen-header">
+            <span class="font-bold">[2] 주제 입력</span>
+            <div class="flex items-center gap-4">
+                <span id="user-email-display" class="text-sm font-medium text-slate-600"></span>
+                <button id="logout-button" class="text-sm font-bold text-red-500 hover:underline">로그아웃</button>
+            </div>
+        </div>
+        <div class="screen-body text-center">
+            <h2 class="text-3xl font-bold text-slate-800">무엇에 대해 토론할까요?</h2>
+            <p class="text-slate-600 mt-2 mb-8">로그인 되었습니다. 이제 토론을 시작할 수 있습니다.</p>
+        </div>
+    </div>
+    
+    <script>
+        // --- DOM Elements ---
+        const loginScreen = document.getElementById('screen-login');
+        const topicScreen = document.getElementById('screen-topic');
+        const emailInput = document.getElementById('email-input');
+        const passwordInput = document.getElementById('password-input');
+        const loginButton = document.getElementById('login-button');
+        const logoutButton = document.getElementById('logout-button');
+        const loginError = document.getElementById('login-error');
+        const userEmailDisplay = document.getElementById('user-email-display');
+
+        // --- API Configuration ---
+        //const API_BASE_URL = 'http://127.0.0.1:8000'; // 로컬 백엔드 서버 주소
+
+        // --- Functions ---
+        
+        /**
+         * 화면을 전환하는 함수
+         * @param {string} screenId - 표시할 화면의 ID
+         */
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        /**
+         * 로그인 API를 호출하는 함수
+         */
+        async function handleLogin() {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+
+            // 입력값 검증
+            if (!email || !password) {
+                loginError.textContent = '이메일과 비밀번호를 모두 입력해주세요.';
+                return;
+            }
+
+            // 로딩 상태 표시
+            loginButton.disabled = true;
+            loginButton.textContent = '로그인 중...';
+            loginError.textContent = '';
+
+            // API는 x-www-form-urlencoded 형식을 요구하므로 FormData를 사용
+            const formData = new URLSearchParams();
+            formData.append('username', email);
+            formData.append('password', password);
+
+            try {
+                const response = await fetch(`/api/v1/login/token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData,
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    // JWT 토큰을 localStorage에 저장
+                    localStorage.setItem('accessToken', data.access_token);
+                    localStorage.setItem('userEmail', email);
+
+                    // 로그인 성공 후 UI 업데이트 및 화면 전환
+                    console.log('로그인 성공:', data);
+                    updateUIForLoggedInState();
+                    showScreen('screen-topic');
+
+                } else {
+                    const errorData = await response.json();
+                    loginError.textContent = errorData.detail || '로그인에 실패했습니다. 이메일 또는 비밀번호를 확인하세요.';
+                    console.error('로그인 실패:', errorData);
+                }
+            } catch (error) {
+                loginError.textContent = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.';
+                console.error('네트워크 오류:', error);
+            } finally {
+                // 로딩 상태 해제
+                loginButton.disabled = false;
+                loginButton.textContent = '로그인';
+            }
+        }
+
+        /**
+         * 로그아웃 처리 함수
+         */
+        function handleLogout() {
+            // 저장된 토큰과 이메일 정보 삭제
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('userEmail');
+            
+            console.log('로그아웃 되었습니다.');
+            
+            // UI 업데이트 및 로그인 화면으로 전환
+            updateUIForLoggedOutState();
+            showScreen('screen-login');
+        }
+        
+        /**
+         * 로그인 상태에 따라 UI를 업데이트하는 함수
+         */
+        function updateUIForLoggedInState() {
+            const userEmail = localStorage.getItem('userEmail');
+            if (userEmail) {
+                userEmailDisplay.textContent = userEmail;
+            }
+        }
+        
+        /**
+         * 로그아웃 상태에 따라 UI를 업데이트하는 함수
+         */
+        function updateUIForLoggedOutState() {
+             userEmailDisplay.textContent = '';
+             emailInput.value = 'user@example.com';
+             passwordInput.value = 'userpassword';
+        }
+
+        // --- Event Listeners ---
+        loginButton.addEventListener('click', handleLogin);
+        logoutButton.addEventListener('click', handleLogout);
+
+        // --- Initial Check ---
+        // 페이지 로드 시, 저장된 토큰이 있는지 확인하여 로그인 상태 유지
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('accessToken');
+            if (token) {
+                console.log('저장된 토큰으로 로그인 상태 유지');
+                updateUIForLoggedInState();
+                showScreen('screen-topic');
+            } else {
+                showScreen('screen-login');
+            }
+        });
+
+    </script>
+</body>
+</html>
