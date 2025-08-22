@@ -25,30 +25,40 @@ from app.services.summarizer import summarize_text
 # --- 역할 기반 상수 정의 ---
 JUDGE_AGENT_NAME = "사회자"
 CRITICAL_AGENT_NAME = "비판적 관점"
+TOPIC_ANALYST_NAME = "Topic Analyst"
+JURY_SELECTOR_NAME = "Jury Selector"
 
-async def analyze_topic(topic: str) -> IssueAnalysisReport:
-    """
-    사용자 주제를 입력받아, 저비용/고속 LLM을 통해 
-    '쟁점 분석 보고서' JSON을 생성합니다.
-    (이전 단계에서 구현한 함수)
-    """
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.1)
+# --- 설정 로더 ---
+def _load_agent_configs(file_path: str) -> Dict[str, Dict]:
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            agents = json.load(f).get("agents", [])
+            return {agent["name"]: agent for agent in agents}
+    except FileNotFoundError:
+        raise ValueError(f"에이전트 설정 파일({file_path})을 찾을 수 없습니다.")
+
+# --- 1단계: 사건 분석 ---
+async def analyze_topic(topic: str, special_agents: Dict[str, Dict]) -> IssueAnalysisReport:
+    print(f"--- [Orchestrator] 1단계: 사건 분석 시작 (주제: {topic}) ---")
+    
+    analyst_config = special_agents.get(TOPIC_ANALYST_NAME)
+    if not analyst_config:
+        raise ValueError(f"'{TOPIC_ANALYST_NAME}' 설정을 찾을 수 없습니다.")
+
+    llm = ChatGoogleGenerativeAI(
+        model=analyst_config["model"],
+        temperature=analyst_config["temperature"]
+    )
     structured_llm = llm.with_structured_output(IssueAnalysisReport)
-    system_prompt = """
-    You are an expert analyst tasked with deconstructing a complex discussion topic into a structured "Issue Analysis Report" in JSON format. Your goal is to provide a clear, structured foundation for a multi-agent debate.
-    Based on the user's topic, you must:
-    1.  Identify and list the `core_keywords`.
-    2.  Formulate 3 to 5 `key_issues` as probing questions, each with a brief `description`.
-    3.  List the `anticipated_perspectives` that are likely to emerge during the debate.
-    You must only respond with a single, valid JSON object that strictly adheres to the provided schema. Do not include any explanatory text or markdown formatting before or after the JSON object.
-    """
+    
     prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
+        ("system", analyst_config["prompt"]),
         ("human", "Please analyze the following topic: {topic}"),
     ])
+    
     chain = prompt | structured_llm
-    print(f"--- [Orchestrator] 1단계: 사건 분석 시작 (주제: {topic}) ---")
     report = await chain.ainvoke({"topic": topic})
+    
     print(f"--- [Orchestrator] 1단계: 사건 분석 완료 ---")
     return report
 
@@ -150,68 +160,44 @@ def _load_available_agents() -> List[Dict[str, str]]:
             return [agent for agent in all_agents if agent.get("name") != JUDGE_AGENT_NAME]
     except FileNotFoundError:
         raise ValueError("에이전트 설정 파일(app/core/settings/agents.json)을 찾을 수 없습니다.")
-    
-def _load_agent_configs(file_path: str) -> Dict[str, Dict]:
-    """설정 파일에서 에이전트 목록을 로드하여 이름-설정 맵을 반환합니다."""
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            agents = json.load(f).get("agents", [])
-            return {agent["name"]: agent for agent in agents}
-    except FileNotFoundError:
-        raise ValueError(f"에이전트 설정 파일({file_path})을 찾을 수 없습니다.")
 
-async def select_debate_team(report: IssueAnalysisReport) -> DebateTeam:
-    """
-    분석 보고서를 기반으로 AI 배심원단을 선정하고 재판관을 지정합니다.
-    """
+async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, special_agents: Dict) -> DebateTeam:
     print(f"--- [Orchestrator] 3단계: 배심원단 선정 시작 ---")
     
-    jury_pool_configs = _load_agent_configs("app/core/settings/agents.json")
-    special_agent_configs = _load_agent_configs("app/core/settings/special_agents.json")
+    selector_config = special_agents.get(JURY_SELECTOR_NAME)
+    if not selector_config:
+        raise ValueError(f"'{JURY_SELECTOR_NAME}' 설정을 찾을 수 없습니다.")
 
-    available_agent_names = list(jury_pool_configs.keys())
-
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0.3)
+    available_agent_names = list(jury_pool.keys())
+    
+    llm = ChatGoogleGenerativeAI(
+        model=selector_config["model"],
+        temperature=selector_config["temperature"]
+    )
     structured_llm = llm.with_structured_output(SelectedJury)
 
-    # --- [수정] 1. 시스템 프롬프트에서는 변하는 데이터를 제거하고, 고정된 지시문만 남깁니다. ---
-    system_prompt = f"""
-    You are a master moderator assembling a panel of AI experts for a debate. Your task is to select a jury of 5 to 7 experts from the `Available Expert Agents Pool` ONLY. Do not invent names or select agents not on the list.
-
-    Available Expert Agents Pool:
-    - {', '.join(available_agent_names)}
-
-    Based on the debate context provided by the user, select the most relevant experts to form a diverse and effective jury. Ensure your selection covers the key issues and anticipated perspectives. Provide a concise reason for your team composition in Korean.
-    You must only respond with a single, valid JSON object. Do NOT select a "Judge" or "Moderator"; that role is assigned separately.
-    """
-
-    # --- [수정] 2. 프롬프트 템플릿에 변하는 데이터가 들어갈 자리({report_json})를 명시합니다. ---
+    system_prompt = selector_config["prompt"].replace("{available_agent_names}", ', '.join(available_agent_names))
+    
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
         ("human", "Here is the debate context (Issue Analysis Report):\n\n{report_json}")
     ])
-
+    
     chain = prompt | structured_llm
-
-    # --- [수정] 3. .ainvoke()를 호출할 때, 변수 자리에 실제 데이터를 전달합니다. ---
-    selected_jury = await chain.ainvoke({
-        "report_json": report.model_dump_json(indent=2)
-    })
+    selected_jury = await chain.ainvoke({"report_json": report.model_dump_json(indent=2)})
     
-    # --- 규칙 강제 적용 로직 (이하 동일) ---
-    validated_jury_names = [name for name in selected_jury.agent_names if name in available_agent_names]
-    
-    if CRITICAL_AGENT_NAME not in validated_jury_names:
-        validated_jury_names.append(CRITICAL_AGENT_NAME)
-    
-    final_jury_names = list(dict.fromkeys(validated_jury_names))
+    # 규칙 적용
+    validated_names = [name for name in selected_jury.agent_names if name in available_agent_names]
+    if CRITICAL_AGENT_NAME not in validated_names:
+        validated_names.append(CRITICAL_AGENT_NAME)
+    final_jury_names = list(dict.fromkeys(validated_names))
 
     final_jury_details = [
-        AgentDetail(name=name, model=jury_pool_configs.get(name, {}).get("model", "N/A"))
+        AgentDetail(name=name, model=jury_pool.get(name, {}).get("model", "N/A"))
         for name in final_jury_names
     ]
     
-    judge_config = special_agent_configs.get(JUDGE_AGENT_NAME)
+    judge_config = special_agents.get(JUDGE_AGENT_NAME)
     if not judge_config:
         raise ValueError(f"'{JUDGE_AGENT_NAME}'의 설정을 찾을 수 없습니다.")
 
@@ -222,7 +208,5 @@ async def select_debate_team(report: IssueAnalysisReport) -> DebateTeam:
     )
     
     print(f"--- [Orchestrator] 3단계: 배심원단 선정 완료 ---")
-    print(f"재판관: {final_team.judge.name} ({final_team.judge.model})")
-    print(f"배심원단: {[f'{agent.name} ({agent.model})' for agent in final_team.jury]}")
-
+    
     return final_team
