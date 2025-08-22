@@ -187,13 +187,13 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
 
     # --- [핵심 수정] 2. 시스템 프롬프트에서 단순 이름 목록 대신, 역할 설명이 포함된 목록을 사용합니다. ---
     system_prompt = f"""
-    You are a master moderator assembling a panel of AI experts for a debate. Your task is to select a jury of 5 to 7 experts from the `Available Expert Agents Pool` ONLY. Do not invent names or select agents not on the list.
-
+    You are a master moderator assembling a panel of AI experts for a debate. Your task is to select a jury of 5 to 7 experts from the `Available Expert Agents Pool` ONLY. [cite: 289]
+    Do not invent names or select agents not on the list. [cite: 290]
     **Available Expert Agents Pool (Name: Role Summary):**
     {agent_pool_description}
 
-    Based on the debate context provided by the user, select the most relevant experts to form a diverse and effective jury. Ensure your selection covers the key issues and anticipated perspectives. Provide a concise reason for your team composition in Korean.
-    You must only respond with a single, valid JSON object. Do NOT select a "Judge" or "Moderator"; that role is assigned separately.
+    Based on the debate context provided by the user, select the most relevant experts to form a diverse and effective jury. Ensure your selection covers the key issues and anticipated perspectives. Provide a concise reason for your team composition in Korean. [cite: 292]
+    You must only respond with a single, valid JSON object. Do NOT select a "Judge" or "Moderator"; that role is assigned separately. [cite: 293, 294]
     """
     # --- 수정 끝 ---
 
@@ -228,7 +228,7 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
         raise ValueError(f"'{JUDGE_AGENT_NAME}'의 설정을 찾을 수 없습니다.")
 
     final_team = DebateTeam(
-        judge=AgentDetail(name=JUDGE_AGENT_NAME, model=judge_config.get("model", "N/A")),
+        judge=AgentDetail(**judge_config),
         jury=final_jury_details,
         reason=selected_jury.reason
     )
