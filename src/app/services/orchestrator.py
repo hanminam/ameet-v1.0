@@ -152,7 +152,7 @@ def _load_available_agents() -> List[Dict[str, str]]:
 
 async def select_debate_team(report: IssueAnalysisReport) -> DebateTeam:
     """
-    분석 보고서를 기반으로 AI 배심원단을 선정하고 사회자을 지정합니다.
+    분석 보고서를 기반으로 AI 배심원단을 선정하고 재판관을 지정합니다.
     """
     print(f"--- [Orchestrator] 3단계: 배심원단 선정 시작 ---")
     
@@ -162,48 +162,50 @@ async def select_debate_team(report: IssueAnalysisReport) -> DebateTeam:
     
     available_agent_names = [agent["name"] for agent in available_agents]
 
-    # 팀 구성은 복잡한 추론이 필요하므로 고성능 모델 사용
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0.3, google_api_key=settings.GOOGLE_API_KEY)
+    llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0.3)
     structured_llm = llm.with_structured_output(SelectedJury)
 
+    # --- [수정] 1. 시스템 프롬프트에서는 변하는 데이터를 제거하고, 고정된 지시문만 남깁니다. ---
     system_prompt = f"""
     You are a master moderator assembling a panel of AI experts for a debate. Your task is to select a jury of 5 to 7 experts from the `Available Expert Agents Pool` ONLY. Do not invent names or select agents not on the list.
 
-    **Debate Context (Issue Analysis Report):**
-    {report.model_dump_json(indent=2)}
-
-    **Available Expert Agents Pool:**
+    Available Expert Agents Pool:
     - {', '.join(available_agent_names)}
 
-    Based on the debate context, select the most relevant experts to form a diverse and effective jury. Ensure your selection covers the key issues and anticipated perspectives. Provide a concise reason for your team composition.
+    Based on the debate context provided by the user, select the most relevant experts to form a diverse and effective jury. Ensure your selection covers the key issues and anticipated perspectives. Provide a concise reason for your team composition.
     You must only respond with a single, valid JSON object. Do NOT select a "Judge" or "Moderator"; that role is assigned separately.
     """
 
-    prompt = ChatPromptTemplate.from_messages([("system", system_prompt)])
+    # --- [수정] 2. 프롬프트 템플릿에 변하는 데이터가 들어갈 자리({report_json})를 명시합니다. ---
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("human", "Here is the debate context (Issue Analysis Report):\n\n{report_json}")
+    ])
+
     chain = prompt | structured_llm
 
-    # LLM을 통해 배심원단 초안 선택
-    selected_jury = await chain.ainvoke({})
+    # --- [수정] 3. .ainvoke()를 호출할 때, 변수 자리에 실제 데이터를 전달합니다. ---
+    selected_jury = await chain.ainvoke({
+        "report_json": report.model_dump_json(indent=2)
+    })
     
-    # --- 규칙 강제 적용 ---
-    # 1. LLM이 생성한 이름 중 실제 풀에 있는 이름만 필터링 (환각 방지)
+    # --- 규칙 강제 적용 로직 (이하 동일) ---
     validated_jury_names = [name for name in selected_jury.agent_names if name in available_agent_names]
     
-    # 2. '비판적 관점' 에이전트가 포함되었는지 확인 후 없으면 추가
     if CRITICAL_AGENT_NAME not in validated_jury_names:
         print(f"--- [규칙 적용] '{CRITICAL_AGENT_NAME}'이 누락되어 강제로 추가합니다. ---")
         validated_jury_names.append(CRITICAL_AGENT_NAME)
     
-    # 3. 중복 제거 및 최종 배심원단 확정
     final_jury = list(dict.fromkeys(validated_jury_names))
 
-    # 4. 최종 팀 구성 객체 생성
     final_team = DebateTeam(
-        judge=JUDGE_AGENT_NAME, # 사회자은 규칙에 따라 별도 지정
+        judge=JUDGE_AGENT_NAME,
         jury=final_jury,
         reason=selected_jury.reason
     )
     
     print(f"--- [Orchestrator] 3단계: 배심원단 선정 완료 ---")
-    print(f"사회자: {final_team.judge}")
+    print(f"재판관: {final_team.judge}")
     print(f"배심원단: {final_team.jury}")
+
+    return final_team
