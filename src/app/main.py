@@ -14,6 +14,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title=settings.APP_TITLE)
 
+# --- main.py 파일의 위치를 기준으로 절대 경로 생성 ---
+BASE_DIR = Path(__file__).resolve().parent.parent
+
 app.add_event_handler("startup", db.init_db_connections)
 app.add_event_handler("shutdown", db.close_db_connections)
 
@@ -41,7 +44,7 @@ async def read_root():
     """
     루트 URL로 접속 시, 프론트엔드의 메인 화면인 index.html 파일을 반환합니다.
     """
-    return FileResponse("src/templates/index.html")
+    return FileResponse(BASE_DIR / "templates/index.html")
 # --- 루트 엔드포인트 수정 끝 ---
 
 @app.get("/api/v1/health-check")
