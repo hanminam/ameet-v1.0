@@ -174,22 +174,31 @@ async def select_debate_team(report: IssueAnalysisReport) -> DebateTeam:
     llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0.3)
     structured_llm = llm.with_structured_output(SelectedJury)
 
-    # --- [수정] 프롬프트에 한국어 이유 명시 ---
+    # --- [수정] 1. 시스템 프롬프트에서는 변하는 데이터를 제거하고, 고정된 지시문만 남깁니다. ---
     system_prompt = f"""
-    You are a master moderator...
-    
+    You are a master moderator assembling a panel of AI experts for a debate. Your task is to select a jury of 5 to 7 experts from the `Available Expert Agents Pool` ONLY. Do not invent names or select agents not on the list.
+
     Available Expert Agents Pool:
     - {', '.join(available_agent_names)}
 
-    ...Provide a concise reason for your team composition in Korean.
-    You must only respond with a single, valid JSON object...
+    Based on the debate context provided by the user, select the most relevant experts to form a diverse and effective jury. Ensure your selection covers the key issues and anticipated perspectives. Provide a concise reason for your team composition in Korean.
+    You must only respond with a single, valid JSON object. Do NOT select a "Judge" or "Moderator"; that role is assigned separately.
     """
 
-    prompt = ChatPromptTemplate.from_messages([("system", system_prompt)])
+    # --- [수정] 2. 프롬프트 템플릿에 변하는 데이터가 들어갈 자리({report_json})를 명시합니다. ---
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("human", "Here is the debate context (Issue Analysis Report):\n\n{report_json}")
+    ])
+
     chain = prompt | structured_llm
+
+    # --- [수정] 3. .ainvoke()를 호출할 때, 변수 자리에 실제 데이터를 전달합니다. ---
+    selected_jury = await chain.ainvoke({
+        "report_json": report.model_dump_json(indent=2)
+    })
     
-    selected_jury = await chain.ainvoke({"report_json": report.model_dump_json(indent=2)})
-    
+    # --- 규칙 강제 적용 로직 (이하 동일) ---
     validated_jury_names = [name for name in selected_jury.agent_names if name in available_agent_names]
     
     if CRITICAL_AGENT_NAME not in validated_jury_names:
@@ -197,7 +206,6 @@ async def select_debate_team(report: IssueAnalysisReport) -> DebateTeam:
     
     final_jury_names = list(dict.fromkeys(validated_jury_names))
 
-    # --- [수정] 이름 목록을 AgentDetail 객체 목록으로 변환 ---
     final_jury_details = [
         AgentDetail(name=name, model=jury_pool_configs.get(name, {}).get("model", "N/A"))
         for name in final_jury_names
