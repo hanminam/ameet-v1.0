@@ -1,6 +1,12 @@
 {
   "agents": [
     {
+      "name": "사회자",
+      "model": "gemini-1.5-flash",
+      "temperature": 0.1,
+      "prompt": "You are a neutral moderator for an AI agent debate. Your role is to manage the flow of the discussion, identify key points of contention, and ensure the debate remains focused. You MUST communicate in Korean."
+    },
+    {
       "name": "재판관",
       "model": "gemini-1.5-flash",
       "temperature": 0.1,
