@@ -162,34 +162,61 @@ def _load_available_agents() -> List[Dict[str, str]]:
         raise ValueError("에이전트 설정 파일(app/core/settings/agents.json)을 찾을 수 없습니다.")
 
 async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, special_agents: Dict) -> DebateTeam:
+    """
+    분석 보고서를 기반으로 AI 배심원단을 선정하고 재판관을 지정합니다.
+    """
     print(f"--- [Orchestrator] 3단계: 배심원단 선정 시작 ---")
     
     selector_config = special_agents.get(JURY_SELECTOR_NAME)
     if not selector_config:
         raise ValueError(f"'{JURY_SELECTOR_NAME}' 설정을 찾을 수 없습니다.")
 
-    available_agent_names = list(jury_pool.keys())
+    # --- [핵심 수정] 1. LLM에게 전달할 에이전트 설명을 생성합니다. ---
+    # 각 에이전트의 이름과 프롬프트의 첫 문장을 조합하여 역할 요약을 만듭니다.
+    agent_pool_description_list = [
+        f"- {name}: {config['prompt'].split('.')[0]}." 
+        for name, config in jury_pool.items()
+    ]
+    agent_pool_description = "\n".join(agent_pool_description_list)
     
+    # --- 수정 끝 ---
+
     llm = ChatGoogleGenerativeAI(
         model=selector_config["model"],
         temperature=selector_config["temperature"]
     )
     structured_llm = llm.with_structured_output(SelectedJury)
 
-    system_prompt = selector_config["prompt"].replace("{available_agent_names}", ', '.join(available_agent_names))
-    
+    # --- [핵심 수정] 2. 시스템 프롬프트에서 단순 이름 목록 대신, 역할 설명이 포함된 목록을 사용합니다. ---
+    system_prompt = f"""
+    You are a master moderator assembling a panel of AI experts for a debate. Your task is to select a jury of 5 to 7 experts from the `Available Expert Agents Pool` ONLY. Do not invent names or select agents not on the list.
+
+    **Available Expert Agents Pool (Name: Role Summary):**
+    {agent_pool_description}
+
+    Based on the debate context provided by the user, select the most relevant experts to form a diverse and effective jury. Ensure your selection covers the key issues and anticipated perspectives. Provide a concise reason for your team composition in Korean.
+    You must only respond with a single, valid JSON object. Do NOT select a "Judge" or "Moderator"; that role is assigned separately.
+    """
+    # --- 수정 끝 ---
+
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
         ("human", "Here is the debate context (Issue Analysis Report):\n\n{report_json}")
     ])
     
     chain = prompt | structured_llm
-    selected_jury = await chain.ainvoke({"report_json": report.model_dump_json(indent=2)})
+    selected_jury = await chain.ainvoke({
+        "report_json": report.model_dump_json(indent=2)
+    })
     
-    # 규칙 적용
+    # --- 규칙 강제 적용 로직 (이하 동일) ---
+    available_agent_names = list(jury_pool.keys())
     validated_names = [name for name in selected_jury.agent_names if name in available_agent_names]
+    
     if CRITICAL_AGENT_NAME not in validated_names:
+        print(f"--- [규칙 적용] '{CRITICAL_AGENT_NAME}'이 누락되어 강제로 추가합니다. ---")
         validated_names.append(CRITICAL_AGENT_NAME)
+    
     final_jury_names = list(dict.fromkeys(validated_names))
 
     final_jury_details = [
@@ -208,5 +235,4 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
     )
     
     print(f"--- [Orchestrator] 3단계: 배심원단 선정 완료 ---")
-    
     return final_team
