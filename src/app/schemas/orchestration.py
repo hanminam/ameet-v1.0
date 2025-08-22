@@ -52,3 +52,19 @@ class DebateTeam(BaseModel):
     judge: str = Field(description="토론의 사회자로 지정된 재판관 에이전트의 이름입니다.")
     jury: List[str] = Field(description="토론에 참여하는 전문가 배심원단 목록입니다.")
     reason: str = Field(description="배심원단 선정 이유입니다.")
+
+class AgentDetail(BaseModel):
+    """에이전트의 상세 정보를 담는 모델"""
+    name: str
+    model: str
+
+class SelectedJury(BaseModel):
+    """LLM이 선택한 배심원단과 그 선정 이유를 정의하는 모델"""
+    agent_names: List[str]
+    reason: str
+
+class DebateTeam(BaseModel):
+    """최종적으로 구성된 재판관과 배심원단 팀 정보"""
+    judge: AgentDetail  # str -> AgentDetail로 변경
+    jury: List[AgentDetail] # List[str] -> List[AgentDetail]로 변경
+    reason: str

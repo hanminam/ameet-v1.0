@@ -87,14 +87,35 @@
     </div>
 
     <div id="screen-analysis" class="screen screen-card">
-            <div class="screen-header"><span>토론 준비: AI 분석 과정</span></div>
+        <div class="screen-header"><span>토론 준비: AI 분석 과정</span></div>
         <div class="screen-body">
             <div class="text-center mb-8">
                 <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mx-auto"></div>
-                <h2 class="text-2xl font-bold text-slate-800 mt-6">주제를 분석하고 있습니다...</h2>
+                <h2 id="analysis-status-text" class="text-2xl font-bold text-slate-800 mt-6">주제를 분석하고 있습니다...</h2>
                 <p class="text-slate-600 mt-2">최적의 토론을 위해 AI가 3단계에 걸쳐 준비합니다.</p>
             </div>
+            <div class="relative w-full max-w-2xl mx-auto p-4">
+                <div class="absolute top-1/2 left-0 w-full h-1 bg-slate-200 -translate-y-1/2"></div>
+                <div id="progress-bar" class="absolute top-1/2 left-0 h-1 bg-blue-500 -translate-y-1/2 transition-all duration-1000" style="width: 15%;"></div>
+                <div class="relative flex justify-between items-start">
+                    <div id="step-1" class="text-center z-10">
+                        <div class="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto font-bold text-xl ring-4 ring-white">1</div>
+                        <p class="text-sm font-bold mt-3">주제 분석</p>
+                        <p id="step-1-status" class="text-xs text-slate-500">쟁점 도출 중</p>
+                    </div>
+                    <div id="step-2" class="text-center z-10 opacity-50">
+                        <div class="w-12 h-12 rounded-full bg-white border-2 border-slate-300 flex items-center justify-center mx-auto font-bold text-xl text-slate-400 ring-4 ring-white">2</div>
+                        <p class="text-sm font-bold mt-3 text-slate-400">자료 수집</p>
+                        <p id="step-2-status" class="text-xs text-slate-500">대기 중</p>
+                    </div>
+                    <div id="step-3" class="text-center z-10 opacity-50">
+                        <div class="w-12 h-12 rounded-full bg-white border-2 border-slate-300 flex items-center justify-center mx-auto font-bold text-xl text-slate-400 ring-4 ring-white">3</div>
+                        <p class="text-sm font-bold mt-3 text-slate-400">패널 선정</p>
+                        <p id="step-3-status" class="text-xs text-slate-500">대기 중</p>
+                    </div>
+                </div>
             </div>
+        </div>
     </div>
 
     <div id="screen-jury" class="screen screen-card">
@@ -225,7 +246,8 @@
 
             // 분석 중 화면으로 전환
             showScreen('screen-analysis');
-            // TODO: 프로그레스 바 애니메이션 시작
+            // 프로그레스 바 애니메이션 시작
+            runAnalysisAnimation();
 
             const formData = new FormData();
             formData.append('topic', topic);
@@ -245,8 +267,9 @@
                 if (response.ok) {
                     const debateTeam = await response.json();
                     console.log('Orchestration 성공:', debateTeam);
-                    renderJuryScreen(debateTeam); // 배심원단 화면 렌더링
-                    showScreen('screen-jury');
+                    //renderJuryScreen(debateTeam); // 배심원단 화면 렌더링
+                    //showScreen('screen-jury');
+                    finishAnalysisAnimation(debateTeam);
                 } else {
                     const errorData = await response.json();
                     alert(`분석 중 오류가 발생했습니다: ${errorData.detail}`);
@@ -260,42 +283,86 @@
         }
 
         /**
+         * 분석 과정 3단계 애니메이션을 시뮬레이션하는 함수
+         */
+        function runAnalysisAnimation() {
+            // UI 요소 가져오기
+            const progressBar = document.getElementById('progress-bar');
+            const analysisStatusText = document.getElementById('analysis-status-text');
+            const steps = {
+                1: { div: document.getElementById('step-1'), status: document.getElementById('step-1-status') },
+                2: { div: document.getElementById('step-2'), status: document.getElementById('step-2-status') },
+                3: { div: document.getElementById('step-3'), status: document.getElementById('step-3-status') }
+            };
+
+            // 2단계 진행
+            setTimeout(() => {
+                progressBar.style.width = '50%';
+                analysisStatusText.textContent = '웹 검색 및 파일 분석 중...';
+                steps[1].status.textContent = '완료';
+                steps[2].div.classList.remove('opacity-50');
+                steps[2].div.querySelector('div').className = 'w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto font-bold text-xl ring-4 ring-white';
+                steps[2].status.textContent = '자료 확보 중';
+            }, 1500); // 1.5초 후
+
+            // 3단계 진행
+            setTimeout(() => {
+                progressBar.style.width = '100%';
+                analysisStatusText.textContent = '최적의 전문가 팀 구성 중...';
+                steps[2].status.textContent = '완료';
+                steps[3].div.classList.remove('opacity-50');
+                steps[3].div.querySelector('div').className = 'w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto font-bold text-xl ring-4 ring-white';
+                steps[3].status.textContent = '선발 중';
+            }, 3000); // 3초 후
+        }
+
+        /**
+         * API 응답을 받은 후 애니메이션을 완료하고 화면을 전환하는 함수
+         * @param {object} debateTeam - API 응답 데이터
+         */
+        function finishAnalysisAnimation(debateTeam) {
+             setTimeout(() => {
+                renderJuryScreen(debateTeam);
+                showScreen('screen-jury');
+            }, 1000); // 마지막 단계 보여주고 1초 후 전환
+        }
+
+        /**
          * API 응답 데이터를 기반으로 배심원단 확인 화면을 동적으로 생성하는 함수
          * @param {object} teamData - /orchestrate API의 응답 데이터 (DebateTeam)
          */
         function renderJuryScreen(teamData) {
             // Font Awesome 아이콘 맵 (예시)
             const iconMap = {
-                "재판관": "🧑‍⚖️", "거시경제 전문가": "🌍", "산업 분석가": "🏭", "재무 분석가": "💹",
+                "사회자": "🧑", "거시경제 전문가": "🌍", "산업 분석가": "🏭", "재무 분석가": "💹",
                 "SNS 트렌드 분석가": "📱", "비판적 관점": "🤔", "워렌 버핏": "👴",
                 "피터 린치": "👨‍💼", "스티브 잡스": "📱", "일론 머스크": "🚀", "심리학 전문가": "🧠",
                 "미래학자": "🔭", "IT 전문가": "💻"
             };
             
             let juryHtml = '';
-            teamData.jury.forEach(agentName => {
-                const icon = iconMap[agentName] || '🤖';
-                // TODO: '이해관계자' 태그 로직 추가 필요
+            teamData.jury.forEach(agent => {
+                const icon = iconMap[agent.name] || '🤖';
                 juryHtml += `
                     <div class="flex flex-col items-center text-center p-3 bg-white rounded-lg shadow-sm">
                         <span class="text-3xl">${icon}</span>
-                        <p class="font-bold mt-2">전문가</p>
-                        <p class="text-sm text-slate-600">${agentName}</p>
+                        <p class="font-bold mt-2">${agent.name}</p>
+                        <p class="text-xs text-slate-500 mt-1">${agent.model}</p>
                     </div>
                 `;
             });
 
             const fullHtml = `
                 <div class="text-center mb-8">
-                    <h2 class="text-2xl font-bold text-slate-800">사회자 및 배심원단 구성이 완료되었습니다.</h2>
-                    <p class="text-slate-600 mt-2">'사회자'의 진행에 따라, 선발된 'AI 배심원단'이 심층 토론을 시작합니다.</p>
+                    <h2 class="text-2xl font-bold text-slate-800">재판관 및 배심원단 구성이 완료되었습니다.</h2>
+                    <p class="text-slate-600 mt-2">'재판관'의 진행에 따라, 선발된 'AI 배심원단'이 심층 토론을 시작합니다.</p>
                 </div>
                 <div class="mb-8">
                     <div class="bg-amber-50 border-2 border-amber-400 p-4 rounded-xl flex flex-col sm:flex-row items-center gap-4">
-                        <span class="text-5xl">${iconMap[teamData.judge] || '🧑‍⚖️'}</span>
+                        <span class="text-5xl">${iconMap[teamData.judge.name] || '🧑'}</span>
                         <div class="text-center sm:text-left">
                             <h3 class="text-lg font-bold text-amber-800">사회자</h3>
-                            <p class="text-slate-600 mt-1">${teamData.judge}</p>
+                            <p class="text-slate-600 mt-1">${teamData.judge.name} (${teamData.judge.model})</p>
                         </div>
                     </div>
                 </div>
