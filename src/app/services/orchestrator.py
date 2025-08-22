@@ -51,7 +51,7 @@ async def analyze_topic(topic: str) -> IssueAnalysisReport:
     print(f"--- [Orchestrator] 1단계: 사건 분석 완료 ---")
     return report
 
-# --- [신규] 증거 수집 로직 ---
+# --- 증거 수집 로직 ---
 async def gather_evidence(
     report: IssueAnalysisReport, 
     files: List[UploadFile],
@@ -135,20 +135,20 @@ async def _get_file_evidence(files: List[UploadFile], topic: str) -> List[Eviden
         
     return evidence_items
 
-# --- [신규] 배심원단 선정 로직 ---
-
+# --- 배심원단 선정 로직 ---
 def _load_available_agents() -> List[Dict[str, str]]:
     """
     선택 가능한 에이전트 풀을 설정 파일에서 로드합니다.
-    '사회자'과 같은 특수 역할은 이 풀에서 제외됩니다.
+    '재판관'과 같은 특수 역할은 이 풀에서 제외됩니다.
     """
     try:
-        with open("src/app/core/settings/agents.json", "r", encoding="utf-8") as f:
+        # 이 경로는 src/app/core/settings/agents.json을 가리킵니다.
+        # 해당 위치로 agents.json 파일을 이동시켜야 합니다.
+        with open("app/core/settings/agents.json", "r", encoding="utf-8") as f:
             all_agents = json.load(f).get("agents", [])
-            # '사회자'은 선택 대상이 아니므로 풀에서 제외
             return [agent for agent in all_agents if agent.get("name") != JUDGE_AGENT_NAME]
     except FileNotFoundError:
-        raise ValueError("에이전트 설정 파일(agents.json)을 찾을 수 없습니다.")
+        raise ValueError("에이전트 설정 파일(app/core/settings/agents.json)을 찾을 수 없습니다.")
 
 async def select_debate_team(report: IssueAnalysisReport) -> DebateTeam:
     """

@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = "default_key"
     GOOGLE_API_KEY: str = "default_key"
     ANTHROPIC_API_KEY: str = "default_key"
+    TAVILY_API_KEY: str = "default_key"
 
     DB_USER: str = "ameet_user"
     DB_PASSWORD: str = "Kimnc0624!"

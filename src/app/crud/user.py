@@ -4,8 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from typing import List, Optional
 
-from app.models.user import User  # 명확하게 직접 임포트
-from app.schemas import UserCreate
+from app.models.user import User  
+from app.schemas.user import UserCreate 
+
 from app.core.security import get_password_hash
 
 async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:

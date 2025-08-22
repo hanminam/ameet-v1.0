@@ -11,9 +11,9 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
 from google.cloud.sql.connector import Connector
 
-from .core.config import settings, logger
-from .models.base import Base
-from .models.user import User
+from app.core.config import settings, logger
+from app.models.base import Base
+#from app.models.user import User
 
 redis_client = None
 mongo_client = None

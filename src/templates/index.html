@@ -64,7 +64,7 @@
 
     <div id="screen-topic" class="screen screen-card">
         <div class="screen-header">
-            <span class="font-bold">[2] 주제 입력</span>
+            <span class="font-bold">주제 입력</span>
             <div class="flex items-center gap-4">
                 <span id="user-email-display" class="text-sm font-medium text-slate-600"></span>
                 <button id="logout-button" class="text-sm font-bold text-red-500 hover:underline">로그아웃</button>
@@ -72,8 +72,35 @@
         </div>
         <div class="screen-body text-center">
             <h2 class="text-3xl font-bold text-slate-800">무엇에 대해 토론할까요?</h2>
-            <p class="text-slate-600 mt-2 mb-8">로그인 되었습니다. 이제 토론을 시작할 수 있습니다.</p>
+            <p class="text-slate-600 mt-2 mb-8">AI 집단지성이 깊이 있는 통찰을 제공합니다.</p>
+            <div class="bg-slate-50 p-6 rounded-xl border">
+                <textarea id="topic-input" class="w-full h-28 p-3 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base" placeholder="예: 테슬라의 6개월 뒤 주가 전망"></textarea>
+                <div class="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4">
+                    <label class="flex items-center gap-2 text-sm text-slate-600 hover:text-primary cursor-pointer">
+                        <input type="file" id="file-input" class="hidden">
+                        📎 <span id="file-name-display">참고 파일 첨부 (TXT, PDF)</span>
+                    </label>
+                    <button id="start-analysis-button" class="btn btn-primary w-full sm:w-auto">분석 시작</button>
+                </div>
+            </div>
         </div>
+    </div>
+
+    <div id="screen-analysis" class="screen screen-card">
+            <div class="screen-header"><span>토론 준비: AI 분석 과정</span></div>
+        <div class="screen-body">
+            <div class="text-center mb-8">
+                <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mx-auto"></div>
+                <h2 class="text-2xl font-bold text-slate-800 mt-6">주제를 분석하고 있습니다...</h2>
+                <p class="text-slate-600 mt-2">최적의 토론을 위해 AI가 3단계에 걸쳐 준비합니다.</p>
+            </div>
+            </div>
+    </div>
+
+    <div id="screen-jury" class="screen screen-card">
+        <div class="screen-header"><span>[4] 배심원단 구성 완료</span></div>
+        <div id="jury-container" class="screen-body">
+            </div>
     </div>
     
     <script>
@@ -86,10 +113,12 @@
         const logoutButton = document.getElementById('logout-button');
         const loginError = document.getElementById('login-error');
         const userEmailDisplay = document.getElementById('user-email-display');
-
-        // --- API Configuration ---
-        //const API_BASE_URL = 'http://127.0.0.1:8000'; // 로컬 백엔드 서버 주소
-
+        const topicInput = document.getElementById('topic-input');
+        const fileInput = document.getElementById('file-input');
+        const fileNameDisplay = document.getElementById('file-name-display');
+        const startAnalysisButton = document.getElementById('start-analysis-button');
+        const juryContainer = document.getElementById('jury-container');
+        
         // --- Functions ---
         
         /**
@@ -175,6 +204,112 @@
             updateUIForLoggedOutState();
             showScreen('screen-login');
         }
+
+        /**
+         * '분석 시작' 버튼 클릭 시 오케스트레이션 파이프라인을 실행하는 함수
+         */
+        async function handleOrchestration() {
+            const topic = topicInput.value.trim();
+            const file = fileInput.files[0];
+            const token = localStorage.getItem('accessToken');
+
+            if (!topic) {
+                alert('토론할 주제를 입력해주세요.');
+                return;
+            }
+            if (!token) {
+                alert('로그인이 필요합니다.');
+                showScreen('screen-login');
+                return;
+            }
+
+            // 분석 중 화면으로 전환
+            showScreen('screen-analysis');
+            // TODO: 프로그레스 바 애니메이션 시작
+
+            const formData = new FormData();
+            formData.append('topic', topic);
+            if (file) {
+                formData.append('file', file);
+            }
+
+            try {
+                const response = await fetch('/api/v1/discussion/orchestrate', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData,
+                });
+
+                if (response.ok) {
+                    const debateTeam = await response.json();
+                    console.log('Orchestration 성공:', debateTeam);
+                    renderJuryScreen(debateTeam); // 배심원단 화면 렌더링
+                    showScreen('screen-jury');
+                } else {
+                    const errorData = await response.json();
+                    alert(`분석 중 오류가 발생했습니다: ${errorData.detail}`);
+                    showScreen('screen-topic'); // 주제 입력 화면으로 복귀
+                }
+            } catch (error) {
+                alert('서버에 연결할 수 없습니다.');
+                showScreen('screen-topic');
+                console.error('Orchestration 네트워크 오류:', error);
+            }
+        }
+
+        /**
+         * API 응답 데이터를 기반으로 배심원단 확인 화면을 동적으로 생성하는 함수
+         * @param {object} teamData - /orchestrate API의 응답 데이터 (DebateTeam)
+         */
+        function renderJuryScreen(teamData) {
+            // Font Awesome 아이콘 맵 (예시)
+            const iconMap = {
+                "재판관": "🧑‍⚖️", "거시경제 전문가": "🌍", "산업 분석가": "🏭", "재무 분석가": "💹",
+                "SNS 트렌드 분석가": "📱", "비판적 관점": "🤔", "워렌 버핏": "👴",
+                "피터 린치": "👨‍💼", "스티브 잡스": "📱", "일론 머스크": "🚀", "심리학 전문가": "🧠",
+                "미래학자": "🔭", "IT 전문가": "💻"
+            };
+            
+            let juryHtml = '';
+            teamData.jury.forEach(agentName => {
+                const icon = iconMap[agentName] || '🤖';
+                // TODO: '이해관계자' 태그 로직 추가 필요
+                juryHtml += `
+                    <div class="flex flex-col items-center text-center p-3 bg-white rounded-lg shadow-sm">
+                        <span class="text-3xl">${icon}</span>
+                        <p class="font-bold mt-2">전문가</p>
+                        <p class="text-sm text-slate-600">${agentName}</p>
+                    </div>
+                `;
+            });
+
+            const fullHtml = `
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold text-slate-800">사회자 및 배심원단 구성이 완료되었습니다.</h2>
+                    <p class="text-slate-600 mt-2">'사회자'의 진행에 따라, 선발된 'AI 배심원단'이 심층 토론을 시작합니다.</p>
+                </div>
+                <div class="mb-8">
+                    <div class="bg-amber-50 border-2 border-amber-400 p-4 rounded-xl flex flex-col sm:flex-row items-center gap-4">
+                        <span class="text-5xl">${iconMap[teamData.judge] || '🧑‍⚖️'}</span>
+                        <div class="text-center sm:text-left">
+                            <h3 class="text-lg font-bold text-amber-800">사회자</h3>
+                            <p class="text-slate-600 mt-1">${teamData.judge}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="border-2 border-slate-200 bg-slate-50 p-6 rounded-xl">
+                    <h3 class="font-bold text-slate-700 text-center mb-4 text-lg">AI 배심원단</h3>
+                    <p class="text-center text-sm text-slate-500 mb-4">${teamData.reason}</p>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        ${juryHtml}
+                    </div>
+                </div>
+                <button class="btn btn-primary w-full mt-8">이 구성으로 토론 시작하기</button>
+            `;
+            juryContainer.innerHTML = fullHtml;
+        }
         
         /**
          * 로그인 상태에 따라 UI를 업데이트하는 함수
@@ -198,6 +333,17 @@
         // --- Event Listeners ---
         loginButton.addEventListener('click', handleLogin);
         logoutButton.addEventListener('click', handleLogout);
+        startAnalysisButton.addEventListener('click', handleOrchestration);
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                fileNameDisplay.textContent = fileInput.files[0].name;
+                fileNameDisplay.classList.add('font-semibold', 'text-primary');
+            } else {
+                fileNameDisplay.textContent = '참고 파일 첨부 (TXT, PDF)';
+                fileNameDisplay.classList.remove('font-semibold', 'text-primary');
+            }
+        });
 
         // --- Initial Check ---
         // 페이지 로드 시, 저장된 토큰이 있는지 확인하여 로그인 상태 유지

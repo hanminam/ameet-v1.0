@@ -6,7 +6,9 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from jose import JWTError, jwt
 
-from app import schemas, crud
+from app.schemas import user as user_schema
+from app import crud
+
 from app.core import security
 from app.db import get_db
 from app.models.user import User as UserModel # UserModel 별칭으로 명확하게 임포트
@@ -32,7 +34,7 @@ async def get_current_user(
         role: str = payload.get("role")
         if email is None or role is None:
             raise credentials_exception
-        token_data = schemas.TokenData(email=email, role=role)
+        token_data = user_schema.TokenData(email=email, role=role)
     except JWTError:
         raise credentials_exception
     
@@ -49,9 +51,9 @@ async def get_current_admin_user(current_user: UserModel = Depends(get_current_u
         )
     return current_user
 
-@router.post("/", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=user_schema.User, status_code=status.HTTP_201_CREATED)
 async def create_user_by_admin(
-    user: schemas.UserCreate,
+    user: user_schema.UserCreate,
     db: AsyncSession = Depends(get_db),
     admin_user: UserModel = Depends(get_current_admin_user) # 별칭 사용
 ):
@@ -63,7 +65,7 @@ async def create_user_by_admin(
         raise HTTPException(status_code=400, detail="Email already registered")
     return await crud.user.create_user(db=db, user=user)
 
-@router.get("/", response_model=List[schemas.User])
+@router.get("/", response_model=List[user_schema.User])
 async def read_users(
     skip: int = 0,
     limit: int = 100,
@@ -76,7 +78,7 @@ async def read_users(
     users = await crud.user.get_users(db, skip=skip, limit=limit)
     return users
 
-@router.delete("/{user_id}", response_model=schemas.User)
+@router.delete("/{user_id}", response_model=user_schema.User)
 async def delete_user_by_admin(
     user_id: int,
     db: AsyncSession = Depends(get_db),
