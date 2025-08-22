@@ -1,7 +1,7 @@
 # src/app/schemas/orchestration.py
 
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 from datetime import date
 
 class KeyIssue(BaseModel):
@@ -57,6 +57,10 @@ class AgentDetail(BaseModel):
     """에이전트의 상세 정보를 담는 모델"""
     name: str
     model: str
+    # --- [수정] 프롬프트와 온도 필드 추가 ---
+    prompt: str
+    temperature: float
+    tools: Optional[List[str]] = Field(default_factory=list)
 
 class SelectedJury(BaseModel):
     """LLM이 선택한 배심원단과 그 선정 이유를 정의하는 모델"""
@@ -65,6 +69,6 @@ class SelectedJury(BaseModel):
 
 class DebateTeam(BaseModel):
     """최종적으로 구성된 재판관과 배심원단 팀 정보"""
-    judge: AgentDetail  # str -> AgentDetail로 변경
-    jury: List[AgentDetail] # List[str] -> List[AgentDetail]로 변경
+    judge: AgentDetail
+    jury: List[AgentDetail]
     reason: str

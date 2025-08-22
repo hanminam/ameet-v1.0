@@ -178,8 +178,6 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
         for name, config in jury_pool.items()
     ]
     agent_pool_description = "\n".join(agent_pool_description_list)
-    
-    # --- 수정 끝 ---
 
     llm = ChatGoogleGenerativeAI(
         model=selector_config["model"],
@@ -219,10 +217,11 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
     
     final_jury_names = list(dict.fromkeys(validated_names))
 
-    final_jury_details = [
-        AgentDetail(name=name, model=jury_pool.get(name, {}).get("model", "N/A"))
-        for name in final_jury_names
-    ]
+    final_jury_details = []
+    for name in final_jury_names:
+        agent_config = jury_pool.get(name)
+        if agent_config:
+            final_jury_details.append(AgentDetail(**agent_config))
     
     judge_config = special_agents.get(JUDGE_AGENT_NAME)
     if not judge_config:
