@@ -34,6 +34,7 @@ JURY_SELECTOR_NAME = "Jury Selector"
 async def get_active_agents_from_db() -> Tuple[Dict[str, Dict], Dict[str, Dict]]:
     """
     DB에서 'active' 상태인 에이전트들을 조회하여 'special'과 'expert' 타입으로 분리하여 반환합니다.
+    [수정] 반환되는 딕셔너리의 값(value)에 'name' 필드를 포함시킵니다.
     """
     special_agents = {}
     expert_agents = {}
@@ -41,11 +42,16 @@ async def get_active_agents_from_db() -> Tuple[Dict[str, Dict], Dict[str, Dict]]
     active_agents_cursor = AgentSettings.find(AgentSettings.status == "active")
     
     async for agent in active_agents_cursor:
-        config_dict = agent.config.model_dump()
+        # config 딕셔너리와 name을 합쳐서 완전한 에이전트 정보 딕셔너리를 생성
+        full_agent_details = {
+            "name": agent.name,
+            **agent.config.model_dump()
+        }
+        
         if agent.agent_type == "special":
-            special_agents[agent.name] = config_dict
+            special_agents[agent.name] = full_agent_details
         else: # "expert"
-            expert_agents[agent.name] = config_dict
+            expert_agents[agent.name] = full_agent_details
             
     return special_agents, expert_agents
 
@@ -192,10 +198,8 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
     if not selector_config:
         raise ValueError(f"'{JURY_SELECTOR_NAME}' 설정을 찾을 수 없습니다.")
 
-    # --- [핵심 수정] 1. LLM에게 전달할 에이전트 설명을 생성합니다. ---
-    # 각 에이전트의 이름과 프롬프트의 첫 문장을 조합하여 역할 요약을 만듭니다.
     agent_pool_description_list = [
-        f"- {name}: {config['prompt'].split('.')[0]}." 
+        f"- {name}: {config['prompt'].split('.')[0]}."
         for name, config in jury_pool.items()
     ]
     agent_pool_description = "\n".join(agent_pool_description_list)
@@ -206,7 +210,7 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
     )
     structured_llm = llm.with_structured_output(SelectedJury)
 
-    # --- [핵심 수정] 2. 시스템 프롬프트에서 단순 이름 목록 대신, 역할 설명이 포함된 목록을 사용합니다. ---
+    # --- 2. 시스템 프롬프트에서 단순 이름 목록 대신, 역할 설명이 포함된 목록을 사용합니다. ---
     system_prompt = f"""
     You are a master moderator assembling a panel of AI experts for a debate. Your task is to select a jury of 5 to 7 experts from the `Available Expert Agents Pool` ONLY. [cite: 289]
     Do not invent names or select agents not on the list. [cite: 290]
@@ -216,7 +220,6 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
     Based on the debate context provided by the user, select the most relevant experts to form a diverse and effective jury. Ensure your selection covers the key issues and anticipated perspectives. Provide a concise reason for your team composition in Korean. [cite: 292]
     You must only respond with a single, valid JSON object. Do NOT select a "Judge" or "Moderator"; that role is assigned separately. [cite: 293, 294]
     """
-    # --- 수정 끝 ---
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
@@ -228,28 +231,26 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
         "report_json": report.model_dump_json(indent=2)
     })
     
-    # --- 규칙 강제 적용 로직 (이하 동일) ---
+    # --- 규칙 강제 적용 로직 ---
     available_agent_names = list(jury_pool.keys())
     validated_names = [name for name in selected_jury.agent_names if name in available_agent_names]
     
-    if CRITICAL_AGENT_NAME not in validated_names:
+    if CRITICAL_AGENT_NAME not in validated_names and CRITICAL_AGENT_NAME in available_agent_names:
         print(f"--- [규칙 적용] '{CRITICAL_AGENT_NAME}'이 누락되어 강제로 추가합니다. ---")
         validated_names.append(CRITICAL_AGENT_NAME)
     
     final_jury_names = list(dict.fromkeys(validated_names))
 
-    final_jury_details = []
-    for name in final_jury_names:
-        agent_config = jury_pool.get(name)
-        if agent_config:
-            final_jury_details.append(AgentDetail(**agent_config))
+    final_jury_details = [
+        AgentDetail(**jury_pool[name]) for name in final_jury_names if name in jury_pool
+    ]
     
     judge_config = special_agents.get(JUDGE_AGENT_NAME)
     if not judge_config:
         raise ValueError(f"'{JUDGE_AGENT_NAME}'의 설정을 찾을 수 없습니다.")
 
     final_team = DebateTeam(
-        judge=AgentDetail(**judge_config),
+        judge=AgentDetail(**judge_config), # 재판관 정보로 AgentDetail 생성
         jury=final_jury_details,
         reason=selected_jury.reason
     )
