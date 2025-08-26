@@ -13,7 +13,10 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import login, users, setup, discussion
-from app.api.v1.admin import agents as admin_agents # 1. admin agents 라우터 임포트
+from app.api.v1.admin import agents as admin_agents
+
+from app.api.v1.admin import agents as admin_agents
+from app.api.v1.admin import discussions as admin_discussions
 
 app = FastAPI(title=settings.APP_TITLE)
 
@@ -33,6 +36,13 @@ app.include_router(
     admin_agents.router, 
     prefix="/api/v1/admin/agents", 
     tags=["Admin: Agents"]
+)
+
+# --- [신규] 토론 관리 API 라우터 등록 ---
+app.include_router(
+    admin_discussions.router,
+    prefix="/api/v1/admin/discussions",
+    tags=["Admin: Discussions"]
 )
 
 # --- CORS 미들웨어 추가 ---
