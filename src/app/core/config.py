@@ -1,6 +1,7 @@
 # app/core/config.py
 
 import logging
+from typing import Optional
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -26,7 +27,13 @@ class Settings(BaseSettings):
     DB_HOST: str = "34.64.212.12"
     DB_PORT: str = "3306"
 
-    # [수정] Cloud Run 환경에서 주입되는 인스턴스 연결 이름
+    # --- LangSmith 환경 변수 추가 ---
+    LANGCHAIN_TRACING_V2: bool = False
+    LANGCHAIN_ENDPOINT: str = "https://api.smith.langchain.com"
+    LANGCHAIN_API_KEY: Optional[str] = None
+    LANGCHAIN_PROJECT: Optional[str] = None
+
+    # Cloud Run 환경에서 주입되는 인스턴스 연결 이름
     # 로컬에서는 이 값이 없으므로 None이 됩니다.
     INSTANCE_CONNECTION_NAME: str | None = None
 
@@ -38,10 +45,10 @@ class Settings(BaseSettings):
 
     MONGO_DB_URL: str = "mongodb+srv://root:Kimnc0624!%40@cluster0.6ckqorp.mongodb.net/ameet_db?retryWrites=true&w=majority"
 
-    # [신규] JWT 서명을 위한 시크릿 키 (실제 운영 시에는 .env에서 관리)
+    # JWT 서명을 위한 시크릿 키 (실제 운영 시에는 .env에서 관리)
     SECRET_KEY: str = "a_very_secret_key_that_should_be_changed"
 
-    # --- [수정] 환경에 따라 Redis 호스트를 동적으로 결정 ---
+    # --- 환경에 따라 Redis 호스트를 동적으로 결정 ---
     @computed_field
     @property
     def REDIS_HOST(self) -> str:
@@ -55,7 +62,7 @@ class Settings(BaseSettings):
             return self.LOCAL_REDIS_HOST
     # --- Redis 설정 수정 끝 ---
 
-    # [추가] SQLAlchemy가 사용할 완전한 데이터베이스 접속 URL 생성
+    # SQLAlchemy가 사용할 완전한 데이터베이스 접속 URL 생성
     @computed_field
     @property
     def DATABASE_URL(self) -> str:

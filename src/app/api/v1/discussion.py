@@ -1,5 +1,6 @@
 # src/app/api/v1/discussion.py
 
+import uuid
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
 
@@ -22,23 +23,26 @@ async def run_orchestration_pipeline(
     current_user: UserModel = Depends(get_current_user)
 ):
     try:
-        # --- [핵심 수정] ---
-        # 1. 더 이상 파일을 로드하지 않고, DB에서 Active 상태의 에이전트 설정을 직접 가져옵니다.
+        # 1. 고유한 토론 ID 생성
+        discussion_id = f"dscn_{uuid.uuid4()}"
+        
+        # 2. DB에서 에이전트 설정 가져오기
         special_agents, jury_pool = await get_active_agents_from_db()
         
-        # 2. 1단계: 사건 분석 함수 호출
-        analysis_report = await analyze_topic(topic, special_agents)
+        # 3. 각 단계별 함수 호출 시 discussion_id 전달
+        analysis_report = await analyze_topic(topic, special_agents, discussion_id)
         
-        # 3. 2단계: 증거 수집
         files_to_process = [file] if file else []
         evidence_briefing = await gather_evidence(
             report=analysis_report, 
             files=files_to_process,
-            topic=topic
+            topic=topic,
+            discussion_id=discussion_id
         )
         
-        # 4. 3단계: 배심원단 선정
-        debate_team = await select_debate_team(analysis_report, jury_pool, special_agents)
+        debate_team = await select_debate_team(
+            analysis_report, jury_pool, special_agents, discussion_id
+        )
         
         return debate_team
         

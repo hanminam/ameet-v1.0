@@ -57,10 +57,10 @@ class AgentDetail(BaseModel):
     """에이전트의 상세 정보를 담는 모델"""
     name: str
     model: str
-    # --- [수정] 프롬프트와 온도 필드 추가 ---
     prompt: str
     temperature: float
     tools: Optional[List[str]] = Field(default_factory=list)
+    icon: Optional[str] = Field(default="🤖")
 
 class SelectedJury(BaseModel):
     """LLM이 선택한 배심원단과 그 선정 이유를 정의하는 모델"""
@@ -69,6 +69,8 @@ class SelectedJury(BaseModel):
 
 class DebateTeam(BaseModel):
     """최종적으로 구성된 재판관과 배심원단 팀 정보"""
+    discussion_id: str = Field(description="이번 토론 세션을 식별하는 고유 ID입니다.")
+    
     judge: AgentDetail
     jury: List[AgentDetail]
     reason: str

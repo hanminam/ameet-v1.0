@@ -4,7 +4,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from app.core.config import settings
 
-async def summarize_text(content: str, topic: str) -> str:
+async def summarize_text(content: str, topic: str, discussion_id: str) -> str:
     """
     주어진 텍스트 내용을 토론 주제와 관련하여 요약합니다.
     """
@@ -30,9 +30,12 @@ async def summarize_text(content: str, topic: str) -> str:
     chain = prompt | llm
 
     # LLM의 토큰 제한을 초과하지 않도록 입력 텍스트의 길이를 제한합니다.
-    summary_result = await chain.ainvoke({
-        "topic": topic,
-        "content": content[:8000] 
-    })
+    summary_result = await chain.ainvoke(
+        {
+            "topic": topic,
+            "content": content[:8000]
+        },
+        config={"tags": [f"discussion_id:{discussion_id}"]}
+    )
 
     return summary_result.content

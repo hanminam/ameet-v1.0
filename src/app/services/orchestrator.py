@@ -34,7 +34,7 @@ JURY_SELECTOR_NAME = "Jury Selector"
 async def get_active_agents_from_db() -> Tuple[Dict[str, Dict], Dict[str, Dict]]:
     """
     DB에서 'active' 상태인 에이전트들을 조회하여 'special'과 'expert' 타입으로 분리하여 반환합니다.
-    [수정] 반환되는 딕셔너리의 값(value)에 'name' 필드를 포함시킵니다.
+    반환되는 딕셔너리의 값(value)에 'name' 필드를 포함시킵니다.
     """
     special_agents = {}
     expert_agents = {}
@@ -55,18 +55,9 @@ async def get_active_agents_from_db() -> Tuple[Dict[str, Dict], Dict[str, Dict]]
             
     return special_agents, expert_agents
 
-# --- 설정 로더 ---
-#def _load_agent_configs(file_path: str) -> Dict[str, Dict]:
-#    try:
-#        with open(file_path, "r", encoding="utf-8") as f:
-#            agents = json.load(f).get("agents", [])
-#            return {agent["name"]: agent for agent in agents}
-#    except FileNotFoundError:
-#        raise ValueError(f"에이전트 설정 파일({file_path})을 찾을 수 없습니다.")
-
 # --- 1단계: 사건 분석 ---
-async def analyze_topic(topic: str, special_agents: Dict[str, Dict]) -> IssueAnalysisReport:
-    print(f"--- [Orchestrator] 1단계: 사건 분석 시작 (주제: {topic}) ---")
+async def analyze_topic(topic: str, special_agents: Dict[str, Dict], discussion_id: str) -> IssueAnalysisReport:
+    print(f"--- [Orchestrator] 1단계: 사건 분석 시작 (ID: {discussion_id}) ---")
     
     analyst_config = special_agents.get(TOPIC_ANALYST_NAME)
     if not analyst_config:
@@ -84,7 +75,12 @@ async def analyze_topic(topic: str, special_agents: Dict[str, Dict]) -> IssueAna
     ])
     
     chain = prompt | structured_llm
-    report = await chain.ainvoke({"topic": topic})
+    
+    # LLM 호출 시 config에 태그 추가
+    report = await chain.ainvoke(
+        {"topic": topic},
+        config={"tags": [f"discussion_id:{discussion_id}"]}
+    )
     
     print(f"--- [Orchestrator] 1단계: 사건 분석 완료 ---")
     return report
@@ -93,18 +89,17 @@ async def analyze_topic(topic: str, special_agents: Dict[str, Dict]) -> IssueAna
 async def gather_evidence(
     report: IssueAnalysisReport, 
     files: List[UploadFile],
-    topic: str
+    topic: str,
+    discussion_id: str
 ) -> CoreEvidenceBriefing:
     """
     분석 보고서와 사용자 파일을 기반으로 '핵심 자료집'을 생성합니다.
     웹 검색과 파일 처리를 병렬로 수행하여 효율성을 높입니다.
     """
-    print(f"--- [Orchestrator] 2단계: 증거 수집 시작 ---")
-    
-    # 웹 증거 수집과 파일 증거 수집 작업을 동시에 실행할 준비
+    print(f"--- [Orchestrator] 2단계: 증거 수집 시작 (ID: {discussion_id}) ---")
     tasks = {
-        "web": _get_web_evidence(report, topic),
-        "files": _get_file_evidence(files, topic)
+        "web": _get_web_evidence(report, topic, discussion_id),
+        "files": _get_file_evidence(files, topic, discussion_id)
     }
 
     # asyncio.gather를 사용하여 모든 작업을 병렬로 실행하고 결과를 기다림
@@ -119,18 +114,16 @@ async def gather_evidence(
         file_evidence=evidence_map["files"]
     )
 
-async def _get_web_evidence(report: IssueAnalysisReport, topic: str) -> List[EvidenceItem]:
-    """웹 검색을 수행하고 결과를 요약하여 증거 항목 리스트를 반환합니다."""
-    # 검색 쿼리를 주제와 핵심 키워드를 조합하여 생성
+async def _get_web_evidence(report: IssueAnalysisReport, topic: str, discussion_id: str) -> List[EvidenceItem]:
     search_query = f"{topic}: {', '.join(report.core_keywords)}"
-    search_results = await perform_web_search(search_query)
+    search_results = await perform_web_search(search_query) # 웹 검색 자체는 LLM 호출이 아님
     
     if not search_results:
         return []
 
-    # 각 검색 결과의 내용을 요약하는 작업을 병렬로 처리
     summary_tasks = [
-        summarize_text(result["content"], topic)
+        # summarize_text 호출 시 discussion_id 전달
+        summarize_text(result["content"], topic, discussion_id)
         for result in search_results if result.get("content")
     ]
     summaries = await asyncio.gather(*summary_tasks)
@@ -146,7 +139,7 @@ async def _get_web_evidence(report: IssueAnalysisReport, topic: str) -> List[Evi
             
     return evidence_items
 
-async def _get_file_evidence(files: List[UploadFile], topic: str) -> List[EvidenceItem]:
+async def _get_file_evidence(files: List[UploadFile], topic: str, discussion_id: str) -> List[EvidenceItem]:
     """업로드된 파일들을 처리하고 요약하여 증거 항목 리스트를 반환합니다."""
     if not files:
         return []
@@ -157,7 +150,8 @@ async def _get_file_evidence(files: List[UploadFile], topic: str) -> List[Eviden
 
     # 파일 내용 요약 작업을 병렬로 처리
     summary_tasks = [
-        summarize_text(content, topic)
+        # summarize_text 호출 시 discussion_id 전달
+        summarize_text(content, topic, discussion_id)
         for content in file_contents if isinstance(content, str)
     ]
     summaries = await asyncio.gather(*summary_tasks)
@@ -188,7 +182,8 @@ def _load_available_agents() -> List[Dict[str, str]]:
     except FileNotFoundError:
         raise ValueError("에이전트 설정 파일(app/core/settings/agents.json)을 찾을 수 없습니다.")
 
-async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, special_agents: Dict) -> DebateTeam:
+async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, special_agents: Dict, discussion_id: str) -> DebateTeam:
+    print(f"--- [Orchestrator] 3단계: 배심원단 선정 시작 (ID: {discussion_id}) ---")
     """
     분석 보고서를 기반으로 AI 배심원단을 선정하고 재판관을 지정합니다.
     """
@@ -227,9 +222,11 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
     ])
     
     chain = prompt | structured_llm
-    selected_jury = await chain.ainvoke({
-        "report_json": report.model_dump_json(indent=2)
-    })
+    # LLM 호출 시 config에 태그 추가
+    selected_jury = await chain.ainvoke(
+        {"report_json": report.model_dump_json(indent=2)},
+        config={"tags": [f"discussion_id:{discussion_id}"]}
+    )
     
     # --- 규칙 강제 적용 로직 ---
     available_agent_names = list(jury_pool.keys())
@@ -250,7 +247,8 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
         raise ValueError(f"'{JUDGE_AGENT_NAME}'의 설정을 찾을 수 없습니다.")
 
     final_team = DebateTeam(
-        judge=AgentDetail(**judge_config), # 재판관 정보로 AgentDetail 생성
+        discussion_id=discussion_id, # 최종 응답 객체에 discussion_id 포함
+        judge=AgentDetail(**judge_config),
         jury=final_jury_details,
         reason=selected_jury.reason
     )
