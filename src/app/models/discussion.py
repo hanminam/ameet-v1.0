@@ -1,24 +1,30 @@
 # src/app/models/discussion.py
 
-from beanie import Document
+from beanie import Document, Indexed
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Literal, Optional
+from typing import List, Dict, Any, Literal, Optional, Annotated
 from datetime import datetime
 
-# --- 기존 DiscussionLog 모델 (변경 없음) ---
+# --- DiscussionLog 모델 ---
 class DiscussionLog(Document):
     """토론의 전체 대화 기록을 저장하는 모델"""
+    discussion_id: Annotated[str, Indexed(unique=True)]
+    status: Literal["processing", "completed", "failed"] = "processing"
+    
     topic: str
-    user_email: str
-    transcript: List[Dict[str, Any]]
-    # 필요시, 토론에 참여한 agent들의 name과 version을 기록해두면 좋습니다.
-    # agent_versions: Dict[str, int] 
-
+    user_email: Annotated[str, Indexed()]
+    
+    transcript: List[Dict[str, Any]] = Field(default_factory=list)
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = None
+    report_summary: Optional[str] = None
+    
     class Settings:
         name = "discussions"
 
 
-# --- [신규] 에이전트의 실제 설정을 담는 Pydantic 모델 ---
+# --- 에이전트의 실제 설정을 담는 Pydantic 모델 ---
 class AgentConfig(BaseModel):
     """에이전트의 프롬프트, 모델 등 실제 설정 값을 담는 모델"""
     prompt: str
@@ -28,7 +34,7 @@ class AgentConfig(BaseModel):
     icon: Optional[str] = Field(default="🤖", description="UI에 표시될 이모지 아이콘")
 
 
-# --- [변경] AgentSettings 모델을 버전/상태 관리가 가능하도록 재설계 ---
+# --- AgentSettings 모델을 버전/상태 관리가 가능하도록 재설계 ---
 class AgentSettings(Document):
     """
     에이전트 설정을 관리하는 MongoDB Document 모델.
