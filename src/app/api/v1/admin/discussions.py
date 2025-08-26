@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import List, Optional
+
 from langsmith import Client
 from collections import defaultdict
 from datetime import datetime
@@ -6,7 +8,8 @@ from datetime import datetime
 from app.api.v1.users import get_current_admin_user
 from app.models.user import User as UserModel
 from app.schemas.admin import DiscussionUsageResponse, TurnUsageDetail, AgentCostSummary
-from app.models.discussion import DiscussionLog # 토론 메타데이터 조회를 위해 임포트
+from app.models.discussion import DiscussionLog
+from app.schemas.discussion import DiscussionLogItem, DiscussionLogDetail
 
 router = APIRouter()
 
@@ -131,3 +134,44 @@ async def get_discussion_usage_details(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Failed to retrieve data from LangSmith: {e}"
         )
+    
+@router.get(
+    "/",
+    response_model=List[DiscussionLogItem],
+    summary="모든 토론 이력 목록 조회 (관리자용)"
+)
+async def list_all_discussions(
+    user_email: Optional[str] = Query(None, description="특정 사용자의 이메일로 필터링"),
+    status: Optional[str] = Query(None, description="토론 상태(processing, completed, failed)로 필터링"),
+    admin_user: UserModel = Depends(get_current_admin_user)
+):
+    """
+    모든 사용자의 토론 이력을 조회하고, 이메일 또는 상태로 필터링할 수 있습니다.
+    """
+    query_conditions = {}
+    if user_email:
+        query_conditions["user_email"] = user_email
+    if status:
+        query_conditions["status"] = status
+        
+    discussions = await DiscussionLog.find(query_conditions).sort(-DiscussionLog.created_at).to_list()
+    return discussions
+
+@router.get(
+    "/{discussion_id}",
+    response_model=DiscussionLogDetail,
+    summary="특정 토론 상세 조회 (관리자용)"
+)
+async def get_any_discussion_detail(
+    discussion_id: str,
+    admin_user: UserModel = Depends(get_current_admin_user)
+):
+    """
+    ID로 특정 토론의 상세 내용을 조회합니다. (소유자 제한 없음)
+    """
+    discussion = await DiscussionLog.find_one(DiscussionLog.discussion_id == discussion_id)
+    
+    if not discussion:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discussion not found.")
+        
+    return discussion

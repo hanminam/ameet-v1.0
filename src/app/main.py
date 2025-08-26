@@ -38,7 +38,12 @@ app.include_router(
     tags=["Admin: Agents"]
 )
 
-# --- [신규] 토론 관리 API 라우터 등록 ---
+# --- 토론 관리 API 라우터 등록 ---
+app.include_router(
+    admin_discussions.router,
+    prefix="/api/v1/admin/discussions",
+    tags=["Admin: Discussions"]
+)
 app.include_router(
     admin_discussions.router,
     prefix="/api/v1/admin/discussions",
