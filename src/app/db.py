@@ -9,6 +9,8 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
+from beanie import init_beanie
+from app.models.discussion import DiscussionLog, AgentSettings
 from google.cloud.sql.connector import Connector
 
 from app.core.config import settings, logger
@@ -45,19 +47,27 @@ async def init_db_connections():
         logger.error(f"--- [DB-INIT-ERROR] Failed during Redis initialization: {e} ---", exc_info=True)
         return
 
-    # --- MongoDB 초기화 ---
+    # --- MongoDB 초기화 및 Beanie 초기화 ---
     try:
         logger.info("--- [DB-INIT-STEP-5] Attempting to create MongoDB client... ---")
+        
+        # [수정] MONGO_DB_URL에서 DB 이름 추출
+        db_name = settings.MONGO_DB_URL.split("/")[-1].split("?")[0]
         mongo_client = AsyncIOMotorClient(settings.MONGO_DB_URL)
-        # MongoDB는 연결 테스트를 위해 서버 정보를 가져옵니다.
+        
+        # [핵심 추가] Beanie 초기화
+        await init_beanie(
+            database=mongo_client[db_name],
+            document_models=[AgentSettings, DiscussionLog] # DB와 매핑할 모든 Beanie 모델 클래스
+        )
+        
+        # MongoDB 연결 테스트
         await mongo_client.server_info()
-        logger.info("--- [DB-INIT-STEP-6] MongoDB client connection successful. ---")
+        logger.info(f"--- [DB-INIT-STEP-6] MongoDB client & Beanie ORM initialized successfully for DB '{db_name}'. ---")
 
     except Exception as e:
-        logger.error(f"--- [DB-INIT-ERROR] Failed during MongoDB initialization: {e} ---", exc_info=True)
+        logger.error(f"--- [DB-INIT-ERROR] Failed during MongoDB/Beanie initialization: {e} ---", exc_info=True)
         return
-
-    logger.info("--- [DB-INIT-STEP-7] All DB connections finished. ---")
 
     # --- MySQL 초기화 ---
     try:
