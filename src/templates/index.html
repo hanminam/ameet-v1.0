@@ -375,10 +375,16 @@
          * @param {object} teamData - /orchestrate API의 응답 데이터 (DebateTeam)
          */
         function renderJuryScreen(teamData) {
-            const iconMap = { "사회자": "🧑‍⚖️", "거시경제 전문가": "🌍", "산업 분석가": "🏭", "재무 분석가": "💹", "SNS 트렌드 분석가": "📱", "비판적 관점": "🤔", "워렌 버핏": "👴", "피터 린치": "👨‍💼", "스티브 잡스": "📱", "일론 머스크": "🚀", "심리학 전문가": "🧠", "미래학자": "🔭", "IT 전문가": "💻" };
+            const iconMap = { 
+                "사회자": "🧑", "거시경제 전문가": "🌍", "산업 분석가": "🏭", 
+                "재무 분석가": "💹", "SNS 트렌드 분석가": "📱", "비판적 관점": "🤔", 
+                "워렌 버핏": "👴", "피터 린치": "👨‍💼", "스티브 잡스": "📱", 
+                "일론 머스크": "🚀", "심리학 전문가": "🧠", "미래학자": "🔭", "IT 전문가": "💻" 
+            };
             
             let juryHtml = '';
             teamData.jury.forEach(agent => {
+                // agent.icon을 우선적으로 사용하고, 없으면 iconMap을 참조하는 로직으로 변경
                 const icon = agent.icon || iconMap[agent.name] || '🤖';
                 juryHtml += `
                     <div class="flex flex-col items-center text-center p-3 bg-white rounded-lg shadow-sm">
@@ -387,6 +393,9 @@
                         <p class="text-xs text-slate-500 mt-1">${agent.model}</p>
                     </div>`;
             });
+
+            const judgeIcon = teamData.judge.icon || iconMap[teamData.judge.name] || '🧑';
+            const judgeName = teamData.judge.name;
 
             const fullHtml = `
                 <div class="text-center mb-8">
