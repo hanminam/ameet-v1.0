@@ -399,20 +399,20 @@
 
             const fullHtml = `
                 <div class="text-center mb-8">
-                    <h2 class="text-2xl font-bold text-slate-800">배심원단 구성이 완료되었습니다.</h2>
-                    <p class="text-slate-600 mt-2">'재판관'의 진행에 따라, 선발된 'AI 배심원단'이 심층 토론을 시작합니다.</p>
+                    <h2 class="text-2xl font-bold text-slate-800">전문가 에이전트 구성이 완료되었습니다.</h2>
+                    <p class="text-slate-600 mt-2">'사회자'의 진행에 따라, 선발된 'AI 전문가'들의 심층 토론을 시작합니다.</p>
                 </div>
                 <div class="mb-8">
                     <div class="bg-amber-50 border-2 border-amber-400 p-4 rounded-xl flex flex-col sm:flex-row items-center gap-4">
-                        <span class="text-5xl">${teamData.judge.icon || iconMap[teamData.judge.name] || '🧑‍⚖️'}</span>
+                        <span class="text-5xl">${teamData.judge.icon || iconMap[teamData.judge.name] || '🧑'}</span>
                         <div class="text-center sm:text-left">
-                            <h3 class="text-lg font-bold text-amber-800">${teamData.judge.name} (사회자)</h3>
+                            <h3 class="text-lg font-bold text-amber-800">사회자</h3>
                             <p class="text-slate-600 mt-1">${teamData.judge.model}</p>
                         </div>
                     </div>
                 </div>
                 <div class="border-2 border-slate-200 bg-slate-50 p-6 rounded-xl">
-                    <h3 class="font-bold text-slate-700 text-center mb-4 text-lg">AI 배심원단</h3>
+                    <h3 class="font-bold text-slate-700 text-center mb-4 text-lg">AI 전문가</h3>
                     <p class="text-center text-sm text-slate-500 mb-4">${teamData.reason}</p>
                     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">${juryHtml}</div>
                 </div>

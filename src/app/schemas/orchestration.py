@@ -60,7 +60,7 @@ class AgentDetail(BaseModel):
     prompt: str
     temperature: float
     tools: Optional[List[str]] = Field(default_factory=list)
-    icon: Optional[str] = Field(default="🤖")
+    icon: Optional[str] = Field(default="🤖", description="UI에 표시될 이모지 아이콘")
 
 class SelectedJury(BaseModel):
     """LLM이 선택한 배심원단과 그 선정 이유를 정의하는 모델"""
