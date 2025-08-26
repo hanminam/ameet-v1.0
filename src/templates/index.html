@@ -128,6 +128,8 @@
         // --- DOM Elements ---
         const loginScreen = document.getElementById('screen-login');
         const topicScreen = document.getElementById('screen-topic');
+        const analysisScreen = document.getElementById('screen-analysis'); // 분석 화면 요소
+        const juryScreen = document.getElementById('screen-jury');       // 배심원단 화면 요소
         const emailInput = document.getElementById('email-input');
         const passwordInput = document.getElementById('password-input');
         const loginButton = document.getElementById('login-button');
@@ -139,6 +141,9 @@
         const fileNameDisplay = document.getElementById('file-name-display');
         const startAnalysisButton = document.getElementById('start-analysis-button');
         const juryContainer = document.getElementById('jury-container');
+
+        // --- Global Variables ---
+        let currentDiscussionId = null; // 현재 토론 ID를 저장할 전역 변수
         
         // --- Functions ---
         
@@ -244,11 +249,8 @@
                 return;
             }
 
-            // 분석 중 화면으로 전환
             showScreen('screen-analysis');
-            // 프로그레스 바 애니메이션 시작
             runAnalysisAnimation();
-
             const formData = new FormData();
             formData.append('topic', topic);
             if (file) {
@@ -256,7 +258,7 @@
             }
 
             try {
-                const response = await fetch('/api/v1/discussion/orchestrate', {
+                const response = await fetch('/api/v1/discussions', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -264,16 +266,18 @@
                     body: formData,
                 });
 
-                if (response.ok) {
+                if (response.status === 201) { // 201 Created 응답 확인
                     const debateTeam = await response.json();
                     console.log('Orchestration 성공:', debateTeam);
-                    //renderJuryScreen(debateTeam); // 배심원단 화면 렌더링
-                    //showScreen('screen-jury');
+                    
+                    currentDiscussionId = debateTeam.discussion_id;
+                    console.log('저장된 Discussion ID:', currentDiscussionId);
+
                     finishAnalysisAnimation(debateTeam);
                 } else {
                     const errorData = await response.json();
                     alert(`분석 중 오류가 발생했습니다: ${errorData.detail}`);
-                    showScreen('screen-topic'); // 주제 입력 화면으로 복귀
+                    showScreen('screen-topic');
                 }
             } catch (error) {
                 alert('서버에 연결할 수 없습니다.');
@@ -332,51 +336,43 @@
          * @param {object} teamData - /orchestrate API의 응답 데이터 (DebateTeam)
          */
         function renderJuryScreen(teamData) {
-            // Font Awesome 아이콘 맵 (예시)
-            const iconMap = {
-                "사회자": "🧑", "거시경제 전문가": "🌍", "산업 분석가": "🏭", "재무 분석가": "💹",
-                "SNS 트렌드 분석가": "📱", "비판적 관점": "🤔", "워렌 버핏": "👴",
-                "피터 린치": "👨‍💼", "스티브 잡스": "📱", "일론 머스크": "🚀", "심리학 전문가": "🧠",
-                "미래학자": "🔭", "IT 전문가": "💻"
-            };
+            const iconMap = { "사회자": "🧑‍⚖️", "거시경제 전문가": "🌍", "산업 분석가": "🏭", "재무 분석가": "💹", "SNS 트렌드 분석가": "📱", "비판적 관점": "🤔", "워렌 버핏": "👴", "피터 린치": "👨‍💼", "스티브 잡스": "📱", "일론 머스크": "🚀", "심리학 전문가": "🧠", "미래학자": "🔭", "IT 전문가": "💻" };
             
             let juryHtml = '';
             teamData.jury.forEach(agent => {
-                const icon = iconMap[agent.name] || '🤖';
+                const icon = agent.icon || iconMap[agent.name] || '🤖';
                 juryHtml += `
                     <div class="flex flex-col items-center text-center p-3 bg-white rounded-lg shadow-sm">
                         <span class="text-3xl">${icon}</span>
                         <p class="font-bold mt-2">${agent.name}</p>
                         <p class="text-xs text-slate-500 mt-1">${agent.model}</p>
-                    </div>
-                `;
+                    </div>`;
             });
 
             const fullHtml = `
                 <div class="text-center mb-8">
-                    <h2 class="text-2xl font-bold text-slate-800">재판관 및 배심원단 구성이 완료되었습니다.</h2>
+                    <h2 class="text-2xl font-bold text-slate-800">배심원단 구성이 완료되었습니다.</h2>
                     <p class="text-slate-600 mt-2">'재판관'의 진행에 따라, 선발된 'AI 배심원단'이 심층 토론을 시작합니다.</p>
                 </div>
                 <div class="mb-8">
                     <div class="bg-amber-50 border-2 border-amber-400 p-4 rounded-xl flex flex-col sm:flex-row items-center gap-4">
-                        <span class="text-5xl">${iconMap[teamData.judge.name] || '🧑'}</span>
+                        <span class="text-5xl">${teamData.judge.icon || iconMap[teamData.judge.name] || '🧑‍⚖️'}</span>
                         <div class="text-center sm:text-left">
-                            <h3 class="text-lg font-bold text-amber-800">사회자 </h3>
+                            <h3 class="text-lg font-bold text-amber-800">${teamData.judge.name} (사회자)</h3>
                             <p class="text-slate-600 mt-1">${teamData.judge.model}</p>
-                            <!--<p class="text-slate-600 mt-1">${teamData.judge.name} (${teamData.judge.model})</p>-->
                         </div>
                     </div>
                 </div>
                 <div class="border-2 border-slate-200 bg-slate-50 p-6 rounded-xl">
                     <h3 class="font-bold text-slate-700 text-center mb-4 text-lg">AI 배심원단</h3>
                     <p class="text-center text-sm text-slate-500 mb-4">${teamData.reason}</p>
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        ${juryHtml}
-                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">${juryHtml}</div>
                 </div>
-                <button class="btn btn-primary w-full mt-8">이 구성으로 토론 시작하기</button>
+                <button id="start-debate-btn" class="btn btn-primary w-full mt-8">이 구성으로 토론 시작하기</button>
             `;
             juryContainer.innerHTML = fullHtml;
+            
+            // [참고] '토론 시작하기' 버튼의 기능은 다음 단계에서 구현하므로, 지금은 이벤트 리스너를 연결하지 않습니다.
         }
         
         /**

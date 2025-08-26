@@ -12,11 +12,8 @@ from sqlalchemy.sql import text
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import login, users, setup, discussion
-from app.api.v1.admin import agents as admin_agents
-
-from app.api.v1.admin import agents as admin_agents
-from app.api.v1.admin import discussions as admin_discussions
+from app.api.v1 import discussions as user_discussions 
+from app.api.v1.admin import agents as admin_agents, discussions as admin_discussions
 
 app = FastAPI(title=settings.APP_TITLE)
 
@@ -29,7 +26,13 @@ app.add_event_handler("shutdown", db.close_db_connections)
 app.include_router(login.router, prefix="/api/v1/login", tags=["login"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(setup.router, prefix="/api/v1/setup", tags=["setup"])
-app.include_router(discussion.router, prefix="/api/v1/discussion", tags=["discussion"])
+
+# 사용자 토론 관련 API 라우터 등록 (생성, 진행, 조회 모두 포함)
+app.include_router(
+    user_discussions.router,
+    prefix="/api/v1/discussions",
+    tags=["Discussions"]
+)
 
 # --- 관리자용 API 라우터 등록 ---
 app.include_router(
