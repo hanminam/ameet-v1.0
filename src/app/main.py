@@ -12,6 +12,9 @@ from sqlalchemy.sql import text
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1 import login, users, setup, discussion
+from app.api.v1.admin import agents as admin_agents # 1. admin agents 라우터 임포트
+
 app = FastAPI(title=settings.APP_TITLE)
 
 # --- main.py 파일의 위치를 기준으로 절대 경로 생성 ---
@@ -24,6 +27,13 @@ app.include_router(login.router, prefix="/api/v1/login", tags=["login"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(setup.router, prefix="/api/v1/setup", tags=["setup"])
 app.include_router(discussion.router, prefix="/api/v1/discussion", tags=["discussion"])
+
+# --- 관리자용 API 라우터 등록 ---
+app.include_router(
+    admin_agents.router, 
+    prefix="/api/v1/admin/agents", 
+    tags=["Admin: Agents"]
+)
 
 # --- CORS 미들웨어 추가 ---
 # 모든 출처(origins)에서의 요청을 허용합니다. (개발 및 테스트용)

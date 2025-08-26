@@ -2,13 +2,15 @@
 
 import asyncio
 import json
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from fastapi import UploadFile
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 
 from app.core.config import settings
+from app.models.discussion import AgentSettings
+
 from app.schemas.orchestration import (
     IssueAnalysisReport, 
     CoreEvidenceBriefing, 
@@ -17,7 +19,7 @@ from app.schemas.orchestration import (
     DebateTeam,
     AgentDetail
 )
-# 새로 추가된 서비스와 도구를 임포트합니다.
+
 from app.tools.search import perform_web_search
 from app.services.document_processor import process_uploaded_file
 from app.services.summarizer import summarize_text
@@ -28,14 +30,33 @@ CRITICAL_AGENT_NAME = "비판적 관점"
 TOPIC_ANALYST_NAME = "Topic Analyst"
 JURY_SELECTOR_NAME = "Jury Selector"
 
+# --- DB에서 Active 상태의 에이전트를 조회하는 함수 ---
+async def get_active_agents_from_db() -> Tuple[Dict[str, Dict], Dict[str, Dict]]:
+    """
+    DB에서 'active' 상태인 에이전트들을 조회하여 'special'과 'expert' 타입으로 분리하여 반환합니다.
+    """
+    special_agents = {}
+    expert_agents = {}
+    
+    active_agents_cursor = AgentSettings.find(AgentSettings.status == "active")
+    
+    async for agent in active_agents_cursor:
+        config_dict = agent.config.model_dump()
+        if agent.agent_type == "special":
+            special_agents[agent.name] = config_dict
+        else: # "expert"
+            expert_agents[agent.name] = config_dict
+            
+    return special_agents, expert_agents
+
 # --- 설정 로더 ---
-def _load_agent_configs(file_path: str) -> Dict[str, Dict]:
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            agents = json.load(f).get("agents", [])
-            return {agent["name"]: agent for agent in agents}
-    except FileNotFoundError:
-        raise ValueError(f"에이전트 설정 파일({file_path})을 찾을 수 없습니다.")
+#def _load_agent_configs(file_path: str) -> Dict[str, Dict]:
+#    try:
+#        with open(file_path, "r", encoding="utf-8") as f:
+#            agents = json.load(f).get("agents", [])
+#            return {agent["name"]: agent for agent in agents}
+#    except FileNotFoundError:
+#        raise ValueError(f"에이전트 설정 파일({file_path})을 찾을 수 없습니다.")
 
 # --- 1단계: 사건 분석 ---
 async def analyze_topic(topic: str, special_agents: Dict[str, Dict]) -> IssueAnalysisReport:
