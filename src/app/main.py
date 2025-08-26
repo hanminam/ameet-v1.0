@@ -6,13 +6,13 @@ from fastapi import FastAPI
 
 from app.core.config import settings
 from app import db
-from app.api.v1 import login, users, setup, discussion
+from app.api.v1 import login, users, setup
 
 from sqlalchemy.sql import text
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import discussions as user_discussions 
+from app.api.v1 import discussions as discussions_router
 from app.api.v1.admin import agents as admin_agents, discussions as admin_discussions
 
 app = FastAPI(title=settings.APP_TITLE)
@@ -29,7 +29,7 @@ app.include_router(setup.router, prefix="/api/v1/setup", tags=["setup"])
 
 # 사용자 토론 관련 API 라우터 등록 (생성, 진행, 조회 모두 포함)
 app.include_router(
-    user_discussions.router,
+    discussions_router.router,
     prefix="/api/v1/discussions",
     tags=["Discussions"]
 )

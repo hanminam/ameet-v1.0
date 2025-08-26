@@ -250,7 +250,9 @@
             }
 
             showScreen('screen-analysis');
-            runAnalysisAnimation();
+            //runAnalysisAnimation();
+            updateAnalysisStep(1, '주제 분석 중...'); // 1단계 시작
+
             const formData = new FormData();
             formData.append('topic', topic);
             if (file) {
@@ -258,22 +260,29 @@
             }
 
             try {
+                // 2. API 호출 시작
+                updateAnalysisStep(2, '자료 수집 중...'); // 2단계 시작
                 const response = await fetch('/api/v1/discussions', {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    },
+                    headers: { 'Authorization': `Bearer ${token}` },
                     body: formData,
                 });
 
-                if (response.status === 201) { // 201 Created 응답 확인
+                if (response.status === 201) {
+                    // 3. API 응답 성공 시 '3단계' 애니메이션 시작
+                    updateAnalysisStep(3, '패널 선정 중...'); // 3단계 시작
                     const debateTeam = await response.json();
                     console.log('Orchestration 성공:', debateTeam);
                     
                     currentDiscussionId = debateTeam.discussion_id;
                     console.log('저장된 Discussion ID:', currentDiscussionId);
 
-                    finishAnalysisAnimation(debateTeam);
+                    // 4. 잠시 후 최종 화면으로 전환
+                    setTimeout(() => {
+                        renderJuryScreen(debateTeam);
+                        showScreen('screen-jury');
+                    }, 1000); // 1초 후 전환
+
                 } else {
                     const errorData = await response.json();
                     alert(`분석 중 오류가 발생했습니다: ${errorData.detail}`);
@@ -286,9 +295,36 @@
             }
         }
 
+        // 분석 단계별 UI 업데이트를 위한 헬퍼 함수
+        function updateAnalysisStep(stepNumber, statusText) {
+            const progressBar = document.getElementById('progress-bar');
+            const analysisStatusText = document.getElementById('analysis-status-text');
+            
+            analysisStatusText.textContent = statusText;
+
+            if (stepNumber === 1) {
+                progressBar.style.width = '15%';
+            } else if (stepNumber === 2) {
+                progressBar.style.width = '50%';
+                const step2Div = document.getElementById('step-2');
+                step2Div.classList.remove('opacity-50');
+                step2Div.querySelector('div').className = 'w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto font-bold text-xl ring-4 ring-white';
+                document.getElementById('step-1-status').textContent = '완료';
+                document.getElementById('step-2-status').textContent = '진행 중';
+            } else if (stepNumber === 3) {
+                progressBar.style.width = '100%';
+                const step3Div = document.getElementById('step-3');
+                step3Div.classList.remove('opacity-50');
+                step3Div.querySelector('div').className = 'w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto font-bold text-xl ring-4 ring-white';
+                document.getElementById('step-2-status').textContent = '완료';
+                document.getElementById('step-3-status').textContent = '진행 중';
+            }
+        }
+
         /**
          * 분석 과정 3단계 애니메이션을 시뮬레이션하는 함수
          */
+        /*
         function runAnalysisAnimation() {
             // UI 요소 가져오기
             const progressBar = document.getElementById('progress-bar');
@@ -319,17 +355,20 @@
                 steps[3].status.textContent = '선발 중';
             }, 3000); // 3초 후
         }
+        */
 
         /**
          * API 응답을 받은 후 애니메이션을 완료하고 화면을 전환하는 함수
          * @param {object} debateTeam - API 응답 데이터
          */
+        /*
         function finishAnalysisAnimation(debateTeam) {
              setTimeout(() => {
                 renderJuryScreen(debateTeam);
                 showScreen('screen-jury');
             }, 1000); // 마지막 단계 보여주고 1초 후 전환
         }
+        */
 
         /**
          * API 응답 데이터를 기반으로 배심원단 확인 화면을 동적으로 생성하는 함수
