@@ -13,7 +13,7 @@ from app.api.v1.users import get_current_user
 from app.models.user import User as UserModel
 from app.models.discussion import DiscussionLog
 
-router = APIRouter()
+router = APIRouter(redirect_slashes=False)
 
 # --- Endpoint 1: 토론 생성 및 오케스트레이션 ---
 @router.post(
