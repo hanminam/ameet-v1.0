@@ -560,7 +560,7 @@
         async function pollDiscussionStatus(discussionId) {
             if (!isPollingActive) {
                 console.log("Polling was stopped externally.");
-                return; // 폴링이 비활성화되면 루프 중단
+                return;
             }
 
             const token = localStorage.getItem('accessToken');
@@ -572,17 +572,14 @@
                 if (response.ok) {
                     const discussionData = await response.json();
                     console.log('Poll success:', discussionData.status, `Transcript length: ${discussionData.transcript.length}`);
-                    
+
                     await updateTranscript(discussionData.transcript, discussionData.participants);
 
                     if (discussionData.status === 'waiting_for_vote') {
                         console.log('Round complete. Polling has been stopped.');
-                        isPollingActive = false; // 폴링 루프 종료
+                        isPollingActive = false;
                         renderUserActionPanel(discussionData);
-                        // UX 패널 렌더링 함수 호출
-                        renderUxPanels(discussionData);
                     } else {
-                        // 작업 완료 후 3초 뒤에 다음 폴링을 예약
                         setTimeout(() => pollDiscussionStatus(discussionId), 3000);
                     }
                 } else {
@@ -594,6 +591,7 @@
                 isPollingActive = false;
             }
         }
+
 
         /**
          * 모든 UX 패널의 렌더링을 관리하는 함수
@@ -873,19 +871,17 @@
 
             isRendering = true;
             const newMessages = transcript.slice(displayedMessagesCount);
-            
+
             const waitingMessage = document.getElementById('waiting-message');
             if (waitingMessage) waitingMessage.remove();
-            
+
             for (const turn of newMessages) {
-                // appendMessage 함수 호출 시, 세 번째 인자로 'transcript'를 전달합니다.
+                // appendMessage 함수 호출 시, 세 번째 인자로 전체 'transcript'를 전달합니다.
                 const messageContainer = appendMessage(turn, participants, transcript);
                 const contentSpan = messageContainer.querySelector('.message-content');
-                
+
                 await typeMessage(contentSpan, turn.message);
-                
                 displayedMessagesCount++;
-                
                 await new Promise(resolve => setTimeout(resolve, 200));
             }
 
@@ -936,39 +932,38 @@
         /**
          * 단일 메시지의 HTML 구조를 만들고, 타이핑 효과를 위해 content span을 비워둠
          */
-        function appendMessage(turn, participants) {
+        function appendMessage(turn, participants, transcript) {
             const chatbox = document.getElementById('chatbox');
             const participantMap = getParticipantMap(participants);
-
             const agentName = turn.agent_name;
             const icon = participantMap[agentName]?.icon || '🤖';
             const isOdd = displayedMessagesCount % 2 !== 0;
 
             let quoteHtml = '';
-            // 다른 에이전트를 언급했는지 분석하여 인용 UI 생성
-            const jury_names = participants.filter(p => (p.name !== '재판관' || p.name !== '사회자')).map(p => p.name);
+            const jury_names = participants.filter(p => p.name !== '재판관' && p.name !== '사회자').map(p => p.name);
+
             for (const mentioned_agent of jury_names) {
-                if (turn.agent_name !== mentioned_agent && turn.message.includes(mentioned_agent)) {
-                    // 해당 에이전트의 가장 최근 발언을 찾아 인용
+                if (agentName !== mentioned_agent && turn.message.includes(mentioned_agent)) {
+                    // 전달받은 transcript를 사용합니다.
                     const targetTurn = [...transcript].reverse().find(t => t.agent_name === mentioned_agent);
                     if (targetTurn) {
                         quoteHtml = `
-                            <div class="border-l-4 border-slate-300 pl-2 text-xs text-slate-500 mb-1">
+                            <div class="border-l-4 border-slate-300 pl-2 text-xs text-slate-500 mb-1 opacity-70">
                                 <strong>${targetTurn.agent_name}</strong>: ${targetTurn.message.substring(0, 40)}...
                             </div>`;
-                        break; // 첫 번째로 언급된 에이전트만 인용
+                        break;
                     }
                 }
             }
 
             const messageContainer = document.createElement('div');
-            
             if (isOdd) {
                 messageContainer.className = 'flex gap-3 my-4 justify-end items-end';
                 messageContainer.innerHTML = `
                     <div class="flex flex-col items-end">
                         <p class="text-sm font-bold text-slate-800">${agentName}</p>
                         <div class="bg-blue-500 text-white p-3 rounded-lg mt-1 text-base inline-block max-w-xl text-left">
+                            ${quoteHtml}
                             <span class="message-content"></span>
                         </div>
                     </div>
@@ -980,13 +975,14 @@
                     <div>
                         <p class="text-sm font-bold text-slate-800">${agentName}</p>
                         <div class="bg-slate-100 p-3 rounded-lg mt-1 text-base inline-block max-w-xl">
+                            ${quoteHtml}
                             <span class="message-content"></span>
                         </div>
                     </div>`;
             }
             chatbox.appendChild(messageContainer);
             chatbox.scrollTop = chatbox.scrollHeight;
-            return messageContainer; // 컨테이너 요소를 반환
+            return messageContainer;
         }
 
         /**
@@ -1036,7 +1032,7 @@
                         }
                         i++;
                         chatbox.scrollTop = chatbox.scrollHeight;
-                        setTimeout(typing, 18); // 다음 글자 타이핑
+                        setTimeout(typing, 20); // 다음 글자 타이핑
                     } else {
                         resolve(); // 타이핑 완료 시 Promise를 resolve
                     }
