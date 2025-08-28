@@ -568,7 +568,6 @@
                 const response = await fetch(`/api/v1/discussions/${discussionId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-
                 if (response.ok) {
                     const discussionData = await response.json();
                     console.log('Poll success:', discussionData.status, `Transcript length: ${discussionData.transcript.length}`);
@@ -578,17 +577,27 @@
                     if (discussionData.status === 'waiting_for_vote') {
                         console.log('Round complete. Polling has been stopped.');
                         isPollingActive = false;
+                        
+                        // UX 패널 렌더링 함수를 호출하여 화면을 업데이트합니다.
+                        renderUxPanels(discussionData); 
+                        
                         renderUserActionPanel(discussionData);
-                    } else {
-                        setTimeout(() => pollDiscussionStatus(discussionId), 3000);
+                    } else if (discussionData.status === 'completed' || discussionData.status === 'failed') {
+                        console.log('Discussion finished. Polling has been stopped.');
+                        isPollingActive = false;
+                        // 최종 보고서 화면으로 전환하는 로직 (추후 구현)
+                        showScreen('screen-6');
+                    }
+                    else {
+                        setTimeout(() => pollDiscussionStatus(discussionId), 3000); // 3초 후 다시 폴링
                     }
                 } else {
                     console.error('Polling failed with status:', response.status);
-                    isPollingActive = false;
+                    isPollingActive = false; // 에러 발생 시 폴링 중단
                 }
             } catch (error) {
                 console.error('Polling network error:', error);
-                isPollingActive = false;
+                isPollingActive = false; // 에러 발생 시 폴링 중단
             }
         }
 
@@ -940,7 +949,7 @@
             const isOdd = displayedMessagesCount % 2 !== 0;
 
             const messageContainer = document.createElement('div');
-            
+
             if (isOdd) {
                 messageContainer.className = 'flex gap-3 my-4 justify-end items-end';
                 messageContainer.innerHTML = `
