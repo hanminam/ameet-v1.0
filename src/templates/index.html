@@ -133,6 +133,7 @@
                 <div id="chatbox" class="flex-1 overflow-y-auto space-y-6 p-4 border rounded-lg bg-white shadow-inner">
                     <div class="text-center text-slate-500">AI 에이전트들의 발언을 기다리고 있습니다...</div>
                 </div>
+                <div id="user-action-panel" class="pt-4"></div>
             </div>
 
             <div class="space-y-6">
@@ -526,21 +527,74 @@
                 const response = await fetch(`/api/v1/discussions/${discussionId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+
                 if (response.ok) {
                     const discussionData = await response.json();
                     console.log('Poll success:', discussionData.status, `Transcript length: ${discussionData.transcript.length}`);
-                    // 기본 대화록 렌더링
                     updateTranscript(discussionData.transcript, discussionData.participants);
-                    
-                    // 다음 단계에서 구현: status가 'waiting_for_vote'일 때 폴링 중지
+
+                    // [구현 완료] 라운드 종료 상태 확인 및 폴링 중지
+                    if (discussionData.status === 'waiting_for_vote') {
+                        console.log('Round complete. Polling has been stopped.');
+                        clearInterval(pollingInterval);
+                        pollingInterval = null; // 타이머 ID 정리
+                        
+                        // [구현 완료] 사용자 액션 패널 표시
+                        renderUserActionPanel(discussionData);
+                    }
                 } else {
                     console.error('Polling failed with status:', response.status);
-                    clearInterval(pollingInterval); // 에러 발생 시 폴링 중지
+                    clearInterval(pollingInterval);
                 }
             } catch (error) {
                 console.error('Polling network error:', error);
-                clearInterval(pollingInterval); // 에러 발생 시 폴링 중지
+                clearInterval(pollingInterval);
             }
+        }
+
+        /**
+         * 사용자 액션 패널(투표, 다음 행동 버튼)을 렌더링하는 함수
+         */
+        function renderUserActionPanel(discussionData) {
+            const actionPanel = document.getElementById('user-action-panel');
+            if (!actionPanel) return;
+
+            // TODO: 향후 discussionData.round_summary에서 투표 내용 가져오기
+            const voteTopic = "현재 논점은 '성장 잠재력'과 '금리 리스크'입니다. 어떤 요소를 더 중요하게 생각하시나요?";
+            const voteOptions = ["성장 잠재력", "금리 리스크"];
+
+            let optionsHtml = '';
+            voteOptions.forEach(option => {
+                // 각 버튼에 data-vote 속성으로 투표 값을 저장
+                optionsHtml += `<button class="btn btn-subtle vote-option">${option}</button>`;
+            });
+
+            actionPanel.innerHTML = `
+                <div class="bg-amber-100 border-l-4 border-amber-500 p-4 rounded-r-lg shadow-lg animate-fade-in">
+                    <p class="font-bold text-amber-800">사회자의 투표 제안</p>
+                    <p class="mt-2 text-base text-amber-900">"${voteTopic}"</p>
+                    <div id="vote-options-container" class="flex flex-wrap gap-3 justify-center mt-4">
+                        ${optionsHtml}
+                    </div>
+                </div>
+                <div class="flex justify-center gap-4 mt-6">
+                    <button id="next-round-btn" class="btn btn-primary">다음 라운드 진행</button>
+                    <button id="end-debate-btn" class="btn btn-secondary">이대로 토론 종료</button>
+                </div>
+            `;
+            
+            // 다음 단계를 위해 투표 버튼에 클릭 이벤트 로직 추가
+            const voteOptionsContainer = document.getElementById('vote-options-container');
+            voteOptionsContainer.addEventListener('click', (event) => {
+                if (event.target.classList.contains('vote-option')) {
+                    // 모든 버튼에서 'active' 스타일 제거
+                    voteOptionsContainer.querySelectorAll('.vote-option').forEach(btn => {
+                        btn.classList.remove('bg-blue-600', 'text-white');
+                    });
+                    // 클릭된 버튼에만 'active' 스타일 추가
+                    event.target.classList.add('bg-blue-600', 'text-white');
+                }
+            });
         }
 
         /**
