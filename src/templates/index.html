@@ -556,6 +556,8 @@
                         console.log('Round complete. Polling has been stopped.');
                         isPollingActive = false; // 폴링 루프 종료
                         renderUserActionPanel(discussionData);
+                        // UX 패널 렌더링 함수 호출
+                        renderUxPanels(discussionData);
                     } else {
                         // 작업 완료 후 3초 뒤에 다음 폴링을 예약
                         setTimeout(() => pollDiscussionStatus(discussionId), 3000);
@@ -568,6 +570,137 @@
                 console.error('Polling network error:', error);
                 isPollingActive = false;
             }
+        }
+
+        /**
+         * 모든 UX 패널의 렌더링을 관리하는 함수
+         */
+        function renderUxPanels(data) {
+            if (data.round_summary) {
+                renderCriticalUtterance(data.round_summary.critical_utterance);
+                renderStanceChanges(data.round_summary.stance_changes, data.participants);
+            }
+            if (data.flow_data) {
+                renderFlowDiagram(data.flow_data.interactions, data.participants);
+            }
+        }
+
+        /**
+         * '결정적 발언' 패널을 렌더링하는 함수
+         */
+        function renderCriticalUtterance(utterance) {
+            const panel = document.getElementById('critical-hit-panel'); // UI에 해당 ID가 있어야 함
+            if (!panel || !utterance) return;
+            panel.innerHTML = `
+                <h3 class="font-bold text-yellow-800 text-lg mb-2">⚡ 결정적 발언</h3>
+                <div class="text-sm text-slate-700">
+                    <p class="font-semibold">[${utterance.agent_name}]</p>
+                    <p class="mt-1">"${utterance.message}"</p>
+                </div>`;
+        }
+
+        /**
+         * '에이전트 입장 변화' 패널을 렌더링하는 함수
+         */
+        function renderStanceChanges(stanceChanges, participants) {
+            const panel = document.getElementById('stance-tracker'); // UI에 해당 ID가 있어야 함
+            const participantMap = getParticipantMap(participants);
+            if (!panel || !stanceChanges) return;
+
+            let html = '';
+            stanceChanges.forEach(change => {
+                html += `
+                    <div class="flex items-center justify-between text-sm">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">${participantMap[change.agent_name]?.icon || '🤖'}</span>
+                            <span class="font-semibold">${change.agent_name}</span>
+                        </div>
+                        <div class="font-bold flex items-center gap-1.5">
+                        ${change.icon} ${change.change}
+                        </div>
+                    </div>`;
+            });
+            panel.innerHTML = html;
+        }
+
+        /**
+         * '토론 흐름도' 패널을 렌더링하는 함수
+         */
+        function renderFlowDiagram(interactions, participants) {
+            const container = document.getElementById('flow-diagram-container'); // UI에 해당 ID가 있어야 함
+            if (!container || !interactions) return;
+            
+            const participantMap = getParticipantMap(participants);
+            let agentHtml = '<div class="grid grid-cols-2 gap-4">';
+            Object.keys(participantMap).forEach(name => {
+                // 토론에 실제 참여한 배심원단만 표시
+                if (participants.some(p => p.name === name && p.name !== '재판관')) {
+                    agentHtml += `
+                        <div id="agent-node-${name.replace(/\s+/g, '-')}" class="flex flex-col items-center text-center">
+                            <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-2xl">${participantMap[name].icon}</div>
+                            <p class="text-xs font-bold mt-1">${name}</p>
+                        </div>`;
+                }
+            });
+            agentHtml += '</div>';
+            container.innerHTML = agentHtml;
+
+            // 잠시 후 화살표 그리기
+            setTimeout(() => {
+                interactions.forEach(flow => {
+                    const fromEl = document.getElementById(`agent-node-${flow.from.replace(/\s+/g, '-')}`);
+                    const toEl = document.getElementById(`agent-node-${flow.to.replace(/\s+/g, '-')}`);
+                    if (fromEl && toEl) {
+                        const line = createFlowLine(fromEl, toEl);
+                        container.appendChild(line);
+                    }
+                });
+            }, 100);
+        }
+
+        /**
+         * 토론 흐름도 화살표를 그리는 헬퍼 함수
+         */
+        /**
+         * 두 HTML 요소(el1, el2)를 연결하는 화살표 선(div)을 생성하여 반환합니다.
+         * @param {HTMLElement} el1 - 시작 요소
+         * @param {HTMLElement} el2 - 도착 요소
+         * @returns {HTMLElement} - 스타일이 적용된 화살표 선 div 요소
+         */
+        function createFlowLine(el1, el2) {
+            // 각 요소의 화면상 위치와 크기 정보를 가져옵니다.
+            const rect1 = el1.getBoundingClientRect();
+            const rect2 = el2.getBoundingClientRect();
+            
+            // 부모 컨테이너의 위치 정보를 가져와 상대 좌표를 계산합니다.
+            const containerRect = el1.parentElement.parentElement.getBoundingClientRect();
+
+            // 각 요소의 중심점 좌표(x, y)를 계산합니다.
+            const x1 = rect1.left + rect1.width / 2 - containerRect.left;
+            const y1 = rect1.top + rect1.height / 2 - containerRect.top;
+            const x2 = rect2.left + rect2.width / 2 - containerRect.left;
+            const y2 = rect2.top + rect2.height / 2 - containerRect.top;
+
+            // 피타고라스 정리를 사용하여 두 점 사이의 거리를 계산합니다 (선의 길이).
+            const length = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+            
+            // 삼각함수(atan2)를 사용하여 두 점 사이의 각도를 계산합니다.
+            const angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
+
+            // 새로운 div 요소를 생성합니다.
+            const line = document.createElement('div');
+            
+            // CSS 클래스를 'flow-line'으로 설정하여 화살표 스타일을 적용합니다.
+            line.className = 'flow-line';
+            
+            // 계산된 값을 사용하여 선의 길이, 위치, 회전 각도를 설정합니다.
+            line.style.width = `${length}px`;
+            line.style.left = `${x1}px`;
+            line.style.top = `${y1}px`;
+            line.style.transform = `rotate(${angle}deg)`;
+            
+            // 완성된 선 요소를 반환합니다.
+            return line;
         }
 
         /**
@@ -858,7 +991,7 @@
                         }
                         i++;
                         chatbox.scrollTop = chatbox.scrollHeight;
-                        setTimeout(typing, 30); // 다음 글자 타이핑
+                        setTimeout(typing, 20); // 다음 글자 타이핑
                     } else {
                         resolve(); // 타이핑 완료 시 Promise를 resolve
                     }

@@ -109,6 +109,31 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
         history_str += f"\n\n{agent_config['name']}: {message}"
         await asyncio.sleep(1)
 
+    # 라운드 종료 후 UX 데이터 생성 (MVP 단계에서는 목업 데이터 사용)
+    if jury_members and discussion_log.transcript:
+        last_agent_name = discussion_log.transcript[-1]['agent_name']
+        last_message = discussion_log.transcript[-1]['message']
+        
+        # 1. 결정적 발언 및 입장 변화 데이터 생성
+        discussion_log.round_summary = {
+            "critical_utterance": {
+                "agent_name": last_agent_name,
+                "message": last_message[:80] + "..." # 메시지를 간단히 요약
+            },
+            "stance_changes": [
+                {"agent_name": jury_members[0]['name'], "change": "유지", "icon": "😐"},
+                {"agent_name": jury_members[1]['name'], "change": "수정", "icon": "🔄"},
+                {"agent_name": jury_members[2]['name'], "change": "강화", "icon": "🔼"},
+            ]
+        }
+        
+        # 2. 토론 흐름도 데이터 생성 (예: 2번째 에이전트가 1번째 에이전트에게 반박)
+        discussion_log.flow_data = {
+            "interactions": [
+                {"from": jury_members[1]['name'], "to": jury_members[0]['name']}
+            ]
+        }
+
     # 5. 라운드 종료 처리 및 6. 최종 상태 변경
     discussion_log.status = "waiting_for_vote"
     discussion_log.turn_number += 1  # 턴 번호를 1 증가시킴
