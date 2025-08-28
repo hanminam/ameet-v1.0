@@ -119,9 +119,37 @@
     </div>
 
     <div id="screen-jury" class="screen screen-card">
-        <div class="screen-header"><span>[4] 배심원단 구성 완료</span></div>
+        <div class="screen-header"><span>배심원단 구성 완료</span></div>
         <div id="jury-container" class="screen-body">
             </div>
+    </div>
+
+    <div id="screen-5" class="screen screen-card" style="max-width: 80rem;">
+        <div class="screen-header">
+            <span>실시간 토론</span>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 bg-slate-50">
+            <div class="lg:col-span-2 h-[70vh] flex flex-col">
+                <div id="chatbox" class="flex-1 overflow-y-auto space-y-6 p-4 border rounded-lg bg-white shadow-inner">
+                    <div class="text-center text-slate-500">AI 에이전트들의 발언을 기다리고 있습니다...</div>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <div class="bg-white border p-4 rounded-xl">
+                    <h3 class="font-bold text-slate-700 text-lg mb-2">⚡ 결정적 발언</h3>
+                    <p class="text-sm text-slate-700">진행 중...</p>
+                </div>
+                <div class="bg-white border p-4 rounded-xl">
+                    <h3 class="font-bold text-slate-700 text-lg mb-4">🔄 토론 흐름도</h3>
+                    <p class="text-sm text-slate-700">진행 중...</p>
+                </div>
+                <div class="bg-white border p-4 rounded-xl">
+                    <h3 class="font-bold text-slate-700 text-lg mb-4">📊 에이전트 입장 변화</h3>
+                    <p class="text-sm text-slate-700">진행 중...</p>
+                </div>
+            </div>
+        </div>
     </div>
     
     <script>
@@ -144,6 +172,7 @@
 
         // --- Global Variables ---
         let currentDiscussionId = null; // 현재 토론 ID를 저장할 전역 변수
+        let pollingInterval = null; // 폴링 타이머 저장을 위한 전역 변수
         
         // --- Functions ---
         
@@ -428,6 +457,7 @@
          * '토론 시작하기' 버튼 클릭 시, 백엔드에 토론 실행을 요청하는 함수
          */
         async function startDebate() {
+
             if (!currentDiscussionId) {
                 alert('오류: 토론 ID를 찾을 수 없습니다.');
                 return;
@@ -454,6 +484,7 @@
                     console.log('백그라운드 토론 작업이 성공적으로 시작되었습니다.');
                     // 다음 단계: 실시간 토론 화면으로 전환
                     showScreen('screen-5'); 
+                    startPolling(currentDiscussionId); // 폴링 시작
                 } else {
                     const errorData = await response.json();
                     alert(`토론 시작에 실패했습니다: ${errorData.detail}`);
@@ -466,6 +497,84 @@
                 startDebateBtn.disabled = false;
                 startDebateBtn.textContent = '이 구성으로 토론 시작하기';
             }
+        }
+
+        /**
+         * 주기적으로 토론 상태를 서버에 요청하는 폴링을 시작하는 함수
+         */
+        function startPolling(discussionId) {
+            if (pollingInterval) {
+                clearInterval(pollingInterval); // 만약 이전에 실행되던 폴링이 있다면 중지
+            }
+            console.log(`Polling started for ${discussionId}`);
+            pollingInterval = setInterval(() => {
+                pollDiscussionStatus(discussionId);
+            }, 3000); // 3초 간격
+        }
+
+        /**
+         * 서버에 토론 상태를 GET으로 요청하는 함수
+         */
+        async function pollDiscussionStatus(discussionId) {
+            const token = localStorage.getItem('accessToken');
+            try {
+                const response = await fetch(`/api/v1/discussions/${discussionId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const discussionData = await response.json();
+                    console.log('Poll success:', discussionData.status, `Transcript length: ${discussionData.transcript.length}`);
+                    // 기본 대화록 렌더링
+                    renderTranscript(discussionData.transcript, discussionData.participants);
+                    
+                    // 다음 단계에서 구현: status가 'waiting_for_vote'일 때 폴링 중지
+                } else {
+                    console.error('Polling failed with status:', response.status);
+                    clearInterval(pollingInterval); // 에러 발생 시 폴링 중지
+                }
+            } catch (error) {
+                console.error('Polling network error:', error);
+                clearInterval(pollingInterval); // 에러 발생 시 폴링 중지
+            }
+        }
+
+        /**
+         * 대화록 데이터를 받아와 채팅창에 렌더링하는 함수
+         */
+        function renderTranscript(transcript, participants) {
+            const chatbox = document.getElementById('chatbox');
+            if (!chatbox) return;
+
+            // 참가자 목록에서 이름과 아이콘을 매핑
+            const participantMap = {};
+            if (participants) {
+                participants.forEach(p => {
+                    participantMap[p.name] = { icon: p.icon || '🤖' };
+                });
+            }
+
+            let html = '';
+            if (transcript.length === 0) {
+                html = '<div class="text-center text-slate-500">AI 에이전트들의 발언을 기다리고 있습니다...</div>';
+            } else {
+                transcript.forEach(turn => {
+                    const agentName = turn.agent_name;
+                    const message = turn.message.replace(/\n/g, '<br>'); // 줄바꿈 처리
+                    const icon = participantMap[agentName]?.icon || '🤖';
+
+                    html += `
+                        <div class="flex gap-3 my-4 animate-fade-in">
+                            <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>
+                            <div>
+                                <p class="text-sm font-bold text-slate-800">${agentName}</p>
+                                <div class="bg-slate-100 p-3 rounded-lg mt-1 text-base inline-block">${message}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            chatbox.innerHTML = html;
+            //chatbox.scrollTop = chatbox.scrollHeight; // 자동 스크롤
         }
         
         /**
