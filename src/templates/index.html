@@ -559,14 +559,12 @@
             const actionPanel = document.getElementById('user-action-panel');
             if (!actionPanel) return;
 
-            // TODO: 향후 discussionData.round_summary에서 투표 내용 가져오기
             const voteTopic = "현재 논점은 '성장 잠재력'과 '금리 리스크'입니다. 어떤 요소를 더 중요하게 생각하시나요?";
             const voteOptions = ["성장 잠재력", "금리 리스크"];
 
             let optionsHtml = '';
             voteOptions.forEach(option => {
-                // 각 버튼에 data-vote 속성으로 투표 값을 저장
-                optionsHtml += `<button class="btn btn-subtle vote-option">${option}</button>`;
+                optionsHtml += `<button class="btn btn-subtle vote-option" data-vote="${option}">${option}</button>`;
             });
 
             actionPanel.innerHTML = `
@@ -583,18 +581,70 @@
                 </div>
             `;
             
-            // 다음 단계를 위해 투표 버튼에 클릭 이벤트 로직 추가
+            // 생성된 버튼들에 이벤트 리스너 연결
+            document.getElementById('next-round-btn').addEventListener('click', handleNextRound);
+            document.getElementById('end-debate-btn').addEventListener('click', handleEndDebate);
+            
             const voteOptionsContainer = document.getElementById('vote-options-container');
             voteOptionsContainer.addEventListener('click', (event) => {
                 if (event.target.classList.contains('vote-option')) {
-                    // 모든 버튼에서 'active' 스타일 제거
                     voteOptionsContainer.querySelectorAll('.vote-option').forEach(btn => {
                         btn.classList.remove('bg-blue-600', 'text-white');
                     });
-                    // 클릭된 버튼에만 'active' 스타일 추가
                     event.target.classList.add('bg-blue-600', 'text-white');
                 }
             });
+        }
+
+        /**
+         * '다음 라운드 진행' 버튼의 로직을 처리하는 함수
+         */
+        async function handleNextRound() {
+            const nextRoundBtn = document.getElementById('next-round-btn');
+            nextRoundBtn.disabled = true;
+            nextRoundBtn.textContent = '다음 라운드를 준비 중입니다...';
+
+            const selectedOption = document.querySelector('.vote-option.bg-blue-600');
+            const userVote = selectedOption ? selectedOption.dataset.vote : null;
+            console.log(`다음 라운드 시작. 사용자 투표: ${userVote}`);
+
+            const token = localStorage.getItem('accessToken');
+            try {
+                const response = await fetch(`/api/v1/discussions/${currentDiscussionId}/turns`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ user_vote: userVote })
+                });
+
+                if (response.status === 202) {
+                    document.getElementById('user-action-panel').innerHTML = ''; // 액션 패널 비우기
+                    startPolling(currentDiscussionId); // 다음 라운드를 위해 폴링 다시 시작
+                } else {
+                    const errorData = await response.json();
+                    alert(`다음 라운드 시작에 실패했습니다: ${errorData.detail}`);
+                    nextRoundBtn.disabled = false;
+                    nextRoundBtn.textContent = '다음 라운드 진행';
+                }
+            } catch (error) {
+                alert('서버 연결에 실패했습니다.');
+                nextRoundBtn.disabled = false;
+                nextRoundBtn.textContent = '다음 라운드 진행';
+            }
+        }
+
+        /**
+         * '토론 종료' 버튼의 로직을 처리하는 함수
+         */
+        function handleEndDebate() {
+            console.log("토론을 종료하고 보고서 화면으로 이동합니다.");
+            if (pollingInterval) {
+                clearInterval(pollingInterval); // 폴링이 활성화되어 있다면 중지
+            }
+            // TODO: 백엔드에 토론 종료 API 호출
+            showScreen('screen-6');
         }
 
         /**

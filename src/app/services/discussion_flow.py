@@ -11,26 +11,52 @@ from app.schemas.orchestration import DebateTeam
 from app.models.discussion import AgentSettings, DiscussionLog
 from app.core.config import logger
 
-async def _run_single_agent_turn(agent_config: dict, topic: str, history: str, special_directive: str, discussion_id: str) -> str:
+async def _run_single_agent_turn(
+    agent_config: dict, 
+    topic: str, 
+    history: str, 
+    special_directive: str, 
+    discussion_id: str,
+    turn_count: int
+) -> str:
     """단일 에이전트의 발언(turn)을 생성합니다."""
     agent_name = agent_config.get("name", "Unknown Agent")
-    logger.info(f"--- [Flow] Running turn for agent: {agent_name} (Discussion: {discussion_id}) ---")
+    logger.info(f"--- [Flow] Running turn for agent: {agent_name} (Discussion: {discussion_id}, Turn: {turn_count}) ---")
+    
     try:
         llm = ChatGoogleGenerativeAI(
             model=agent_config.get("model", "gemini-1.5-flash"),
             temperature=agent_config.get("temperature", 0.2)
         )
-        # 특별 지시문을 포함하도록 프롬프트가 수정되었습니다.
+        
+        # [수정] 토론 라운드 수에 따라 동적으로 지시사항을 변경
+        if turn_count == 0:  # 첫 번째 라운드 (모두 변론)
+            human_instruction = "지금은 '모두 변론' 시간입니다. 위 내용을 바탕으로 당신의 초기 입장을 최소 200자에서 최대 1000자 이내로 설명해주세요."
+        else:  # 두 번째 라운드 이후 (반론)
+            human_instruction = f"지금은 '{turn_count + 1}차 토론' 시간입니다. 이전의 에이전트들의 의견을 고려하여 다른 에이전트의 주장을 반박하거나 다른 에이전트의 의견에 적극 동조하거나 아니면 다른 에이전트의 의견을 수렴하여 의견을 수정한 당신의 의견을 최소 100자 최대 500자 이내로 추가해주세요."
+
+        # 최종 프롬프트 구성
+        final_human_prompt = (
+            f"주제: {topic}\n\n"
+            f"지금까지의 토론 내용:\n{history}\n\n"
+            f"{special_directive}\n"
+            f"{human_instruction}"
+        )
+
         prompt = ChatPromptTemplate.from_messages([
             ("system", agent_config.get("prompt", "You are a helpful assistant.")),
-            ("human", "주제: {topic}\n\n지금까지의 토론 내용:\n{history}\n{special_directive}\n\n위 내용을 바탕으로 당신의 의견을 말해주세요.")
+            ("human", final_human_prompt)
         ])
+        
         chain = prompt | llm
+        
         response = await chain.ainvoke(
             {"topic": topic, "history": history, "special_directive": special_directive},
-            config={"tags": [f"discussion_id:{discussion_id}", f"agent_name:{agent_name}"]}
+            config={"tags": [f"discussion_id:{discussion_id}", f"agent_name:{agent_name}", f"turn:{turn_count}"]}
         )
+        
         return response.content
+        
     except Exception as e:
         logger.error(f"--- [Flow Error] Agent '{agent_name}' turn failed: {e} ---")
         return f"({agent_name} 발언 생성 중 오류 발생)"
@@ -41,6 +67,8 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     """
     logger.info(f"--- [BG Task] Executing turn for Discussion ID: {discussion_log.discussion_id} ---")
     
+    current_turn = discussion_log.turn_number  # [수정] DB에서 현재 턴 번호를 가져옴
+
     # 1. 컨텍스트 준비
     current_transcript = [f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript]
     history_str = "\n\n".join(current_transcript)
@@ -65,7 +93,8 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
             discussion_log.topic, 
             history_str, 
             special_directive,
-            discussion_log.discussion_id
+            discussion_log.discussion_id,
+            current_turn  # 현재 턴 번호를 인자로 전달
         )
         
         # 4. 실시간 DB 업데이트
@@ -77,12 +106,12 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
         discussion_log.transcript.append(turn_data)
         await discussion_log.save()
         
-        # 다음 에이전트를 위해 대화 기록(컨텍스트)을 업데이트
         history_str += f"\n\n{agent_config['name']}: {message}"
         await asyncio.sleep(1)
 
     # 5. 라운드 종료 처리 및 6. 최종 상태 변경
     discussion_log.status = "waiting_for_vote"
+    discussion_log.turn_number += 1  # 턴 번호를 1 증가시킴
     await discussion_log.save()
     
     logger.info(f"--- [BG Task] Turn completed for {discussion_log.discussion_id}. New status: '{discussion_log.status}' ---")

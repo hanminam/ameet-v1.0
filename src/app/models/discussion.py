@@ -25,6 +25,7 @@ class DiscussionLog(Document):
     
     topic: str
     user_email: Annotated[str, Indexed()]
+    turn_number: int = Field(default=0, description="현재 토론 라운드 번호 (0부터 시작)")
     transcript: List[Dict[str, Any]] = Field(default_factory=list)
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
