@@ -618,27 +618,66 @@
             }
 
             const agentName = turn.agent_name;
-            const message = turn.message.replace(/\n/g, '<br>');
+            const messageText = turn.message; // .replace(/\n/g, '<br>')는 타이핑 함수 내부로 이동
             const icon = participantMap[agentName]?.icon || '🤖';
+            const isOdd = displayedMessagesCount % 2 !== 0;
 
-            const messageEl = document.createElement('div');
-            // 초기 상태는 투명, transition 효과 적용
-            messageEl.className = 'flex gap-3 my-4 opacity-0 transition-opacity duration-500 ease-in-out';
-            messageEl.innerHTML = `
-                <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>
-                <div>
-                    <p class="text-sm font-bold text-slate-800">${agentName}</p>
-                    <div class="bg-slate-100 p-3 rounded-lg mt-1 text-base inline-block">${message}</div>
-                </div>
-            `;
-            chatbox.appendChild(messageEl);
+            const messageContainer = document.createElement('div');
+            
+            // 좌/우 정렬을 위한 클래스 동적 할당
+            if (isOdd) {
+                // 우측 정렬 (상대방)
+                messageContainer.className = 'flex gap-3 my-4 justify-end items-end';
+                messageContainer.innerHTML = `
+                    <div class="flex flex-col items-end">
+                        <p class="text-sm font-bold text-slate-800">${agentName}</p>
+                        <div class="bg-blue-500 text-white p-3 rounded-lg mt-1 text-base inline-block max-w-xl">
+                            <span class="message-content"></span>
+                        </div>
+                    </div>
+                    <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>
+                `;
+            } else {
+                // 좌측 정렬 (나)
+                messageContainer.className = 'flex gap-3 my-4';
+                messageContainer.innerHTML = `
+                    <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>
+                    <div>
+                        <p class="text-sm font-bold text-slate-800">${agentName}</p>
+                        <div class="bg-slate-100 p-3 rounded-lg mt-1 text-base inline-block max-w-xl">
+                            <span class="message-content"></span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            chatbox.appendChild(messageContainer);
 
-            // 잠시 후 투명도를 1로 변경하여 fade-in 애니메이션 실행
-            setTimeout(() => {
-                messageEl.classList.remove('opacity-0');
-            }, 50);
+            // 타이핑 효과 시작
+            const messageContentSpan = messageContainer.querySelector('.message-content');
+            typeMessage(messageContentSpan, messageText);
 
-            chatbox.scrollTop = chatbox.scrollHeight; // 항상 최하단으로 자동 스크롤
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+
+        /**
+         * 텍스트에 타이핑 효과를 적용하는 함수
+         */
+        function typeMessage(element, text) {
+            let index = 0;
+            text = text.replace(/\n/g, '<br>'); // 줄바꿈 처리
+            
+            const typingInterval = setInterval(() => {
+                if (index < text.length) {
+                    element.innerHTML += text.charAt(index);
+                    index++;
+                    // 타이핑 중에도 스크롤을 맨 아래로 유지
+                    const chatbox = document.getElementById('chatbox');
+                    chatbox.scrollTop = chatbox.scrollHeight;
+                } else {
+                    clearInterval(typingInterval);
+                }
+            }, 30); // 30ms 간격으로 한 글자씩 타이핑
         }
         
         /**
