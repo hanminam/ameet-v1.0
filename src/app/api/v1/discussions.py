@@ -13,6 +13,11 @@ from app.api.v1.users import get_current_user
 from app.models.user import User as UserModel
 from app.models.discussion import DiscussionLog
 
+from pydantic import BaseModel
+
+class TurnRequest(BaseModel):
+    user_vote: Optional[str] = None
+
 router = APIRouter(redirect_slashes=False)
 
 # --- Endpoint 1: 토론 생성 및 오케스트레이션 ---
@@ -28,7 +33,7 @@ async def create_discussion(
     current_user: UserModel = Depends(get_current_user)
 ):
     """
-    새로운 토론을 시작합니다. 
+    새로운 토론을 시작합니다.
     1. 토론 ID를 생성하고 DB에 초기 기록을 저장합니다.
     2. 오케스트레이션을 실행하여 토론팀을 구성합니다.
     3. 구성된 팀 정보를 반환하고, 토론은 'ready' 상태로 대기합니다.
@@ -79,6 +84,7 @@ async def create_discussion(
 )
 async def execute_discussion_turn(
     discussion_id: str,
+    turn_request: TurnRequest, # [수정] Pydantic 모델로 user_vote 받기
     background_tasks: BackgroundTasks,
     current_user: UserModel = Depends(get_current_user)
 ):
@@ -109,7 +115,8 @@ async def execute_discussion_turn(
 
     # 5. 실제 토론을 진행할 함수를 백그라운드 작업으로 추가합니다.
     # 이 작업은 아래 return 문이 실행된 후에 비동기적으로 처리됩니다.
-    background_tasks.add_task(execute_turn, discussion_log)
+    # 백그라운드 작업에 user_vote 전달
+    background_tasks.add_task(execute_turn, discussion_log, turn_request.user_vote)
 
     # 6. 클라이언트에게 작업이 백그라운드에서 시작되었음을 즉시 알립니다.
     return {"message": "Discussion turn execution started in the background."}
@@ -142,7 +149,7 @@ async def get_discussion_detail(
 ):
     """
     특정 토론의 상세 내용을 조회합니다.
-    자신이 생성한 토론이 아닐 경우 접근이 거부됩니다.
+    자신이 생성한 토론이 아닐 경우 접근이 거부됩니다. 
     """
     discussion = await DiscussionLog.find_one(DiscussionLog.discussion_id == discussion_id)
     

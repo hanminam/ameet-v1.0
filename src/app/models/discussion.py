@@ -11,13 +11,13 @@ class DiscussionLog(Document):
     discussion_id: Annotated[str, Indexed(unique=True)]
     
     status: Literal[
-        "orchestrating",      # 1. 팀 구성 및 오케스트레이션 진행 중
-        "ready",              # 2. 팀 구성 완료, 첫 턴 시작 대기 중
-        "turn_inprogress",    # 3. 특정 턴(예: 모두 변론)이 진행 중
+        "orchestrating",      # 1. 팀 구성 및 오케스트레이션 진행 중 
+        "ready",              # 2. 팀 구성 완료, 첫 턴 시작 대기 중 
+        "turn_inprogress",    # 3. 특정 턴(예: 모두 변론)이 진행 중 
         "turn_complete",      # 4. 턴 완료, 다음 턴 또는 사용자 입력 대기 중
-        "waiting_for_vote",   # 5. 사용자 투표/피드백 대기 중
-        "completed",          # 6. 모든 토론 절차 완료
-        "failed"              # 7. 오류로 인한 실패
+        "waiting_for_vote",   # 5. 사용자 투표/피드백 대기 중 
+        "completed",          # 6. 모든 토론 절차 완료 
+        "failed"              # 7. 오류로 인한 실패 
     ] = "orchestrating"
 
     # --- 토론 참여자 정보를 저장하는 필드 ---
@@ -30,6 +30,10 @@ class DiscussionLog(Document):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = None
     report_summary: Optional[str] = None
+
+    # --- UX 데이터 필드 ---
+    flow_data: Optional[Dict[str, Any]] = Field(default=None, description="라운드별 에이전트 상호작용 데이터")
+    round_summary: Optional[Dict[str, Any]] = Field(default=None, description="라운드별 결정적 발언, 입장 변화 데이터")
     
     class Settings:
         name = "discussions"

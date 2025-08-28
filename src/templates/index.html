@@ -420,7 +420,52 @@
             `;
             juryContainer.innerHTML = fullHtml;
             
-            // [참고] '토론 시작하기' 버튼의 기능은 다음 단계에서 구현하므로, 지금은 이벤트 리스너를 연결하지 않습니다.
+            // '토론 시작하기' 버튼에 이벤트 리스너 
+            document.getElementById('start-debate-btn').addEventListener('click', startDebate);
+        }
+
+        /**
+         * '토론 시작하기' 버튼 클릭 시, 백엔드에 토론 실행을 요청하는 함수
+         */
+        async function startDebate() {
+            if (!currentDiscussionId) {
+                alert('오류: 토론 ID를 찾을 수 없습니다.');
+                return;
+            }
+
+            const token = localStorage.getItem('accessToken');
+            const startDebateBtn = document.getElementById('start-debate-btn');
+
+            // 로딩 상태 표시
+            startDebateBtn.disabled = true;
+            startDebateBtn.textContent = '토론을 준비 중입니다...';
+
+            try {
+                const response = await fetch(`/api/v1/discussions/${currentDiscussionId}/turns`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ user_vote: null }) // 첫 시작이므로 투표 값은 null
+                });
+
+                if (response.status === 202) { // 202 Accepted
+                    console.log('백그라운드 토론 작업이 성공적으로 시작되었습니다.');
+                    // 다음 단계: 실시간 토론 화면으로 전환
+                    showScreen('screen-5'); 
+                } else {
+                    const errorData = await response.json();
+                    alert(`토론 시작에 실패했습니다: ${errorData.detail}`);
+                    startDebateBtn.disabled = false;
+                    startDebateBtn.textContent = '이 구성으로 토론 시작하기';
+                }
+            } catch (error) {
+                alert('서버 연결에 실패했습니다.');
+                console.error('토론 시작 API 호출 오류:', error);
+                startDebateBtn.disabled = false;
+                startDebateBtn.textContent = '이 구성으로 토론 시작하기';
+            }
         }
         
         /**
