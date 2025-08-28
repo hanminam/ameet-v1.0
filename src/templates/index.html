@@ -584,61 +584,98 @@
         /**
          * 수신된 대화록을 기반으로 새 메시지만 화면에 추가하는 함수
          */
-        function updateTranscript(transcript, participants) {
-            if (!transcript) return;
-
-            if (transcript.length > displayedMessagesCount) {
-                const newMessages = transcript.slice(displayedMessagesCount);
-                
-                // "발언을 기다리고 있습니다" 초기 메시지가 있다면 제거
-                const waitingMessage = document.getElementById('waiting-message');
-                if (waitingMessage) {
-                    waitingMessage.remove();
-                }
-                
-                // 새 메시지들을 순차적으로 화면에 추가
-                newMessages.forEach(turn => {
-                    appendMessage(turn, participants);
-                });
-
-                displayedMessagesCount = transcript.length; // 표시된 메시지 수 업데이트
+        async function updateTranscript(transcript, participants) {
+            if (!transcript || transcript.length <= displayedMessagesCount || isRendering) {
+                return;
             }
+
+            isRendering = true;
+            const newMessages = transcript.slice(displayedMessagesCount);
+            
+            const waitingMessage = document.getElementById('waiting-message');
+            if (waitingMessage) waitingMessage.remove();
+            
+            for (const turn of newMessages) {
+                // appendMessage가 messageContainer를 반환하도록 함
+                const messageContainer = appendMessage(turn, participants);
+                const contentSpan = messageContainer.querySelector('.message-content');
+                
+                // 타이핑 효과가 완료될 때까지 기다림
+                await typeMessage(contentSpan, turn.message);
+                
+                displayedMessagesCount++;
+                
+                await new Promise(resolve => setTimeout(resolve, 200)); // 메시지 간 짧은 간격
+            }
+
+            isRendering = false;
         }
 
         /**
-         * 단일 메시지를 채팅창에 'fade-in' 효과와 함께 추가하는 함수
+         * '입력 중...' 인디케이터를 생성하고 화면에 추가하는 함수
+         */
+        function showTypingIndicator(turn, participants) {
+            const chatbox = document.getElementById('chatbox');
+            const participantMap = getParticipantMap(participants);
+            const agentName = turn.agent_name;
+            const icon = participantMap[agentName]?.icon || '🤖';
+            const isOdd = (displayedMessagesCount + 1) % 2 !== 0; // 다음 메시지의 위치를 기준으로
+
+            const indicator = document.createElement('div');
+            if (isOdd) {
+                indicator.className = 'flex gap-3 my-4 justify-end items-end';
+                indicator.innerHTML = `
+                    <div class="flex flex-col items-end">
+                        <p class="text-sm font-bold text-slate-800">${agentName}</p>
+                        <div class="bg-blue-500 text-white p-3 rounded-lg mt-1 inline-flex items-center gap-1">
+                            <span class="typing-dot animate-bounce">.</span>
+                            <span class="typing-dot animate-bounce" style="animation-delay: 0.2s">.</span>
+                            <span class="typing-dot animate-bounce" style="animation-delay: 0.4s">.</span>
+                        </div>
+                    </div>
+                    <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>`;
+            } else {
+                indicator.className = 'flex gap-3 my-4';
+                indicator.innerHTML = `
+                    <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>
+                    <div>
+                        <p class="text-sm font-bold text-slate-800">${agentName}</p>
+                        <div class="bg-slate-100 p-3 rounded-lg mt-1 inline-flex items-center gap-1">
+                            <span class="typing-dot animate-bounce">.</span>
+                            <span class="typing-dot animate-bounce" style="animation-delay: 0.2s">.</span>
+                            <span class="typing-dot animate-bounce" style="animation-delay: 0.4s">.</span>
+                        </div>
+                    </div>`;
+            }
+            chatbox.appendChild(indicator);
+            chatbox.scrollTop = chatbox.scrollHeight;
+            return indicator;
+        }
+
+        /**
+         * 단일 메시지의 HTML 구조를 만들고, 타이핑 효과를 위해 content span을 비워둠
          */
         function appendMessage(turn, participants) {
             const chatbox = document.getElementById('chatbox');
-            const participantMap = {};
-            if (participants) {
-                participants.forEach(p => {
-                    participantMap[p.name] = { icon: p.icon || '🤖' };
-                });
-            }
+            const participantMap = getParticipantMap(participants);
 
             const agentName = turn.agent_name;
-            const messageText = turn.message; // .replace(/\n/g, '<br>')는 타이핑 함수 내부로 이동
             const icon = participantMap[agentName]?.icon || '🤖';
             const isOdd = displayedMessagesCount % 2 !== 0;
 
             const messageContainer = document.createElement('div');
             
-            // 좌/우 정렬을 위한 클래스 동적 할당
             if (isOdd) {
-                // 우측 정렬 (상대방)
                 messageContainer.className = 'flex gap-3 my-4 justify-end items-end';
                 messageContainer.innerHTML = `
                     <div class="flex flex-col items-end">
                         <p class="text-sm font-bold text-slate-800">${agentName}</p>
-                        <div class="bg-blue-500 text-white p-3 rounded-lg mt-1 text-base inline-block max-w-xl">
+                        <div class="bg-blue-500 text-white p-3 rounded-lg mt-1 text-base inline-block max-w-xl text-left">
                             <span class="message-content"></span>
                         </div>
                     </div>
-                    <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>
-                `;
+                    <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>`;
             } else {
-                // 좌측 정렬 (나)
                 messageContainer.className = 'flex gap-3 my-4';
                 messageContainer.innerHTML = `
                     <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>
@@ -647,37 +684,67 @@
                         <div class="bg-slate-100 p-3 rounded-lg mt-1 text-base inline-block max-w-xl">
                             <span class="message-content"></span>
                         </div>
-                    </div>
-                `;
+                    </div>`;
             }
-            
             chatbox.appendChild(messageContainer);
-
-            // 타이핑 효과 시작
-            const messageContentSpan = messageContainer.querySelector('.message-content');
-            typeMessage(messageContentSpan, messageText);
-
             chatbox.scrollTop = chatbox.scrollHeight;
+            return messageContainer; // 컨테이너 요소를 반환
+        }
+
+        /**
+         * 간단한 마크다운을 HTML로 변환하는 함수
+         */
+        function markdownToHtml(text) {
+            return text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')       // Italic
+                .replace(/^\s*\*\s(.*)/gm, '<ul><li>$1</li></ul>') // Basic lists
+                .replace(/\n/g, '<br>'); // Line breaks
+        }
+
+        /**
+         * 참가자 정보를 맵으로 만들어주는 헬퍼 함수
+         */
+        function getParticipantMap(participants) {
+            const map = {};
+            if (participants) {
+                participants.forEach(p => {
+                    map[p.name] = { icon: p.icon || '🤖' };
+                });
+            }
+            return map;
         }
 
         /**
          * 텍스트에 타이핑 효과를 적용하는 함수
          */
         function typeMessage(element, text) {
-            let index = 0;
-            text = text.replace(/\n/g, '<br>'); // 줄바꿈 처리
-            
-            const typingInterval = setInterval(() => {
-                if (index < text.length) {
-                    element.innerHTML += text.charAt(index);
-                    index++;
-                    // 타이핑 중에도 스크롤을 맨 아래로 유지
+            return new Promise(resolve => {
+                const htmlText = markdownToHtml(text);
+                let i = 0;
+                
+                function typing() {
                     const chatbox = document.getElementById('chatbox');
-                    chatbox.scrollTop = chatbox.scrollHeight;
-                } else {
-                    clearInterval(typingInterval);
+                    if (i < htmlText.length) {
+                        // '<'를 만나면 '>'가 나올 때까지 한번에 추가
+                        if (htmlText.charAt(i) === '<') {
+                            const closingTagIndex = htmlText.indexOf('>', i);
+                            if (closingTagIndex !== -1) {
+                                element.innerHTML += htmlText.substring(i, closingTagIndex + 1);
+                                i = closingTagIndex;
+                            }
+                        } else {
+                            element.innerHTML += htmlText.charAt(i);
+                        }
+                        i++;
+                        chatbox.scrollTop = chatbox.scrollHeight;
+                        setTimeout(typing, 30); // 다음 글자 타이핑
+                    } else {
+                        resolve(); // 타이핑 완료 시 Promise를 resolve
+                    }
                 }
-            }, 30); // 30ms 간격으로 한 글자씩 타이핑
+                typing();
+            });
         }
         
         /**
