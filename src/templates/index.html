@@ -171,8 +171,9 @@
         const juryContainer = document.getElementById('jury-container');
 
         // --- Global Variables ---
-        let currentDiscussionId = null; // 현재 토론 ID를 저장할 전역 변수
-        let pollingInterval = null; // 폴링 타이머 저장을 위한 전역 변수
+        let currentDiscussionId = null;     // 현재 토론 ID를 저장할 전역 변수
+        let pollingInterval = null;         // 폴링 타이머 저장을 위한 전역 변수
+        let displayedMessagesCount = 0;     // 화면에 표시된 메시지 수
         
         // --- Functions ---
         
@@ -482,6 +483,9 @@
 
                 if (response.status === 202) { // 202 Accepted
                     console.log('백그라운드 토론 작업이 성공적으로 시작되었습니다.');
+                    displayedMessagesCount = 0; // 새 토론 시작 시 카운트 초기화
+                    const chatbox = document.getElementById('chatbox');
+                    chatbox.innerHTML = '<div id="waiting-message" class="text-center text-slate-500">AI 에이전트들의 발언을 기다리고 있습니다...</div>'; // 초기 메시지 설정
                     // 다음 단계: 실시간 토론 화면으로 전환
                     showScreen('screen-5'); 
                     startPolling(currentDiscussionId); // 폴링 시작
@@ -525,7 +529,7 @@
                     const discussionData = await response.json();
                     console.log('Poll success:', discussionData.status, `Transcript length: ${discussionData.transcript.length}`);
                     // 기본 대화록 렌더링
-                    renderTranscript(discussionData.transcript, discussionData.participants);
+                    updateTranscript(discussionData.transcript, discussionData.participants);
                     
                     // 다음 단계에서 구현: status가 'waiting_for_vote'일 때 폴링 중지
                 } else {
@@ -574,7 +578,67 @@
                 });
             }
             chatbox.innerHTML = html;
-            //chatbox.scrollTop = chatbox.scrollHeight; // 자동 스크롤
+            chatbox.scrollTop = chatbox.scrollHeight; // 자동 스크롤
+        }
+
+        /**
+         * 수신된 대화록을 기반으로 새 메시지만 화면에 추가하는 함수
+         */
+        function updateTranscript(transcript, participants) {
+            if (!transcript) return;
+
+            if (transcript.length > displayedMessagesCount) {
+                const newMessages = transcript.slice(displayedMessagesCount);
+                
+                // "발언을 기다리고 있습니다" 초기 메시지가 있다면 제거
+                const waitingMessage = document.getElementById('waiting-message');
+                if (waitingMessage) {
+                    waitingMessage.remove();
+                }
+                
+                // 새 메시지들을 순차적으로 화면에 추가
+                newMessages.forEach(turn => {
+                    appendMessage(turn, participants);
+                });
+
+                displayedMessagesCount = transcript.length; // 표시된 메시지 수 업데이트
+            }
+        }
+
+        /**
+         * 단일 메시지를 채팅창에 'fade-in' 효과와 함께 추가하는 함수
+         */
+        function appendMessage(turn, participants) {
+            const chatbox = document.getElementById('chatbox');
+            const participantMap = {};
+            if (participants) {
+                participants.forEach(p => {
+                    participantMap[p.name] = { icon: p.icon || '🤖' };
+                });
+            }
+
+            const agentName = turn.agent_name;
+            const message = turn.message.replace(/\n/g, '<br>');
+            const icon = participantMap[agentName]?.icon || '🤖';
+
+            const messageEl = document.createElement('div');
+            // 초기 상태는 투명, transition 효과 적용
+            messageEl.className = 'flex gap-3 my-4 opacity-0 transition-opacity duration-500 ease-in-out';
+            messageEl.innerHTML = `
+                <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>
+                <div>
+                    <p class="text-sm font-bold text-slate-800">${agentName}</p>
+                    <div class="bg-slate-100 p-3 rounded-lg mt-1 text-base inline-block">${message}</div>
+                </div>
+            `;
+            chatbox.appendChild(messageEl);
+
+            // 잠시 후 투명도를 1로 변경하여 fade-in 애니메이션 실행
+            setTimeout(() => {
+                messageEl.classList.remove('opacity-0');
+            }, 50);
+
+            chatbox.scrollTop = chatbox.scrollHeight; // 항상 최하단으로 자동 스크롤
         }
         
         /**
