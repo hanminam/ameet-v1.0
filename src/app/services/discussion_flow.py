@@ -34,7 +34,7 @@ async def _get_single_stance_change(
         structured_llm = analyst_agent.with_structured_output(StanceAnalysis)
         prompt = ChatPromptTemplate.from_messages([
             ("system", analyst_setting.config.prompt),
-            ("human", f"Agent Name: {agent_name}\n\nPrevious Statement:\n{prev_statement}\n\nCurrent Statement:\n{current_statement}")
+            ("human", "다음 토론 대화록을 분석하세요:\n\n{transcript}")
         ])
         chain = prompt | structured_llm
         analysis = await chain.ainvoke(
@@ -49,21 +49,30 @@ async def _get_single_stance_change(
 # 모든 참여자의 입장 변화를 병렬로 분석하는 메인 함수
 async def _analyze_stance_changes(transcript: List[dict], jury_members: List[dict], discussion_id: str, turn_number: int) -> List[dict]:
     num_jury = len(jury_members)
-    if turn_number == 0 or len(transcript) < num_jury * 2:
+    # 비교할 이전 라운드가 없으면 빈 리스트 반환
+    if turn_number < 1 or len(transcript) < num_jury * 2:
         return []
 
+    # 현재 라운드와 이전 라운드의 발언을 에이전트 이름으로 매핑
     current_round_map = {turn['agent_name']: turn['message'] for turn in transcript[-num_jury:]}
     prev_round_map = {turn['agent_name']: turn['message'] for turn in transcript[-num_jury*2:-num_jury]}
 
     tasks = []
     for agent in jury_members:
         agent_name = agent['name']
+        # 두 라운드 모두에 발언이 있는 에이전트만 분석 대상으로 추가
         if agent_name in prev_round_map and agent_name in current_round_map:
             task = _get_single_stance_change(
-                agent_name, prev_round_map[agent_name], current_round_map[agent_name], discussion_id, turn_number
+                agent_name, 
+                prev_round_map[agent_name], 
+                current_round_map[agent_name], 
+                discussion_id, 
+                turn_number
             )
             tasks.append(task)
     
+    if not tasks:
+        return []
     return await asyncio.gather(*tasks)
 
 # 라운드 요약 분석을 위한 Pydantic 모델
@@ -222,11 +231,13 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
         
         # 1. 결정적 발언 선정 (AI 호출 + Fallback)
         critical_utterance_data = await _get_round_summary(transcript_for_summary, discussion_log.discussion_id, discussion_log.turn_number)
-        if not critical_utterance_data: # AI 호출 실패 시 Fallback
-            last_turn = discussion_log.transcript[-1]
+        if not critical_utterance_data: # AI 호출 실패 시
+            current_round_transcript = discussion_log.transcript[-len(jury_members):]
+            # 가장 긴 발언을 결정적 발언으로 선정
+            longest_turn = max(current_round_transcript, key=lambda x: len(x['message']))
             critical_utterance_data = {
-                "agent_name": last_turn['agent_name'],
-                "message": (last_turn['message'][:80] + "...") if len(last_turn['message']) > 80 else last_turn['message']
+                "agent_name": longest_turn['agent_name'],
+                "message": (longest_turn['message'][:80] + "...") if len(longest_turn['message']) > 80 else longest_turn['message']
             }
 
         # 2. 입장 변화 데이터 생성 (AI 기반 분석)

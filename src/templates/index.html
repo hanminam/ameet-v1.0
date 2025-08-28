@@ -945,6 +945,23 @@
             const icon = participantMap[agentName]?.icon || '🤖';
             const isOdd = displayedMessagesCount % 2 !== 0;
 
+            let quoteHtml = '';
+            // 다른 에이전트를 언급했는지 분석하여 인용 UI 생성
+            const jury_names = participants.filter(p => (p.name !== '재판관' || p.name !== '사회자')).map(p => p.name);
+            for (const mentioned_agent of jury_names) {
+                if (turn.agent_name !== mentioned_agent && turn.message.includes(mentioned_agent)) {
+                    // 해당 에이전트의 가장 최근 발언을 찾아 인용
+                    const targetTurn = [...transcript].reverse().find(t => t.agent_name === mentioned_agent);
+                    if (targetTurn) {
+                        quoteHtml = `
+                            <div class="border-l-4 border-slate-300 pl-2 text-xs text-slate-500 mb-1">
+                                <strong>${targetTurn.agent_name}</strong>: ${targetTurn.message.substring(0, 40)}...
+                            </div>`;
+                        break; // 첫 번째로 언급된 에이전트만 인용
+                    }
+                }
+            }
+
             const messageContainer = document.createElement('div');
             
             if (isOdd) {
