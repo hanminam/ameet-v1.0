@@ -876,8 +876,8 @@
             if (waitingMessage) waitingMessage.remove();
 
             for (const turn of newMessages) {
-                // appendMessage 함수 호출 시, 세 번째 인자로 전체 'transcript'를 전달합니다.
-                const messageContainer = appendMessage(turn, participants, transcript);
+                // [수정] appendMessage 호출 시 transcript 인자 제거
+                const messageContainer = appendMessage(turn, participants);
                 const contentSpan = messageContainer.querySelector('.message-content');
 
                 await typeMessage(contentSpan, turn.message);
@@ -932,38 +932,21 @@
         /**
          * 단일 메시지의 HTML 구조를 만들고, 타이핑 효과를 위해 content span을 비워둠
          */
-        function appendMessage(turn, participants, transcript) {
+        function appendMessage(turn, participants) {
             const chatbox = document.getElementById('chatbox');
             const participantMap = getParticipantMap(participants);
             const agentName = turn.agent_name;
             const icon = participantMap[agentName]?.icon || '🤖';
             const isOdd = displayedMessagesCount % 2 !== 0;
 
-            let quoteHtml = '';
-            const jury_names = participants.filter(p => p.name !== '재판관' && p.name !== '사회자').map(p => p.name);
-
-            for (const mentioned_agent of jury_names) {
-                if (agentName !== mentioned_agent && turn.message.includes(mentioned_agent)) {
-                    // 전달받은 transcript를 사용합니다.
-                    const targetTurn = [...transcript].reverse().find(t => t.agent_name === mentioned_agent);
-                    if (targetTurn) {
-                        quoteHtml = `
-                            <div class="border-l-4 border-slate-300 pl-2 text-xs text-slate-500 mb-1 opacity-70">
-                                <strong>${targetTurn.agent_name}</strong>: ${targetTurn.message.substring(0, 40)}...
-                            </div>`;
-                        break;
-                    }
-                }
-            }
-
             const messageContainer = document.createElement('div');
+            
             if (isOdd) {
                 messageContainer.className = 'flex gap-3 my-4 justify-end items-end';
                 messageContainer.innerHTML = `
                     <div class="flex flex-col items-end">
                         <p class="text-sm font-bold text-slate-800">${agentName}</p>
                         <div class="bg-blue-500 text-white p-3 rounded-lg mt-1 text-base inline-block max-w-xl text-left">
-                            ${quoteHtml}
                             <span class="message-content"></span>
                         </div>
                     </div>
@@ -975,7 +958,6 @@
                     <div>
                         <p class="text-sm font-bold text-slate-800">${agentName}</p>
                         <div class="bg-slate-100 p-3 rounded-lg mt-1 text-base inline-block max-w-xl">
-                            ${quoteHtml}
                             <span class="message-content"></span>
                         </div>
                     </div>`;
