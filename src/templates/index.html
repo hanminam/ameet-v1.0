@@ -864,7 +864,7 @@
         }
 
         /**
-         * 수신된 대화록을 기반으로 새 메시지만 화면에 추가하는 함수
+         * 수신된 대화록을 기반으로 새 메시지만 순차적으로 화면에 추가하는 함수
          */
         async function updateTranscript(transcript, participants) {
             if (!transcript || transcript.length <= displayedMessagesCount || isRendering) {
@@ -878,16 +878,15 @@
             if (waitingMessage) waitingMessage.remove();
             
             for (const turn of newMessages) {
-                // appendMessage가 messageContainer를 반환하도록 함
-                const messageContainer = appendMessage(turn, participants);
+                // appendMessage 함수 호출 시, 세 번째 인자로 'transcript'를 전달합니다.
+                const messageContainer = appendMessage(turn, participants, transcript);
                 const contentSpan = messageContainer.querySelector('.message-content');
                 
-                // 타이핑 효과가 완료될 때까지 기다림
                 await typeMessage(contentSpan, turn.message);
                 
                 displayedMessagesCount++;
                 
-                await new Promise(resolve => setTimeout(resolve, 200)); // 메시지 간 짧은 간격
+                await new Promise(resolve => setTimeout(resolve, 200));
             }
 
             isRendering = false;
