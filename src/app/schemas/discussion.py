@@ -22,5 +22,9 @@ class DiscussionLogDetail(DiscussionLogItem):
     completed_at: Optional[datetime] = None
     report_summary: Optional[str] = None
     
+    # UX 데이터 필드 추가
+    round_summary: Optional[Dict[str, Any]] = None
+    flow_data: Optional[Dict[str, Any]] = None
+    
     class Config:
-        from_attributes = True
+        from_attributes = True 
