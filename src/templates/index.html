@@ -152,6 +152,20 @@
             </div>
         </div>
     </div>
+
+    <div id="screen-6" class="screen screen-card">
+        <div class="screen-header"><span>최종 분석 보고서</span></div>
+        <div class="screen-body">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+                <h2 class="text-3xl font-bold text-slate-800">최종 분석 보고서</h2>
+                <button class="btn btn-secondary w-full sm:w-auto">📥 PDF 다운로드</button>
+            </div>
+            <div class="text-center p-8 border rounded-lg">
+                <h3 class="text-xl font-bold">보고서 생성 중...</h3>
+                <p class="text-slate-600 mt-2">토론이 종료되었으며, 최종 보고서가 백그라운드에서 생성되고 있습니다. 완료되면 이 화면이 자동으로 업데이트됩니다.</p>
+            </div>
+        </div>
+    </div>
     
     <script>
         // --- DOM Elements ---
@@ -531,15 +545,15 @@
                 if (response.ok) {
                     const discussionData = await response.json();
                     console.log('Poll success:', discussionData.status, `Transcript length: ${discussionData.transcript.length}`);
-                    updateTranscript(discussionData.transcript, discussionData.participants);
+                    
+                    // updateTranscript 작업이 완전히 끝날 때까지 기다립니다.
+                    await updateTranscript(discussionData.transcript, discussionData.participants);
 
-                    // [구현 완료] 라운드 종료 상태 확인 및 폴링 중지
+                    // 렌더링이 모두 끝난 후에 상태를 확인합니다.
                     if (discussionData.status === 'waiting_for_vote') {
                         console.log('Round complete. Polling has been stopped.');
                         clearInterval(pollingInterval);
-                        pollingInterval = null; // 타이머 ID 정리
-                        
-                        // [구현 완료] 사용자 액션 패널 표시
+                        pollingInterval = null;
                         renderUserActionPanel(discussionData);
                     }
                 } else {
