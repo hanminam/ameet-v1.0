@@ -2,7 +2,7 @@
 # 미래에 구현될 복잡한 토론 로직을 임시로 대체하는 '기능적인 목업(Functional Mock)' 
 
 import asyncio
-from typing import Optional
+from typing import List, Literal, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from datetime import datetime
@@ -14,6 +14,57 @@ from app.models.discussion import AgentSettings, DiscussionLog
 from app.core.config import logger
 
 from app.schemas.orchestration import AgentDetail # AgentDetail 스키마 추가
+
+# 입장 변화 분석 결과 Pydantic 모델
+class StanceAnalysis(BaseModel):
+    change: Literal['유지', '강화', '수정', '약화']
+    reason: str
+
+# 개별 에이전트의 입장 변화를 분석하는 AI 호출 함수
+async def _get_single_stance_change(
+    agent_name: str, prev_statement: str, current_statement: str, discussion_id: str, turn_number: int
+) -> dict:
+    try:
+        analyst_setting = await AgentSettings.find_one(
+            AgentSettings.name == "Stance Analyst", AgentSettings.status == "active"
+        )
+        if not analyst_setting: return {"agent_name": agent_name, "change": "분석 불가", "icon": "❓"}
+
+        analyst_agent = ChatGoogleGenerativeAI(model=analyst_setting.config.model)
+        structured_llm = analyst_agent.with_structured_output(StanceAnalysis)
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", analyst_setting.config.prompt),
+            ("human", f"Agent Name: {agent_name}\n\nPrevious Statement:\n{prev_statement}\n\nCurrent Statement:\n{current_statement}")
+        ])
+        chain = prompt | structured_llm
+        analysis = await chain.ainvoke(
+            {}, config={"tags": [f"discussion_id:{discussion_id}", f"turn:{turn_number}", "task:stance_analysis"]}
+        )
+        
+        icon_map = {"유지": "😐", "강화": "🔼", "수정": "🔄", "약화": "🔽"}
+        return {"agent_name": agent_name, "change": analysis.change, "icon": icon_map.get(analysis.change, "❓")}
+    except Exception:
+        return {"agent_name": agent_name, "change": "분석 불가", "icon": "❓"}
+
+# 모든 참여자의 입장 변화를 병렬로 분석하는 메인 함수
+async def _analyze_stance_changes(transcript: List[dict], jury_members: List[dict], discussion_id: str, turn_number: int) -> List[dict]:
+    num_jury = len(jury_members)
+    if turn_number == 0 or len(transcript) < num_jury * 2:
+        return []
+
+    current_round_map = {turn['agent_name']: turn['message'] for turn in transcript[-num_jury:]}
+    prev_round_map = {turn['agent_name']: turn['message'] for turn in transcript[-num_jury*2:-num_jury]}
+
+    tasks = []
+    for agent in jury_members:
+        agent_name = agent['name']
+        if agent_name in prev_round_map and agent_name in current_round_map:
+            task = _get_single_stance_change(
+                agent_name, prev_round_map[agent_name], current_round_map[agent_name], discussion_id, turn_number
+            )
+            tasks.append(task)
+    
+    return await asyncio.gather(*tasks)
 
 # 라운드 요약 분석을 위한 Pydantic 모델
 class CriticalUtterance(BaseModel):
@@ -97,6 +148,26 @@ async def _run_single_agent_turn(
         logger.error(f"--- [Flow Error] Agent '{agent_name}' turn failed: {e} ---")
         return f"({agent_name} 발언 생성 중 오류 발생)"
     
+# 토론 흐름도 분석을 위한 헬퍼 함수
+def _analyze_flow_data(transcript: List[dict], jury_members: List[dict]) -> dict:
+    interactions = []
+    agent_names = [agent['name'] for agent in jury_members]
+    
+    # 현재 라운드의 대화만 분석 (transcript는 전체 대화록)
+    # 간단하게 마지막 jury_members 수만큼의 대화만 분석
+    current_round_transcript = transcript[-len(jury_members):]
+
+    for turn in current_round_transcript:
+        speaker = turn['agent_name']
+        message = turn['message']
+        
+        # 다른 에이전트의 이름이 언급되었는지 확인
+        for mentioned_agent in agent_names:
+            if speaker != mentioned_agent and mentioned_agent in message:
+                interactions.append({"from": speaker, "to": mentioned_agent})
+                
+    return {"interactions": interactions}
+    
 async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] = None):
     """
     백그라운드에서 단일 토론 턴을 실행하고, 결과를 DB에 기록합니다.
@@ -147,28 +218,32 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
 
     # 라운드 종료 후 UX 데이터 생성 (MVP 단계에서는 목업 데이터 사용)
     if jury_members and discussion_log.transcript:
-        # 1. 결정적 발언 선정 (AI 호출)
         transcript_for_summary = "\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript])
-        critical_utterance_data = await _get_round_summary(transcript_for_summary, discussion_log.discussion_id, discussion_log.turn_number)
         
-        # 2. 입장 변화 및 토론 흐름도 데이터 생성 (현재는 목업 유지)
-        if discussion_log.turn_number > 0: # 첫 라운드(turn_number=0)에서는 입장 변화를 표시하지 않음
-            discussion_log.round_summary = {
-                "critical_utterance": critical_utterance_data,
-                "stance_changes": [
-                    {"agent_name": jury_members[0]['name'], "change": "유지", "icon": "😐"},
-                    {"agent_name": jury_members[1]['name'], "change": "수정", "icon": "🔄"},
-                ]
+        # 1. 결정적 발언 선정 (AI 호출 + Fallback)
+        critical_utterance_data = await _get_round_summary(transcript_for_summary, discussion_log.discussion_id, discussion_log.turn_number)
+        if not critical_utterance_data: # AI 호출 실패 시 Fallback
+            last_turn = discussion_log.transcript[-1]
+            critical_utterance_data = {
+                "agent_name": last_turn['agent_name'],
+                "message": (last_turn['message'][:80] + "...") if len(last_turn['message']) > 80 else last_turn['message']
             }
-        else: # 첫 라운드에서는 결정적 발언만 표시
-            discussion_log.round_summary = {"critical_utterance": critical_utterance_data}
 
-        discussion_log.flow_data = { "interactions": [{"from": jury_members[1]['name'], "to": jury_members[0]['name']}] }
+        # 2. 입장 변화 데이터 생성 (AI 기반 분석)
+        stance_changes_data = await _analyze_stance_changes(
+            discussion_log.transcript, jury_members, discussion_log.discussion_id, discussion_log.turn_number
+        )
+        discussion_log.round_summary = {
+            "critical_utterance": critical_utterance_data,
+            "stance_changes": stance_changes_data
+        }
 
+        # 3. 토론 흐름도 데이터 생성 (대화 내용 기반)
+        discussion_log.flow_data = _analyze_flow_data(discussion_log.transcript, jury_members)
 
-    # 5. 라운드 종료 처리 및 6. 최종 상태 변경
+    # 5. 최종 상태 변경
     discussion_log.status = "waiting_for_vote"
-    discussion_log.turn_number += 1  # 턴 번호를 1 증가시킴
+    discussion_log.turn_number += 1
     await discussion_log.save()
     
     logger.info(f"--- [BG Task] Turn completed for {discussion_log.discussion_id}. New status: '{discussion_log.status}' ---")
