@@ -7,9 +7,45 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from datetime import datetime
 
+from pydantic import BaseModel
+
 from app.schemas.orchestration import DebateTeam
 from app.models.discussion import AgentSettings, DiscussionLog
 from app.core.config import logger
+
+from app.schemas.orchestration import AgentDetail # AgentDetail 스키마 추가
+
+# 라운드 요약 분석을 위한 Pydantic 모델
+class CriticalUtterance(BaseModel):
+    agent_name: str
+    message: str
+
+async def _get_round_summary(transcript_str: str, discussion_id: str, turn_number: int) -> dict:
+    """라운드 대화록을 분석하여 결정적 발언을 선정하는 AI 에이전트를 호출합니다."""
+    try:
+        # DB에서 Round Analyst 에이전트 설정을 가져옵니다.
+        analyst_setting = await AgentSettings.find_one(
+            AgentSettings.name == "Round Analyst", AgentSettings.status == "active"
+        )
+        if not analyst_setting: return None
+
+        analyst_agent = ChatGoogleGenerativeAI(model=analyst_setting.config.model)
+        structured_llm = analyst_agent.with_structured_output(CriticalUtterance)
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", analyst_setting.config.prompt),
+            ("human", "Analyze the following transcript:\n\n{transcript}")
+        ])
+        
+        chain = prompt | structured_llm
+        summary = await chain.ainvoke(
+            {"transcript": transcript_str},
+            config={"tags": [f"discussion_id:{discussion_id}", f"turn:{turn_number}", "task:summarize"]}
+        )
+        return summary.dict()
+    except Exception as e:
+        logger.error(f"Error getting round summary: {e}")
+        return None
 
 async def _run_single_agent_turn(
     agent_config: dict, 
@@ -111,28 +147,24 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
 
     # 라운드 종료 후 UX 데이터 생성 (MVP 단계에서는 목업 데이터 사용)
     if jury_members and discussion_log.transcript:
-        last_agent_name = discussion_log.transcript[-1]['agent_name']
-        last_message = discussion_log.transcript[-1]['message']
+        # 1. 결정적 발언 선정 (AI 호출)
+        transcript_for_summary = "\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript])
+        critical_utterance_data = await _get_round_summary(transcript_for_summary, discussion_log.discussion_id, discussion_log.turn_number)
         
-        # 1. 결정적 발언 및 입장 변화 데이터 생성
-        discussion_log.round_summary = {
-            "critical_utterance": {
-                "agent_name": last_agent_name,
-                "message": last_message[:80] + "..." # 메시지를 간단히 요약
-            },
-            "stance_changes": [
-                {"agent_name": jury_members[0]['name'], "change": "유지", "icon": "😐"},
-                {"agent_name": jury_members[1]['name'], "change": "수정", "icon": "🔄"},
-                {"agent_name": jury_members[2]['name'], "change": "강화", "icon": "🔼"},
-            ]
-        }
-        
-        # 2. 토론 흐름도 데이터 생성 (예: 2번째 에이전트가 1번째 에이전트에게 반박)
-        discussion_log.flow_data = {
-            "interactions": [
-                {"from": jury_members[1]['name'], "to": jury_members[0]['name']}
-            ]
-        }
+        # 2. 입장 변화 및 토론 흐름도 데이터 생성 (현재는 목업 유지)
+        if discussion_log.turn_number > 0: # 첫 라운드(turn_number=0)에서는 입장 변화를 표시하지 않음
+            discussion_log.round_summary = {
+                "critical_utterance": critical_utterance_data,
+                "stance_changes": [
+                    {"agent_name": jury_members[0]['name'], "change": "유지", "icon": "😐"},
+                    {"agent_name": jury_members[1]['name'], "change": "수정", "icon": "🔄"},
+                ]
+            }
+        else: # 첫 라운드에서는 결정적 발언만 표시
+            discussion_log.round_summary = {"critical_utterance": critical_utterance_data}
+
+        discussion_log.flow_data = { "interactions": [{"from": jury_members[1]['name'], "to": jury_members[0]['name']}] }
+
 
     # 5. 라운드 종료 처리 및 6. 최종 상태 변경
     discussion_log.status = "waiting_for_vote"
