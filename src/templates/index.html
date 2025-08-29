@@ -698,17 +698,16 @@
             if (!container || !interactions) return;
 
             const participantMap = getParticipantMap(participants);
-            // [수정] 실제 토론에 참여한 배심원단(jury)의 이름 목록을 미리 추출합니다.
             const juryNames = participants
                 .filter(p => p.name !== '재판관' && interactions.some(i => i.from === p.name || i.to === p.name))
                 .map(p => p.name);
 
-            let agentHtml = '<div class="grid grid-cols-2 gap-x-8 gap-y-6">'; // gap을 늘려 공간 확보
+            // 1. 에이전트 아이콘과 이름 노드를 생성합니다.
+            let agentHtml = '<div class="grid grid-cols-2 gap-x-8 gap-y-6">';
             juryNames.forEach(name => {
-                // [수정] ID에 특수문자나 공백이 포함될 수 있으므로 CSS Selector로 사용하기 쉽게 변환합니다.
                 const safeId = `agent-node-${name.replace(/[^a-zA-Z0-9]/g, '-')}`;
                 agentHtml += `
-                    <div id="${safeId}" class="flex flex-col items-center text-center cursor-pointer">
+                    <div id="${safeId}" class="flex flex-col items-center text-center cursor-pointer" style="z-index: 20;">
                         <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-2xl">${participantMap[name].icon}</div>
                         <p class="text-xs font-bold mt-1">${name}</p>
                     </div>`;
@@ -716,13 +715,12 @@
             agentHtml += '</div>';
             container.innerHTML = agentHtml;
 
-            // 잠시 후(DOM 렌더링 후) 화살표 그리기 및 이벤트 리스너 추가
+            // 2. DOM 렌더링 후 화살표를 그리고, 마우스 이벤트 리스너를 추가합니다.
             setTimeout(() => {
-                const lines = []; // 생성된 화살표 DOM 요소를 저장할 배열
-
-                // 에이전트별 색상 지정을 위한 컬러맵
+                const lines = []; 
                 const colorClasses = Array.from({ length: 7 }, (_, i) => `flow-line-color-${i}`);
 
+                // 2-1. 모든 상호작용에 대해 화살표를 생성합니다.
                 interactions.forEach(flow => {
                     const fromId = `agent-node-${flow.from.replace(/[^a-zA-Z0-9]/g, '-')}`;
                     const toId = `agent-node-${flow.to.replace(/[^a-zA-Z0-9]/g, '-')}`;
@@ -730,12 +728,10 @@
                     const toEl = document.getElementById(toId);
 
                     if (fromEl && toEl) {
-                        // 'from' 에이전트 기준으로 색상 인덱스 결정
                         const colorIndex = juryNames.indexOf(flow.from) % colorClasses.length;
                         const colorClass = colorClasses[colorIndex];
                         
                         const line = createFlowLine(fromEl, toEl, colorClass);
-                        // 마우스 오버 시 참조할 수 있도록 데이터 속성 추가
                         line.dataset.from = flow.from;
                         line.dataset.to = flow.to;
                         
@@ -744,23 +740,27 @@
                     }
                 });
 
-                // 각 에이전트 노드에 마우스 오버/아웃 이벤트 리스너 추가
+                // 2-2. 각 에이전트 노드에 마우스 오버/아웃 이벤트를 설정합니다.
                 juryNames.forEach(name => {
                     const safeId = `agent-node-${name.replace(/[^a-zA-Z0-9]/g, '-')}`;
                     const agentNode = document.getElementById(safeId);
                     if (agentNode) {
+                        // 마우스를 올렸을 때
                         agentNode.addEventListener('mouseover', () => {
                             lines.forEach(line => {
+                                // 현재 에이전트가 시작점이거나 끝점인 화살표는 강조
                                 if (line.dataset.from === name || line.dataset.to === name) {
                                     line.classList.remove('dimmed');
                                     line.classList.add('highlighted');
-                                } else {
+                                } else { // 관련 없는 화살표는 흐리게
                                     line.classList.add('dimmed');
                                     line.classList.remove('highlighted');
                                 }
                             });
                         });
+                        // 마우스를 뗐을 때
                         agentNode.addEventListener('mouseout', () => {
+                            // 모든 화살표를 원래 상태로 복원
                             lines.forEach(line => {
                                 line.classList.remove('dimmed', 'highlighted');
                             });
@@ -780,64 +780,26 @@
          * @returns {HTMLElement} - 스타일이 적용된 화살표 선 div 요소
          */
         function createFlowLine(el1, el2, colorClass) {
-            // 1. 필요한 모든 요소와 좌표 정보를 가져옵니다.
+            // 1. 필요한 요소(아이콘)와 부모 컨테이너의 좌표 정보를 가져옵니다.
             const containerRect = el1.closest('#flow-diagram-container').getBoundingClientRect();
-            
-            // 에이전트 전체 노드 좌표
-            const rect1 = el1.getBoundingClientRect();
-            const rect2 = el2.getBoundingClientRect();
-            
-            // 에이전트 내부의 아이콘(div)과 이름(p) 요소
             const icon1 = el1.querySelector('div:first-child');
-            const name1 = el1.querySelector('p');
             const icon2 = el2.querySelector('div:first-child');
-            const name2 = el2.querySelector('p');
-            
-            // 아이콘과 이름의 좌표
             const icon1Rect = icon1.getBoundingClientRect();
-            const name1Rect = name1.getBoundingClientRect();
             const icon2Rect = icon2.getBoundingClientRect();
-            const name2Rect = name2.getBoundingClientRect();
 
-            let x1, y1, x2, y2; // 최종 시작점과 끝점 좌표
+            // 2. 각 아이콘의 '중앙'을 시작점과 끝점으로 계산합니다.
+            const x1 = icon1Rect.left + icon1Rect.width / 2 - containerRect.left;
+            const y1 = icon1Rect.top + icon1Rect.height / 2 - containerRect.top;
+            const x2 = icon2Rect.left + icon2Rect.width / 2 - containerRect.left;
+            const y2 = icon2Rect.top + icon2Rect.height / 2 - containerRect.top;
 
-            // 2. 두 에이전트의 수평/수직 거리를 계산하여 관계를 결정합니다.
-            const dx = Math.abs((rect1.left + rect1.width / 2) - (rect2.left + rect2.width / 2));
-            const dy = Math.abs((rect1.top + rect1.height / 2) - (rect2.top + rect2.height / 2));
-
-            // 3. 관계에 따라 접촉점을 다르게 계산합니다.
-            if (dx > dy) {
-                // [좌우 관계일 경우] 아이콘의 왼쪽/오른쪽 끝을 접촉점으로 설정
-                const isEl1Left = rect1.left < rect2.left;
-                
-                const leftIconRect = isEl1Left ? icon1Rect : icon2Rect;
-                const rightIconRect = isEl1Left ? icon2Rect : icon1Rect;
-
-                x1 = leftIconRect.right - containerRect.left;
-                y1 = leftIconRect.top + leftIconRect.height / 2 - containerRect.top;
-                x2 = rightIconRect.left - containerRect.left;
-                y2 = rightIconRect.top + rightIconRect.height / 2 - containerRect.top;
-
-            } else {
-                // [상하 관계일 경우] 이름(p 태그)의 위/아래 중앙을 접촉점으로 설정
-                const isEl1Top = rect1.top < rect2.top;
-
-                const topNameRect = isEl1Top ? name1Rect : name2Rect;
-                const bottomNameRect = isEl1Top ? name2Rect : name1Rect;
-                
-                x1 = topNameRect.left + topNameRect.width / 2 - containerRect.left;
-                y1 = topNameRect.bottom - containerRect.top;
-                x2 = bottomNameRect.left + bottomNameRect.width / 2 - containerRect.left;
-                y2 = bottomNameRect.top - containerRect.top;
-            }
-
-            // 4. 계산된 좌표를 바탕으로 화살표의 길이와 각도를 계산합니다.
+            // 3. 계산된 좌표를 바탕으로 화살표의 길이와 각도를 계산합니다.
             const length = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
             const angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
             
+            // 4. 스타일이 적용된 화살표 div 요소를 생성하여 반환합니다.
             const line = document.createElement('div');
             line.className = `flow-line ${colorClass}`;
-            
             line.style.width = `${length}px`;
             line.style.left = `${x1}px`;
             line.style.top = `${y1}px`;
