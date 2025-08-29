@@ -16,8 +16,6 @@ from app.core.config import logger
 from app.schemas.orchestration import AgentDetail # AgentDetail 스키마 추가
 from app.schemas.discussion import VoteContent
 
-import json
-
 # 입장 변화 분석 결과 Pydantic 모델
 class StanceAnalysis(BaseModel):
     change: Literal['유지', '강화', '수정', '약화']
@@ -226,6 +224,8 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
             return None
 
         vote_caster_agent = ChatGoogleGenerativeAI(model=vote_caster_setting.config.model)
+        
+        # Use with_structured_output to parse the JSON response into the VoteContent model
         structured_llm = vote_caster_agent.with_structured_output(VoteContent)
         
         prompt = ChatPromptTemplate.from_messages([
@@ -239,9 +239,12 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
             config={"tags": [f"discussion_id:{discussion_id}", f"turn:{turn_number}", "task:generate_vote"]}
         )
         logger.info(f"--- [Vote Generation] 투표 생성 완료: {vote_content.topic} ---")
-        return vote_content.model_dump() # Pydantic 모델을 dict로 변환하여 반환
+        
+        # Return the parsed content as a dictionary
+        return vote_content.model_dump()
     except Exception as e:
-        logger.error(f"!!! [Vote Generation] 투표 생성 중 오류 발생: {e}", exc_info=True)
+        # It's possible the LLM returns a non-JSON string. Log the error.
+        logger.error(f"!!! [Vote Generation] 투표 생성 또는 파싱 중 오류 발생: {e}", exc_info=True)
         return None
     
 async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] = None):
@@ -323,16 +326,10 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
         discussion_log.current_vote = await _generate_vote_options(
             history_str, discussion_log.discussion_id, discussion_log.turn_number
         )
-        # [로그 추가] 생성된 투표 데이터가 discussion_log 객체에 잘 담겼는지 확인
-        logger.info(f"--- [DB 저장 직전 데이터 확인] current_vote: {json.dumps(discussion_log.current_vote, ensure_ascii=False)} ---")
 
     # 5. 최종 상태 변경
     discussion_log.status = "waiting_for_vote"
     discussion_log.turn_number += 1
-
-    # [로그 추가] DB에 저장될 최종 discussion_log 객체의 전체 구조 확인
-    logger.info(f"--- [DB SAVE] 최종 저장될 데이터 --- \n{discussion_log.model_dump_json(indent=2, ensure_ascii=False)}")
-
     await discussion_log.save()
     
     logger.info(f"--- [BG Task] Turn completed for {discussion_log.discussion_id}. New status: '{discussion_log.status}' ---")

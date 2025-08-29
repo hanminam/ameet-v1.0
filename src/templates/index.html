@@ -604,10 +604,7 @@
                 if (response.ok) {
                     const discussionData = await response.json();
                     console.log('Poll success:', discussionData.status, `Transcript length: ${discussionData.transcript.length}`);
-                    // [로그 추가] 백엔드로부터 받은 데이터 원본을 그대로 콘솔에 출력
-                    console.log('%c[Polling Response Received]', 'color: blue; font-weight: bold;', discussionData);
-
-
+                    
                     await updateTranscript(discussionData.transcript, discussionData.participants);
 
                     if (discussionData.status === 'waiting_for_vote') {
@@ -814,15 +811,15 @@
             const actionPanel = document.getElementById('user-action-panel');
             if (!actionPanel) return;
 
-            // discussionData에서 동적 투표 정보를 가져옵니다.
             const voteData = discussionData.current_vote;
 
-            // voteData의 존재 여부와 그 내용의 유효성을 명확하게 확인합니다.
+            // Check if voteData and its properties (topic, options) exist and are valid
             if (voteData && voteData.topic && Array.isArray(voteData.options) && voteData.options.length > 0) {
-                // 투표 데이터가 유효할 경우, 투표 UI를 동적으로 생성합니다.
                 let optionsHtml = '';
                 voteData.options.forEach(option => {
-                    optionsHtml += `<button class="btn btn-subtle vote-option" data-vote="${option}">${option}</button>`;
+                    // Ensure option is a string to prevent rendering issues
+                    const optionText = String(option);
+                    optionsHtml += `<button class="btn btn-subtle vote-option" data-vote="${optionText}">${optionText}</button>`;
                 });
 
                 actionPanel.innerHTML = `
@@ -839,7 +836,7 @@
                     </div>
                 `;
             } else {
-                // 투표 데이터가 (아직) 없는 경우, 기본 버튼만 표시합니다.
+                // If vote data is missing or invalid, show default buttons
                 actionPanel.innerHTML = `
                     <div class="flex justify-center gap-4 mt-6">
                         <button id="next-round-btn" class="btn btn-primary">다음 라운드 진행</button>
@@ -847,7 +844,7 @@
                     </div>`;
             }
 
-            // 이벤트 리스너 연결
+            // Attach event listeners
             document.getElementById('next-round-btn').addEventListener('click', handleNextRound);
             document.getElementById('end-debate-btn').addEventListener('click', handleEndDebate);
             
