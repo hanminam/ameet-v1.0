@@ -780,23 +780,62 @@
          * @returns {HTMLElement} - 스타일이 적용된 화살표 선 div 요소
          */
         function createFlowLine(el1, el2, colorClass) {
+            // 1. 필요한 모든 요소와 좌표 정보를 가져옵니다.
+            const containerRect = el1.closest('#flow-diagram-container').getBoundingClientRect();
+            
+            // 에이전트 전체 노드 좌표
             const rect1 = el1.getBoundingClientRect();
             const rect2 = el2.getBoundingClientRect();
-            const containerRect = el1.closest('#flow-diagram-container').getBoundingClientRect();
-
-            // 요소의 좌/우를 판별하여 시작점과 끝점 재계산
-            const isEl1Left = rect1.left < rect2.left;
-            const x1 = (isEl1Left ? rect1.right : rect1.left) - containerRect.left;
-            const y1 = rect1.top + rect1.height / 2 - containerRect.top;
-            const x2 = (isEl1Left ? rect2.left : rect2.right) - containerRect.left;
-            const y2 = rect2.top + rect2.height / 2 - containerRect.top;
             
+            // 에이전트 내부의 아이콘(div)과 이름(p) 요소
+            const icon1 = el1.querySelector('div:first-child');
+            const name1 = el1.querySelector('p');
+            const icon2 = el2.querySelector('div:first-child');
+            const name2 = el2.querySelector('p');
+            
+            // 아이콘과 이름의 좌표
+            const icon1Rect = icon1.getBoundingClientRect();
+            const name1Rect = name1.getBoundingClientRect();
+            const icon2Rect = icon2.getBoundingClientRect();
+            const name2Rect = name2.getBoundingClientRect();
+
+            let x1, y1, x2, y2; // 최종 시작점과 끝점 좌표
+
+            // 2. 두 에이전트의 수평/수직 거리를 계산하여 관계를 결정합니다.
+            const dx = Math.abs((rect1.left + rect1.width / 2) - (rect2.left + rect2.width / 2));
+            const dy = Math.abs((rect1.top + rect1.height / 2) - (rect2.top + rect2.height / 2));
+
+            // 3. 관계에 따라 접촉점을 다르게 계산합니다.
+            if (dx > dy) {
+                // [좌우 관계일 경우] 아이콘의 왼쪽/오른쪽 끝을 접촉점으로 설정
+                const isEl1Left = rect1.left < rect2.left;
+                
+                const leftIconRect = isEl1Left ? icon1Rect : icon2Rect;
+                const rightIconRect = isEl1Left ? icon2Rect : icon1Rect;
+
+                x1 = leftIconRect.right - containerRect.left;
+                y1 = leftIconRect.top + leftIconRect.height / 2 - containerRect.top;
+                x2 = rightIconRect.left - containerRect.left;
+                y2 = rightIconRect.top + rightIconRect.height / 2 - containerRect.top;
+
+            } else {
+                // [상하 관계일 경우] 이름(p 태그)의 위/아래 중앙을 접촉점으로 설정
+                const isEl1Top = rect1.top < rect2.top;
+
+                const topNameRect = isEl1Top ? name1Rect : name2Rect;
+                const bottomNameRect = isEl1Top ? name2Rect : name1Rect;
+                
+                x1 = topNameRect.left + topNameRect.width / 2 - containerRect.left;
+                y1 = topNameRect.bottom - containerRect.top;
+                x2 = bottomNameRect.left + bottomNameRect.width / 2 - containerRect.left;
+                y2 = bottomNameRect.top - containerRect.top;
+            }
+
+            // 4. 계산된 좌표를 바탕으로 화살표의 길이와 각도를 계산합니다.
             const length = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
             const angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
             
             const line = document.createElement('div');
-            
-            // 기본 클래스와 함께 에이전트별 색상 클래스를 추가합니다.
             line.className = `flow-line ${colorClass}`;
             
             line.style.width = `${length}px`;
