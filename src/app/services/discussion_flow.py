@@ -16,6 +16,7 @@ from app.core.config import logger
 
 from app.schemas.orchestration import AgentDetail # AgentDetail 스키마 추가
 from app.schemas.discussion import VoteContent
+import re
 
 # 입장 변화 분석 결과 Pydantic 모델
 class StanceAnalysis(BaseModel):
@@ -244,14 +245,24 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
         raw_response = response.content
         logger.info(f"[로그 추가] Vote Caster로부터 받은 원본 응답:\n---\n{raw_response}\n---")
 
+        # LLM 응답에서 Markdown 코드 블록을 제거하는 전처리 로직
+        # 정규표현식을 사용하여 ```json 과 ```, 그리고 그 사이의 줄바꿈 문자를 찾아 제거합니다.
+        # re.DOTALL 플래그는 '.'이 줄바꿈 문자도 포함하도록 만듭니다.
+        match = re.search(r"```(json)?\s*({.*?})\s*```", raw_response, re.DOTALL)
+        if match:
+            json_str = match.group(2)
+            logger.info(f"[로그 추가] 마크다운 블록 제거 후 추출된 JSON: {json_str}")
+        else:
+            json_str = raw_response # 마크다운 블록이 없으면 원본 그대로 사용
+
         # 원본 응답을 VoteContent Pydantic 모델로 직접 파싱
-        vote_content = VoteContent.model_validate_json(raw_response)
+        vote_content = VoteContent.model_validate_json(json_str)
         
         logger.info(f"--- [Vote Generation] 투표 생성 및 파싱 완료: {vote_content.topic} ---")
         return vote_content.model_dump()
         
     except (ValidationError, json.JSONDecodeError) as e:
-        logger.error(f"!!! [Vote Generation] JSON 파싱 오류. 오류: {e}\n원본 응답: {raw_response}")
+        logger.error(f"!!! [Vote Generation] JSON 파싱 오류. 오류: {e}\n(전처리 후) 파싱 대상: {json_str}")
         return None
     except Exception as e:
         logger.error(f"!!! [Vote Generation] 투표 생성 중 알 수 없는 오류 발생: {e}", exc_info=True)
