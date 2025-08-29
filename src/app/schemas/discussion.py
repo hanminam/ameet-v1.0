@@ -26,6 +26,8 @@ class DiscussionLogDetail(DiscussionLogItem):
     round_summary: Optional[Dict[str, Any]] = None
     flow_data: Optional[Dict[str, Any]] = None
     
+    current_vote: Optional[Dict[str, Any]] = Field(default=None, description="현재 진행 중인 투표의 주제와 선택지")
+    
     class Config:
         from_attributes = True 
 
