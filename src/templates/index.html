@@ -601,39 +601,42 @@
                 const response = await fetch(`/api/v1/discussions/${discussionId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+
                 if (response.ok) {
                     const discussionData = await response.json();
-                    console.log('Poll success:', discussionData.status, `Transcript length: ${discussionData.transcript.length}`);
+                    
+                    // [로그 추가] 백엔드로부터 받은 데이터 원본을 그대로 콘솔에 출력
+                    console.log('%c[Polling Response Received]', 'color: blue; font-weight: bold;', discussionData);
                     
                     await updateTranscript(discussionData.transcript, discussionData.participants);
 
                     if (discussionData.status === 'waiting_for_vote') {
-                        console.log('Round complete. Polling has been stopped.');
+                        console.log('%c[Polling] Status is "waiting_for_vote". Stopping poll.', 'color: green; font-weight: bold;');
                         isPollingActive = false;
                         
-                        // UX 패널 렌더링 함수를 호출하여 화면을 업데이트합니다.
                         renderUxPanels(discussionData); 
                         
-                        renderUserActionPanel(discussionData);
+                        // [로그 추가] renderUserActionPanel 함수 호출 직전 로그
+                        console.log("[로그 추가] renderUserActionPanel 함수를 호출합니다.");
+                        renderUserActionPanel(discussionData); 
                     } else if (discussionData.status === 'completed' || discussionData.status === 'failed') {
-                        console.log('Discussion finished. Polling has been stopped.');
+                        console.log(`%c[Polling] Discussion finished with status: ${discussionData.status}. Stopping poll.`, 'color: red; font-weight: bold;');
                         isPollingActive = false;
-                        // 최종 보고서 화면으로 전환하는 로직 (추후 구현)
                         showScreen('screen-6');
-                    }
-                    else {
-                        setTimeout(() => pollDiscussionStatus(discussionId), 3000); // 3초 후 다시 폴링
+                    } else {
+                        // [로그 추가] 폴링 계속 진행 상황
+                        console.log(`[Polling] Status is "${discussionData.status}". Continuing poll in 3 seconds.`);
+                        setTimeout(() => pollDiscussionStatus(discussionId), 3000);
                     }
                 } else {
                     console.error('Polling failed with status:', response.status);
-                    isPollingActive = false; // 에러 발생 시 폴링 중단
+                    isPollingActive = false;
                 }
             } catch (error) {
                 console.error('Polling network error:', error);
-                isPollingActive = false; // 에러 발생 시 폴링 중단
+                isPollingActive = false;
             }
         }
-
 
         /**
          * 모든 UX 패널의 렌더링을 관리하는 함수
@@ -809,19 +812,30 @@
          */
         function renderUserActionPanel(discussionData) {
             const actionPanel = document.getElementById('user-action-panel');
-            if (!actionPanel) return;
+            if (!actionPanel) {
+                // [로그 추가]
+                console.error("[로그 오류] 'user-action-panel' 요소를 찾을 수 없습니다.");
+                return;
+            }
 
             const voteData = discussionData.current_vote;
+            
+            // [로그 추가] 수신된 voteData를 자세히 검사
+            console.log("[로그 추가] renderUserActionPanel 내부 voteData:", voteData);
+            if (voteData) {
+                console.log(`[로그 추가] voteData.topic: ${voteData.topic}`);
+                console.log(`[로그 추가] voteData.options: ${JSON.stringify(voteData.options)}`);
+                console.log(`[로그 추가] Array.isArray(voteData.options): ${Array.isArray(voteData.options)}`);
+            }
 
-            // Check if voteData and its properties (topic, options) exist and are valid
+            // [수정] 렌더링 조건 검사 강화 및 로그 추가
             if (voteData && voteData.topic && Array.isArray(voteData.options) && voteData.options.length > 0) {
+                console.log('%c[로그 성공] 투표 데이터가 유효하여 투표 UI를 렌더링합니다.', 'color: green');
                 let optionsHtml = '';
                 voteData.options.forEach(option => {
-                    // Ensure option is a string to prevent rendering issues
                     const optionText = String(option);
                     optionsHtml += `<button class="btn btn-subtle vote-option" data-vote="${optionText}">${optionText}</button>`;
                 });
-
                 actionPanel.innerHTML = `
                     <div class="bg-amber-100 border-l-4 border-amber-500 p-4 rounded-r-lg shadow-lg animate-fade-in">
                         <p class="font-bold text-amber-800">사회자의 투표 제안 (Round ${discussionData.turn_number})</p>
@@ -836,7 +850,7 @@
                     </div>
                 `;
             } else {
-                // If vote data is missing or invalid, show default buttons
+                console.warn('%c[로그 경고] 투표 데이터가 유효하지 않아 기본 버튼을 렌더링합니다.', 'color: orange');
                 actionPanel.innerHTML = `
                     <div class="flex justify-center gap-4 mt-6">
                         <button id="next-round-btn" class="btn btn-primary">다음 라운드 진행</button>
@@ -844,7 +858,7 @@
                     </div>`;
             }
 
-            // Attach event listeners
+            // 이벤트 리스너 연결
             document.getElementById('next-round-btn').addEventListener('click', handleNextRound);
             document.getElementById('end-debate-btn').addEventListener('click', handleEndDebate);
             
