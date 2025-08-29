@@ -811,18 +811,12 @@
             const actionPanel = document.getElementById('user-action-panel');
             if (!actionPanel) return;
 
-            // [수정] discussionData에서 동적 투표 정보를 가져옵니다.
+            // discussionData에서 동적 투표 정보를 가져옵니다.
             const voteData = discussionData.current_vote;
 
-            // 투표 정보가 없으면 패널을 렌더링하지 않거나, 다른 메시지를 표시할 수 있습니다.
-            if (!voteData || !voteData.topic || !voteData.options) {
-                actionPanel.innerHTML = `
-                    <div class="flex justify-center gap-4 mt-6">
-                        <button id="next-round-btn" class="btn btn-primary">다음 라운드 진행</button>
-                        <button id="end-debate-btn" class="btn btn-secondary">이대로 토론 종료</button>
-                    </div>`;
-            } else {
-                // [수정] voteData.options 배열을 순회하며 투표 버튼을 동적으로 생성합니다.
+            // voteData의 존재 여부와 그 내용의 유효성을 명확하게 확인합니다.
+            if (voteData && voteData.topic && Array.isArray(voteData.options) && voteData.options.length > 0) {
+                // 투표 데이터가 유효할 경우, 투표 UI를 동적으로 생성합니다.
                 let optionsHtml = '';
                 voteData.options.forEach(option => {
                     optionsHtml += `<button class="btn btn-subtle vote-option" data-vote="${option}">${option}</button>`;
@@ -841,9 +835,16 @@
                         <button id="end-debate-btn" class="btn btn-secondary">이대로 토론 종료</button>
                     </div>
                 `;
+            } else {
+                // 투표 데이터가 (아직) 없는 경우, 기본 버튼만 표시합니다.
+                actionPanel.innerHTML = `
+                    <div class="flex justify-center gap-4 mt-6">
+                        <button id="next-round-btn" class="btn btn-primary">다음 라운드 진행</button>
+                        <button id="end-debate-btn" class="btn btn-secondary">이대로 토론 종료</button>
+                    </div>`;
             }
 
-            // [유지] 생성된 버튼들에 이벤트 리스너 연결 (기존 로직과 동일하게 작동)
+            // 이벤트 리스너 연결
             document.getElementById('next-round-btn').addEventListener('click', handleNextRound);
             document.getElementById('end-debate-btn').addEventListener('click', handleEndDebate);
             
