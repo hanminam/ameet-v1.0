@@ -52,7 +52,7 @@
             height: 3px; /* 기본 두께를 약간 두껍게 조정 */
             transform-origin: 0 0;
             transition: all 0.2s ease-in-out; /* 부드러운 효과를 위한 트랜지션 */
-            z-index: 10;
+            z-index: 10; /* 기본 화살표 z-index 설정 */
         }
         .flow-line::after {
             content: '';
@@ -69,12 +69,14 @@
         /* 마우스 오버 시 비활성화된 화살표 스타일 */
         .flow-line.dimmed {
             opacity: 0.15;
+            z-index: 5; /* 흐려진 화살표는 뒤로 보냄 */
         }
 
         /* 마우스 오버 시 강조되는 화살표 스타일 */
         .flow-line.highlighted {
             height: 5px; /* 두께를 더 두껍게 */
             opacity: 1;
+            z-index: 20; /* 강조된 화살표를 가장 위로 보냄 */
         }
         .flow-line.highlighted::after {
             top: -4.5px; /* 강조된 두께에 맞춰 위치 재조정 */
@@ -702,12 +704,12 @@
                 .filter(p => p.name !== '재판관' && interactions.some(i => i.from === p.name || i.to === p.name))
                 .map(p => p.name);
 
-            // 1. 에이전트 아이콘과 이름 노드를 생성합니다.
+            // 1. 에이전트 아이콘과 이름 노드를 생성합니다. (z-index 제거됨)
             let agentHtml = '<div class="grid grid-cols-2 gap-x-8 gap-y-6">';
             juryNames.forEach(name => {
                 const safeId = `agent-node-${name.replace(/[^a-zA-Z0-9]/g, '-')}`;
                 agentHtml += `
-                    <div id="${safeId}" class="flex flex-col items-center text-center cursor-pointer" style="z-index: 20;">
+                    <div id="${safeId}" class="flex flex-col items-center text-center cursor-pointer">
                         <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-2xl">${participantMap[name].icon}</div>
                         <p class="text-xs font-bold mt-1">${name}</p>
                     </div>`;
@@ -720,7 +722,6 @@
                 const lines = []; 
                 const colorClasses = Array.from({ length: 7 }, (_, i) => `flow-line-color-${i}`);
 
-                // 2-1. 모든 상호작용에 대해 화살표를 생성합니다.
                 interactions.forEach(flow => {
                     const fromId = `agent-node-${flow.from.replace(/[^a-zA-Z0-9]/g, '-')}`;
                     const toId = `agent-node-${flow.to.replace(/[^a-zA-Z0-9]/g, '-')}`;
@@ -740,27 +741,22 @@
                     }
                 });
 
-                // 2-2. 각 에이전트 노드에 마우스 오버/아웃 이벤트를 설정합니다.
                 juryNames.forEach(name => {
                     const safeId = `agent-node-${name.replace(/[^a-zA-Z0-9]/g, '-')}`;
                     const agentNode = document.getElementById(safeId);
                     if (agentNode) {
-                        // 마우스를 올렸을 때
                         agentNode.addEventListener('mouseover', () => {
                             lines.forEach(line => {
-                                // 현재 에이전트가 시작점이거나 끝점인 화살표는 강조
                                 if (line.dataset.from === name || line.dataset.to === name) {
                                     line.classList.remove('dimmed');
                                     line.classList.add('highlighted');
-                                } else { // 관련 없는 화살표는 흐리게
+                                } else { 
                                     line.classList.add('dimmed');
                                     line.classList.remove('highlighted');
                                 }
                             });
                         });
-                        // 마우스를 뗐을 때
                         agentNode.addEventListener('mouseout', () => {
-                            // 모든 화살표를 원래 상태로 복원
                             lines.forEach(line => {
                                 line.classList.remove('dimmed', 'highlighted');
                             });
