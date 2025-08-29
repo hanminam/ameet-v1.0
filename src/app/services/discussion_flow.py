@@ -277,6 +277,10 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
         return None
     
 async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] = None):
+    """
+    백그라운드에서 단일 토론 턴을 실행하고, 결과를 DB에 기록합니다.
+    사용자의 투표 기록은 Redis를 통해 세션으로 관리합니다.
+    """
     logger.info(f"--- [BG Task] Executing turn for Discussion ID: {discussion_log.discussion_id} ---")
     
     redis_key = f"vote_history:{discussion_log.discussion_id}"
@@ -311,8 +315,13 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     excluded_roles = ["재판관", "사회자"]
     jury_members = [p for p in discussion_log.participants if p.get('name') not in excluded_roles]
 
+    # --- [핵심 수정] 에이전트 발언을 순차 실행에서 동시 실행으로 변경 ---
+
+    # 1. 모든 에이전트의 비동기 작업을 담을 리스트를 생성합니다.
+    tasks = []
     for agent_config in jury_members:
-        message = await _run_single_agent_turn(
+        # 2. await로 즉시 실행하는 대신, 실행할 작업(코루틴)을 만들어 tasks 리스트에 추가합니다.
+        task = _run_single_agent_turn(
             agent_config, 
             discussion_log.topic, 
             history_str, 
@@ -320,29 +329,35 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
             discussion_log.discussion_id,
             current_turn
         )
-        turn_data = {"agent_name": agent_config['name'], "message": message, "timestamp": datetime.utcnow()}
-        discussion_log.transcript.append(turn_data)
-        # [수정] 발언이 추가될 때마다 DB에 즉시 저장하지 않고, 라운드 끝에서 한 번만 저장하도록 변경 (성능 최적화)
-        history_str += f"\n\n{agent_config['name']}: {message}"
-        await asyncio.sleep(1)
-        
-    # --- [핵심 수정 시작] 누락되었던 분석 로직을 여기에 추가합니다 ---
-    logger.info(f"--- [BG Task] 라운드 {current_turn} 완료. 분석을 시작합니다... (ID: {discussion_log.discussion_id})")
+        tasks.append(task)
 
-    # 1. 분석에 필요한 최신 대화록 문자열을 다시 만듭니다.
+    # 3. asyncio.gather를 사용해 모든 작업을 동시에 실행하고, 모든 결과가 도착할 때까지 기다립니다.
+    logger.info(f"--- [BG Task] {len(tasks)}명의 에이전트 발언을 동시에 생성 시작... (ID: {discussion_log.discussion_id})")
+    messages = await asyncio.gather(*tasks)
+    logger.info(f"--- [BG Task] 모든 에이전트 발언 생성 완료. (ID: {discussion_log.discussion_id})")
+
+    # 4. 이제 모든 답변이 도착했으므로, 결과를 순서대로 transcript에 추가합니다.
+    for i, message in enumerate(messages):
+        agent_name = jury_members[i]['name']
+        turn_data = {"agent_name": agent_name, "message": message, "timestamp": datetime.utcnow()}
+        discussion_log.transcript.append(turn_data)
+
+    # --- [수정 완료] ---
+        
+    logger.info(f"--- [BG Task] 라운드 {current_turn} 완료. 분석을 시작합니다... (ID: {discussion_log.discussion_id})")
+    
+    # 분석에 필요한 최신 대화록 문자열 생성 (이번 라운드 발언만)
     final_transcript_str = "\n\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript[-len(jury_members):]])
     
-    # 2. 각 분석 함수를 병렬로 실행합니다.
     analysis_tasks = {
         "round_summary": _get_round_summary(final_transcript_str, discussion_log.discussion_id, discussion_log.turn_number),
         "stance_changes": _analyze_stance_changes(discussion_log.transcript, jury_members, discussion_log.discussion_id, discussion_log.turn_number),
-        "flow_data": asyncio.to_thread(_analyze_flow_data, discussion_log.transcript, jury_members) # 동기 함수이므로 to_thread 사용
+        "flow_data": asyncio.to_thread(_analyze_flow_data, discussion_log.transcript, jury_members)
     }
     
     analysis_results = await asyncio.gather(*analysis_tasks.values())
     analysis_map = dict(zip(analysis_tasks.keys(), analysis_results))
 
-    # 3. 분석 결과를 discussion_log 객체에 저장합니다.
     discussion_log.round_summary = {
         "critical_utterance": analysis_map.get("round_summary"),
         "stance_changes": analysis_map.get("stance_changes")
@@ -350,10 +365,11 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     discussion_log.flow_data = analysis_map.get("flow_data")
 
     logger.info(f"--- [BG Task] 분석 완료. 결과를 DB에 저장합니다. (ID: {discussion_log.discussion_id})")
-    # --- [핵심 수정 끝] ---
-
+    
+    # 다음 라운드를 위한 투표 생성
+    full_history_str = "\n\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript])
     discussion_log.current_vote = await _generate_vote_options(
-        history_str, 
+        full_history_str, 
         discussion_log.discussion_id, 
         discussion_log.turn_number,
         vote_history
@@ -362,7 +378,6 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     discussion_log.status = "waiting_for_vote"
     discussion_log.turn_number += 1
     
-    # [수정] 모든 작업이 끝난 후 마지막에 한 번만 save()를 호출합니다.
     await discussion_log.save()
     
     logger.info(f"--- [BG Task] Turn completed for {discussion_log.discussion_id}. New status: '{discussion_log.status}' ---")
