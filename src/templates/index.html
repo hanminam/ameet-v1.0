@@ -246,9 +246,6 @@
         let isPollingActive = false;        // 폴링 루프의 활성 상태를 관리
         let displayedMessagesCount = 0;     // 화면에 표시된 메시지 수
         let isRendering = false;
-
-        let currentParticipants = [];       // 현재 토론의 참가자(jury) 목록 저장
-        let isNewTurn = false;              // 새로운 턴이 시작되었는지 여부 확인
         
         // --- Functions ---
         
@@ -524,9 +521,6 @@
                 <button id="start-debate-btn" class="btn btn-primary w-full mt-8">이 구성으로 토론 시작하기</button>
             `;
             juryContainer.innerHTML = fullHtml;
-
-            // 참가자 정보를 전역 변수에 저장하여 다음 턴에서도 사용할 수 있도록 함
-            currentParticipants = teamData.jury; 
             
             // '토론 시작하기' 버튼에 이벤트 리스너 
             document.getElementById('start-debate-btn').addEventListener('click', startDebate);
@@ -566,9 +560,9 @@
                     chatbox.innerHTML = '<div id="waiting-message" class="text-center text-slate-500">AI 에이전트들의 발언을 기다리고 있습니다...</div>'; // 초기 메시지 설정
                     // 다음 단계: 실시간 토론 화면으로 전환
                     showScreen('screen-5'); 
-                    
-                    // 폴링 시작 전에 "입력 중" UI를 먼저 표시
-                    showTypingIndicators(currentParticipants); 
+
+                    // 채팅창을 비우는 대신, 범용 "입력 중" 인디케이터를 표시합니다.
+                    showGeneralTypingIndicator(true); 
 
                     startPolling(currentDiscussionId); // 폴링 시작
                 } else {
@@ -911,9 +905,8 @@
                 if (response.status === 202) {
                     document.getElementById('user-action-panel').innerHTML = ''; // 액션 패널 비우기
 
-                    isNewTurn = true; // 새 턴 시작 플래그 설정
-                    // 다음 라운드를 위해 "입력 중" UI 다시 표시
-                    showTypingIndicators(currentParticipants);
+                    // 다음 라운드를 위해 범용 "입력 중" 인디케이터를 다시 표시합니다.
+                    showGeneralTypingIndicator(true);
 
                     startPolling(currentDiscussionId); // 다음 라운드를 위해 폴링 다시 시작
                 } else {
@@ -1017,27 +1010,29 @@
             }
 
             isRendering = true;
-
-            // 새 턴이 시작된 후 첫 업데이트인 경우, "입력 중..." UI를 모두 지움
-            if (isNewTurn) {
-                document.getElementById('chatbox').innerHTML = '';
-                displayedMessagesCount = 0; // 메시지 카운트도 초기화
-                isNewTurn = false;          // 플래그 리셋
-            }
+            
+            // 범용 인디케이터가 있다면 한 번만 제거합니다.
+            showGeneralTypingIndicator(false);
 
             const newMessages = transcript.slice(displayedMessagesCount);
-
-            const waitingMessage = document.getElementById('waiting-message');
-            if (waitingMessage) waitingMessage.remove();
-
+            
             for (const turn of newMessages) {
-                // [수정] appendMessage 호출 시 transcript 인자 제거
+                // 1. 이 메시지를 보낼 에이전트의 "입력 중..." 인디케이터를 표시합니다.
+                const indicator = showTypingIndicator(turn, participants);
+                
+                // 2. 현실감을 위해 1.5초 ~ 2.5초 사이의 랜덤한 시간 동안 기다립니다.
+                await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
+                
+                // 3. 인디케이터를 제거합니다.
+                indicator.remove();
+
+                // 4. 실제 메시지를 타이핑 효과와 함께 추가합니다.
                 const messageContainer = appendMessage(turn, participants);
                 const contentSpan = messageContainer.querySelector('.message-content');
-
                 await typeMessage(contentSpan, turn.message);
+                
+                // 5. 메시지 카운트를 증가시켜 중복 표시를 방지합니다.
                 displayedMessagesCount++;
-                await new Promise(resolve => setTimeout(resolve, 200));
             }
 
             isRendering = false;
@@ -1179,51 +1174,77 @@
         }
 
         /**
-         * 채팅창에 모든 배심원의 "입력 중..." 인디케이터를 미리 표시하는 함수
+         * 채팅창 하단에 범용 "입력 중..." 인디케이터를 표시하거나 숨기는 함수
          */
-        function showTypingIndicators(participants) {
+        function showGeneralTypingIndicator(show) {
             const chatbox = document.getElementById('chatbox');
-            if (!chatbox) return;
+            let indicator = document.getElementById('general-typing-indicator');
 
-            const participantMap = getParticipantMap(participants);
-            chatbox.innerHTML = ''; // 채팅창 초기화
-
-            let indicatorHtml = '';
-            participants.forEach((agent, index) => {
-                const agentName = agent.name;
-                const icon = agent.icon || '🤖';
-                const isOdd = index % 2 !== 0; // 짝수/홀수 번째에 따라 좌/우 정렬
-
-                if (isOdd) {
-                    indicatorHtml += `
-                    <div class="flex gap-3 my-4 justify-end items-end">
-                        <div class="flex flex-col items-end">
-                            <p class="text-sm font-bold text-slate-800">${agentName}</p>
-                            <div class="bg-blue-500 text-white p-3 rounded-lg mt-1 inline-flex items-center gap-1">
-                                <span class="typing-dot animate-bounce">.</span>
-                                <span class="typing-dot animate-bounce" style="animation-delay: 0.2s">.</span>
-                                <span class="typing-dot animate-bounce" style="animation-delay: 0.4s">.</span>
-                            </div>
-                        </div>
-                        <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>
-                    </div>`;
-                } else {
-                    indicatorHtml += `
-                    <div class="flex gap-3 my-4">
-                        <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>
+            if (show) {
+                if (!indicator) {
+                    indicator = document.createElement('div');
+                    indicator.id = 'general-typing-indicator';
+                    indicator.className = 'flex gap-3 my-4';
+                    indicator.innerHTML = `
+                        <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">🤖</div>
                         <div>
-                            <p class="text-sm font-bold text-slate-800">${agentName}</p>
+                            <p class="text-sm font-bold text-slate-800">AI Panel</p>
                             <div class="bg-slate-100 p-3 rounded-lg mt-1 inline-flex items-center gap-1">
                                 <span class="typing-dot animate-bounce">.</span>
                                 <span class="typing-dot animate-bounce" style="animation-delay: 0.2s">.</span>
                                 <span class="typing-dot animate-bounce" style="animation-delay: 0.4s">.</span>
                             </div>
+                        </div>`;
+                    chatbox.appendChild(indicator);
+                    chatbox.scrollTop = chatbox.scrollHeight;
+                }
+            } else {
+                if (indicator) {
+                    indicator.remove();
+                }
+            }
+        }
+
+        /**
+         * 특정 에이전트의 "입력 중..." 인디케이터를 생성하고 반환하는 함수 (수정된 버전)
+         */
+        function showTypingIndicator(turn, participants) {
+            const chatbox = document.getElementById('chatbox');
+            const participantMap = getParticipantMap(participants);
+            const agentName = turn.agent_name;
+            const icon = participantMap[agentName]?.icon || '🤖';
+            const isOdd = (displayedMessagesCount) % 2 !== 0;
+
+            const indicator = document.createElement('div');
+            
+            if (isOdd) {
+                indicator.className = 'flex gap-3 my-4 justify-end items-end';
+                indicator.innerHTML = `
+                    <div class="flex flex-col items-end">
+                        <p class="text-sm font-bold text-slate-800">${agentName}</p>
+                        <div class="bg-blue-500 text-white p-3 rounded-lg mt-1 inline-flex items-center gap-1">
+                            <span class="typing-dot animate-bounce">.</span>
+                            <span class="typing-dot animate-bounce" style="animation-delay: 0.2s">.</span>
+                            <span class="typing-dot animate-bounce" style="animation-delay: 0.4s">.</span>
+                        </div>
+                    </div>
+                    <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>`;
+            } else {
+                indicator.className = 'flex gap-3 my-4';
+                indicator.innerHTML = `
+                    <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>
+                    <div>
+                        <p class="text-sm font-bold text-slate-800">${agentName}</p>
+                        <div class="bg-slate-100 p-3 rounded-lg mt-1 inline-flex items-center gap-1">
+                            <span class="typing-dot animate-bounce">.</span>
+                            <span class="typing-dot animate-bounce" style="animation-delay: 0.2s">.</span>
+                            <span class="typing-dot animate-bounce" style="animation-delay: 0.4s">.</span>
                         </div>
                     </div>`;
-                }
-            });
-            chatbox.innerHTML = indicatorHtml;
+            }
+            chatbox.appendChild(indicator);
             chatbox.scrollTop = chatbox.scrollHeight;
+            return indicator;
         }
         
         /**
