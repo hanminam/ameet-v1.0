@@ -277,16 +277,11 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
         return None
     
 async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] = None):
-    """
-    백그라운드에서 단일 토론 턴을 실행하고, 결과를 DB에 기록합니다.
-    사용자의 투표 기록은 Redis를 통해 세션으로 관리합니다.
-    """
     logger.info(f"--- [BG Task] Executing turn for Discussion ID: {discussion_log.discussion_id} ---")
     
     redis_key = f"vote_history:{discussion_log.discussion_id}"
     vote_history = []
     try:
-        # db.redis_client 형태로 최신 객체를 참조합니다.
         history_json = await db.redis_client.get(redis_key)
         if history_json:
             vote_history = json.loads(history_json)
@@ -296,15 +291,13 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     if user_vote:
         vote_history.append(user_vote)
         try:
-            # db.redis_client 형태로 최신 객체를 참조합니다.
             await db.redis_client.set(redis_key, json.dumps(vote_history), ex=86400)
             logger.info(f"--- [BG Task] 사용자 투표 '{user_vote}'를 Redis에 기록했습니다. 현재 기록: {vote_history} ---")
         except Exception as e:
             logger.error(f"!!! [Redis Error] Redis에 투표 기록을 저장하는 중 오류 발생: {e}", exc_info=True)
 
     current_turn = discussion_log.turn_number
-    current_transcript = [f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript]
-    history_str = "\n\n".join(current_transcript)
+    history_str = "\n\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript])
 
     special_directive = ""
     if user_vote:
@@ -329,11 +322,36 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
         )
         turn_data = {"agent_name": agent_config['name'], "message": message, "timestamp": datetime.utcnow()}
         discussion_log.transcript.append(turn_data)
-        await discussion_log.save()
+        # [수정] 발언이 추가될 때마다 DB에 즉시 저장하지 않고, 라운드 끝에서 한 번만 저장하도록 변경 (성능 최적화)
         history_str += f"\n\n{agent_config['name']}: {message}"
         await asyncio.sleep(1)
         
-    # _generate_vote_options 호출 시 vote_history를 명확히 전달합니다.
+    # --- [핵심 수정 시작] 누락되었던 분석 로직을 여기에 추가합니다 ---
+    logger.info(f"--- [BG Task] 라운드 {current_turn} 완료. 분석을 시작합니다... (ID: {discussion_log.discussion_id})")
+
+    # 1. 분석에 필요한 최신 대화록 문자열을 다시 만듭니다.
+    final_transcript_str = "\n\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript[-len(jury_members):]])
+    
+    # 2. 각 분석 함수를 병렬로 실행합니다.
+    analysis_tasks = {
+        "round_summary": _get_round_summary(final_transcript_str, discussion_log.discussion_id, discussion_log.turn_number),
+        "stance_changes": _analyze_stance_changes(discussion_log.transcript, jury_members, discussion_log.discussion_id, discussion_log.turn_number),
+        "flow_data": asyncio.to_thread(_analyze_flow_data, discussion_log.transcript, jury_members) # 동기 함수이므로 to_thread 사용
+    }
+    
+    analysis_results = await asyncio.gather(*analysis_tasks.values())
+    analysis_map = dict(zip(analysis_tasks.keys(), analysis_results))
+
+    # 3. 분석 결과를 discussion_log 객체에 저장합니다.
+    discussion_log.round_summary = {
+        "critical_utterance": analysis_map.get("round_summary"),
+        "stance_changes": analysis_map.get("stance_changes")
+    }
+    discussion_log.flow_data = analysis_map.get("flow_data")
+
+    logger.info(f"--- [BG Task] 분석 완료. 결과를 DB에 저장합니다. (ID: {discussion_log.discussion_id})")
+    # --- [핵심 수정 끝] ---
+
     discussion_log.current_vote = await _generate_vote_options(
         history_str, 
         discussion_log.discussion_id, 
@@ -343,6 +361,8 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     
     discussion_log.status = "waiting_for_vote"
     discussion_log.turn_number += 1
+    
+    # [수정] 모든 작업이 끝난 후 마지막에 한 번만 save()를 호출합니다.
     await discussion_log.save()
     
     logger.info(f"--- [BG Task] Turn completed for {discussion_log.discussion_id}. New status: '{discussion_log.status}' ---")
