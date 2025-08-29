@@ -821,17 +821,16 @@
             const voteData = discussionData.current_vote;
             
             // [로그 추가] 수신된 voteData를 자세히 검사
-            /*
             console.log("[로그 추가] renderUserActionPanel 내부 voteData:", voteData);
             if (voteData) {
                 console.log(`[로그 추가] voteData.topic: ${voteData.topic}`);
                 console.log(`[로그 추가] voteData.options: ${JSON.stringify(voteData.options)}`);
                 console.log(`[로그 추가] Array.isArray(voteData.options): ${Array.isArray(voteData.options)}`);
             }
-            */
 
+            // [수정] 렌더링 조건 검사 강화 및 로그 추가
             if (voteData && voteData.topic && Array.isArray(voteData.options) && voteData.options.length > 0) {
-                //console.log('%c[로그 성공] 투표 데이터가 유효하여 투표 UI를 렌더링합니다.', 'color: green');
+                console.log('%c[로그 성공] 투표 데이터가 유효하여 투표 UI를 렌더링합니다.', 'color: green');
                 let optionsHtml = '';
                 voteData.options.forEach(option => {
                     const optionText = String(option);
@@ -851,7 +850,7 @@
                     </div>
                 `;
             } else {
-                //console.warn('%c[로그 경고] 투표 데이터가 유효하지 않아 기본 버튼을 렌더링합니다.', 'color: orange');
+                console.warn('%c[로그 경고] 투표 데이터가 유효하지 않아 기본 버튼을 렌더링합니다.', 'color: orange');
                 actionPanel.innerHTML = `
                     <div class="flex justify-center gap-4 mt-6">
                         <button id="next-round-btn" class="btn btn-primary">다음 라운드 진행</button>
