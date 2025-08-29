@@ -10,7 +10,9 @@ from datetime import datetime
 
 from pydantic import BaseModel, ValidationError
 
+from app import db
 from app.db import redis_client
+
 from app.schemas.orchestration import DebateTeam
 from app.models.discussion import AgentSettings, DiscussionLog
 from app.core.config import logger
@@ -284,7 +286,8 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     redis_key = f"vote_history:{discussion_log.discussion_id}"
     vote_history = []
     try:
-        history_json = await redis_client.get(redis_key)
+        # db.redis_client 형태로 최신 객체를 참조합니다.
+        history_json = await db.redis_client.get(redis_key)
         if history_json:
             vote_history = json.loads(history_json)
     except Exception as e:
@@ -293,7 +296,8 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     if user_vote:
         vote_history.append(user_vote)
         try:
-            await redis_client.set(redis_key, json.dumps(vote_history), ex=86400)
+            # db.redis_client 형태로 최신 객체를 참조합니다.
+            await db.redis_client.set(redis_key, json.dumps(vote_history), ex=86400)
             logger.info(f"--- [BG Task] 사용자 투표 '{user_vote}'를 Redis에 기록했습니다. 현재 기록: {vote_history} ---")
         except Exception as e:
             logger.error(f"!!! [Redis Error] Redis에 투표 기록을 저장하는 중 오류 발생: {e}", exc_info=True)
