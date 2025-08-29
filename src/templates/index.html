@@ -49,21 +49,52 @@
         /* 토론 흐름도 화살표 스타일 */
         .flow-line {
             position: absolute;
-            height: 2px;
-            background-color: #ef4444; /* Red for conflict */
+            height: 3px; /* 기본 두께를 약간 두껍게 조정 */
             transform-origin: 0 0;
+            transition: all 0.2s ease-in-out; /* 부드러운 효과를 위한 트랜지션 */
+            z-index: 10;
         }
         .flow-line::after {
             content: '';
             position: absolute;
             right: -1px;
-            top: -4px;
-            border: solid #ef4444;
-            border-width: 0 2px 2px 0;
+            top: -3.5px; /* 두께에 맞춰 위치 조정 */
+            border-style: solid;
+            border-width: 0 3px 3px 0;
             display: inline-block;
-            padding: 4px;
+            padding: 3.5px;
             transform: rotate(-45deg);
         }
+
+        /* 마우스 오버 시 비활성화된 화살표 스타일 */
+        .flow-line.dimmed {
+            opacity: 0.15;
+        }
+
+        /* 마우스 오버 시 강조되는 화살표 스타일 */
+        .flow-line.highlighted {
+            height: 5px; /* 두께를 더 두껍게 */
+            opacity: 1;
+        }
+        .flow-line.highlighted::after {
+            top: -4.5px; /* 강조된 두께에 맞춰 위치 재조정 */
+        }
+
+        /* 에이전트별 화살표 색상 정의 (7개) */
+        .flow-line-color-0 { background-color: #ef4444; } /* red-500 */
+        .flow-line-color-0::after { border-color: #ef4444; }
+        .flow-line-color-1 { background-color: #3b82f6; } /* blue-500 */
+        .flow-line-color-1::after { border-color: #3b82f6; }
+        .flow-line-color-2 { background-color: #22c55e; } /* green-500 */
+        .flow-line-color-2::after { border-color: #22c55e; }
+        .flow-line-color-3 { background-color: #eab308; } /* yellow-500 */
+        .flow-line-color-3::after { border-color: #eab308; }
+        .flow-line-color-4 { background-color: #8b5cf6; } /* violet-500 */
+        .flow-line-color-4::after { border-color: #8b5cf6; }
+        .flow-line-color-5 { background-color: #ec4899; } /* pink-500 */
+        .flow-line-color-5::after { border-color: #ec4899; }
+        .flow-line-color-6 { background-color: #f97316; } /* orange-500 */
+        .flow-line-color-6::after { border-color: #f97316; }
     </style>
 </head>
 <body class="antialiased">
@@ -663,32 +694,77 @@
          * '토론 흐름도' 패널을 렌더링하는 함수
          */
         function renderFlowDiagram(interactions, participants) {
-            const container = document.getElementById('flow-diagram-container'); // UI에 해당 ID가 있어야 함
+            const container = document.getElementById('flow-diagram-container');
             if (!container || !interactions) return;
-            
+
             const participantMap = getParticipantMap(participants);
-            let agentHtml = '<div class="grid grid-cols-2 gap-4">';
-            Object.keys(participantMap).forEach(name => {
-                // 토론에 실제 참여한 배심원단만 표시
-                if (participants.some(p => p.name === name && p.name !== '재판관')) {
-                    agentHtml += `
-                        <div id="agent-node-${name.replace(/\s+/g, '-')}" class="flex flex-col items-center text-center">
-                            <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-2xl">${participantMap[name].icon}</div>
-                            <p class="text-xs font-bold mt-1">${name}</p>
-                        </div>`;
-                }
+            // [수정] 실제 토론에 참여한 배심원단(jury)의 이름 목록을 미리 추출합니다.
+            const juryNames = participants
+                .filter(p => p.name !== '재판관' && interactions.some(i => i.from === p.name || i.to === p.name))
+                .map(p => p.name);
+
+            let agentHtml = '<div class="grid grid-cols-2 gap-x-8 gap-y-6">'; // gap을 늘려 공간 확보
+            juryNames.forEach(name => {
+                // [수정] ID에 특수문자나 공백이 포함될 수 있으므로 CSS Selector로 사용하기 쉽게 변환합니다.
+                const safeId = `agent-node-${name.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                agentHtml += `
+                    <div id="${safeId}" class="flex flex-col items-center text-center cursor-pointer">
+                        <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-2xl">${participantMap[name].icon}</div>
+                        <p class="text-xs font-bold mt-1">${name}</p>
+                    </div>`;
             });
             agentHtml += '</div>';
             container.innerHTML = agentHtml;
 
-            // 잠시 후 화살표 그리기
+            // 잠시 후(DOM 렌더링 후) 화살표 그리기 및 이벤트 리스너 추가
             setTimeout(() => {
+                const lines = []; // 생성된 화살표 DOM 요소를 저장할 배열
+
+                // 에이전트별 색상 지정을 위한 컬러맵
+                const colorClasses = Array.from({ length: 7 }, (_, i) => `flow-line-color-${i}`);
+
                 interactions.forEach(flow => {
-                    const fromEl = document.getElementById(`agent-node-${flow.from.replace(/\s+/g, '-')}`);
-                    const toEl = document.getElementById(`agent-node-${flow.to.replace(/\s+/g, '-')}`);
+                    const fromId = `agent-node-${flow.from.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                    const toId = `agent-node-${flow.to.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                    const fromEl = document.getElementById(fromId);
+                    const toEl = document.getElementById(toId);
+
                     if (fromEl && toEl) {
-                        const line = createFlowLine(fromEl, toEl);
+                        // 'from' 에이전트 기준으로 색상 인덱스 결정
+                        const colorIndex = juryNames.indexOf(flow.from) % colorClasses.length;
+                        const colorClass = colorClasses[colorIndex];
+                        
+                        const line = createFlowLine(fromEl, toEl, colorClass);
+                        // 마우스 오버 시 참조할 수 있도록 데이터 속성 추가
+                        line.dataset.from = flow.from;
+                        line.dataset.to = flow.to;
+                        
                         container.appendChild(line);
+                        lines.push(line);
+                    }
+                });
+
+                // 각 에이전트 노드에 마우스 오버/아웃 이벤트 리스너 추가
+                juryNames.forEach(name => {
+                    const safeId = `agent-node-${name.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                    const agentNode = document.getElementById(safeId);
+                    if (agentNode) {
+                        agentNode.addEventListener('mouseover', () => {
+                            lines.forEach(line => {
+                                if (line.dataset.from === name || line.dataset.to === name) {
+                                    line.classList.remove('dimmed');
+                                    line.classList.add('highlighted');
+                                } else {
+                                    line.classList.add('dimmed');
+                                    line.classList.remove('highlighted');
+                                }
+                            });
+                        });
+                        agentNode.addEventListener('mouseout', () => {
+                            lines.forEach(line => {
+                                line.classList.remove('dimmed', 'highlighted');
+                            });
+                        });
                     }
                 });
             }, 100);
@@ -703,39 +779,31 @@
          * @param {HTMLElement} el2 - 도착 요소
          * @returns {HTMLElement} - 스타일이 적용된 화살표 선 div 요소
          */
-        function createFlowLine(el1, el2) {
-            // 각 요소의 화면상 위치와 크기 정보를 가져옵니다.
+        function createFlowLine(el1, el2, colorClass) {
             const rect1 = el1.getBoundingClientRect();
             const rect2 = el2.getBoundingClientRect();
-            
-            // 부모 컨테이너의 위치 정보를 가져와 상대 좌표를 계산합니다.
-            const containerRect = el1.parentElement.parentElement.getBoundingClientRect();
+            const containerRect = el1.closest('#flow-diagram-container').getBoundingClientRect();
 
-            // 각 요소의 중심점 좌표(x, y)를 계산합니다.
-            const x1 = rect1.left + rect1.width / 2 - containerRect.left;
+            // 요소의 좌/우를 판별하여 시작점과 끝점 재계산
+            const isEl1Left = rect1.left < rect2.left;
+            const x1 = (isEl1Left ? rect1.right : rect1.left) - containerRect.left;
             const y1 = rect1.top + rect1.height / 2 - containerRect.top;
-            const x2 = rect2.left + rect2.width / 2 - containerRect.left;
+            const x2 = (isEl1Left ? rect2.left : rect2.right) - containerRect.left;
             const y2 = rect2.top + rect2.height / 2 - containerRect.top;
-
-            // 피타고라스 정리를 사용하여 두 점 사이의 거리를 계산합니다 (선의 길이).
-            const length = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
             
-            // 삼각함수(atan2)를 사용하여 두 점 사이의 각도를 계산합니다.
+            const length = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
             const angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
-
-            // 새로운 div 요소를 생성합니다.
+            
             const line = document.createElement('div');
             
-            // CSS 클래스를 'flow-line'으로 설정하여 화살표 스타일을 적용합니다.
-            line.className = 'flow-line';
+            // 기본 클래스와 함께 에이전트별 색상 클래스를 추가합니다.
+            line.className = `flow-line ${colorClass}`;
             
-            // 계산된 값을 사용하여 선의 길이, 위치, 회전 각도를 설정합니다.
             line.style.width = `${length}px`;
             line.style.left = `${x1}px`;
             line.style.top = `${y1}px`;
             line.style.transform = `rotate(${angle}deg)`;
             
-            // 완성된 선 요소를 반환합니다.
             return line;
         }
 

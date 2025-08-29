@@ -31,9 +31,9 @@ async def _get_single_stance_change(
         )
         # 1. Stance Analyst 에이전트를 DB에서 찾았는지 확인
         if not analyst_setting:
-            logger.warning("!!! [Stance Analysis] 'Stance Analyst' 에이전트를 DB에서 찾을 수 없거나 'active' 상태가 아닙니다.")
+            # logger.warning("!!! [Stance Analysis] 'Stance Analyst' 에이전트를 DB에서 찾을 수 없거나 'active' 상태가 아닙니다.")
             return {"agent_name": agent_name, "change": "분석 불가", "icon": "❓"}
-        logger.info("'Stance Analyst' 에이전트 설정을 성공적으로 찾았습니다.")
+        # logger.info("'Stance Analyst' 에이전트 설정을 성공적으로 찾았습니다.")
 
         transcript_to_analyze = (
             f"에이전트 이름: {agent_name}\n\n"
@@ -41,7 +41,7 @@ async def _get_single_stance_change(
             f"현재 발언: \"{current_statement}\""
         )
         # 2. AI에게 전달될 최종 프롬프트 내용을 로그로 출력
-        logger.info(f"--- AI에게 전달될 프롬프트 ---\n{transcript_to_analyze}\n---------------------------")
+        # logger.info(f"--- AI에게 전달될 프롬프트 ---\n{transcript_to_analyze}\n---------------------------")
 
         analyst_agent = ChatGoogleGenerativeAI(model=analyst_setting.config.model)
         structured_llm = analyst_agent.with_structured_output(StanceAnalysis)
@@ -57,10 +57,11 @@ async def _get_single_stance_change(
         )
         
         # 3. AI의 응답이 성공적으로 파싱되었는지 확인
-        logger.info(f"성공적으로 AI 응답을 파싱했습니다: {analysis}")
+        # logger.info(f"성공적으로 AI 응답을 파싱했습니다: {analysis}")
         
         icon_map = {"유지": "😐", "강화": "🔼", "수정": "🔄", "약화": "🔽"}
         return {"agent_name": agent_name, "change": analysis.change, "icon": icon_map.get(analysis.change, "❓")}
+    
     except Exception as e:
         # 4. 오류 발생 시, 정확한 오류 메시지를 로그로 출력
         logger.error(f"!!! [Stance Analysis] 에러 발생: Agent '{agent_name}'의 입장 분석 중 실패. 에러: {e}", exc_info=True)
@@ -69,19 +70,19 @@ async def _get_single_stance_change(
 # 모든 참여자의 입장 변화를 병렬로 분석하는 메인 함수
 async def _analyze_stance_changes(transcript: List[dict], jury_members: List[dict], discussion_id: str, turn_number: int) -> List[dict]:
     num_jury = len(jury_members)
-    logger.info(f"--- [Stance Analysis] 입장 변화 분석 시작. Turn: {turn_number}, Transcript Lenth: {len(transcript)}, Jury Members: {num_jury} ---")
+    # logger.info(f"--- [Stance Analysis] 입장 변화 분석 시작. Turn: {turn_number}, Transcript Lenth: {len(transcript)}, Jury Members: {num_jury} ---")
     
     # 1. 분석을 실행할 조건이 맞는지 확인
     if turn_number < 1 or len(transcript) < num_jury * 2:
-        logger.warning(f"분석 조건 미충족으로 입장 변화 분석을 건너뜁니다. (Turn: {turn_number}, Transcript Lenth: {len(transcript)})")
+        # logger.warning(f"분석 조건 미충족으로 입장 변화 분석을 건너뜁니다. (Turn: {turn_number}, Transcript Lenth: {len(transcript)})")
         return []
 
     current_round_map = {turn['agent_name']: turn['message'] for turn in transcript[-num_jury:]}
     prev_round_map = {turn['agent_name']: turn['message'] for turn in transcript[-num_jury*2:-num_jury]}
 
     # 2. 이전 라운드와 현재 라운드의 발언이 올바르게 추출되었는지 확인
-    logger.info(f"이전 라운드 발언자: {list(prev_round_map.keys())}")
-    logger.info(f"현재 라운드 발언자: {list(current_round_map.keys())}")
+    # logger.info(f"이전 라운드 발언자: {list(prev_round_map.keys())}")
+    # logger.info(f"현재 라운드 발언자: {list(current_round_map.keys())}")
 
     tasks = []
     for agent in jury_members:
@@ -100,11 +101,11 @@ async def _analyze_stance_changes(transcript: List[dict], jury_members: List[dic
             logger.warning(f"!!! '{agent_name}' 에이전트의 이전 또는 현재 발언이 없어 분석에서 제외됩니다.")
     
     if not tasks:
-        logger.warning("분석할 에이전트가 없습니다.")
+        # logger.warning("분석할 에이전트가 없습니다.")
         return []
         
     results = await asyncio.gather(*tasks)
-    logger.info(f"--- [Stance Analysis] 입장 변화 분석 완료. 결과 수: {len(results)} ---")
+    # logger.info(f"--- [Stance Analysis] 입장 변화 분석 완료. 결과 수: {len(results)} ---")
     return results
 
 # 라운드 요약 분석을 위한 Pydantic 모델
