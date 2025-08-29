@@ -161,6 +161,6 @@ async def get_discussion_detail(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this discussion.")
     
      # [로그 추가] API가 프론트엔드에 응답으로 보낼 최종 데이터 확인
-    logger.info(f"--- [API 응답 데이터] 프론트엔드로 전송될 데이터 --- \n{discussion.model_dump_json(indent=2, ensure_ascii=False)}")
+    logger.info(f"--- [API 응답 데이터] 프론트엔드로 전송될 데이터 --- \n{discussion.model_dump_json(indent=2)}")
         
     return discussion
