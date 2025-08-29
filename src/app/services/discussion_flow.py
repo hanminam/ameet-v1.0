@@ -16,6 +16,8 @@ from app.core.config import logger
 from app.schemas.orchestration import AgentDetail # AgentDetail 스키마 추가
 from app.schemas.discussion import VoteContent
 
+import json
+
 # 입장 변화 분석 결과 Pydantic 모델
 class StanceAnalysis(BaseModel):
     change: Literal['유지', '강화', '수정', '약화']
@@ -321,10 +323,16 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
         discussion_log.current_vote = await _generate_vote_options(
             history_str, discussion_log.discussion_id, discussion_log.turn_number
         )
+        # [로그 추가] 생성된 투표 데이터가 discussion_log 객체에 잘 담겼는지 확인
+        logger.info(f"--- [DB 저장 직전 데이터 확인] current_vote: {json.dumps(discussion_log.current_vote, ensure_ascii=False)} ---")
 
     # 5. 최종 상태 변경
     discussion_log.status = "waiting_for_vote"
     discussion_log.turn_number += 1
+
+    # [로그 추가] DB에 저장될 최종 discussion_log 객체의 전체 구조 확인
+    logger.info(f"--- [DB SAVE] 최종 저장될 데이터 --- \n{discussion_log.model_dump_json(indent=2, ensure_ascii=False)}")
+
     await discussion_log.save()
     
     logger.info(f"--- [BG Task] Turn completed for {discussion_log.discussion_id}. New status: '{discussion_log.status}' ---")

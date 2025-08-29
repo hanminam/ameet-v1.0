@@ -1,5 +1,6 @@
 # src/app/api/v1/discussions.py
 
+from asyncio.log import logger
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Form, UploadFile, File
 from typing import List, Optional
@@ -158,5 +159,8 @@ async def get_discussion_detail(
         
     if discussion.user_email != current_user.email:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this discussion.")
+    
+     # [로그 추가] API가 프론트엔드에 응답으로 보낼 최종 데이터 확인
+    logger.info(f"--- [API 응답 데이터] 프론트엔드로 전송될 데이터 --- \n{discussion.model_dump_json(indent=2, ensure_ascii=False)}")
         
     return discussion
