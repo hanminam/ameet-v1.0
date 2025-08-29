@@ -32,6 +32,9 @@ class DiscussionLog(Document):
     completed_at: Optional[datetime] = None
     report_summary: Optional[str] = None
 
+     # 현재 라운드의 투표 정보를 저장하는 필드
+    current_vote: Optional[Dict[str, Any]] = Field(default=None, description="현재 진행 중인 투표의 주제와 선택지")
+
     # --- UX 데이터 필드 ---
     flow_data: Optional[Dict[str, Any]] = Field(default=None, description="라운드별 에이전트 상호작용 데이터")
     round_summary: Optional[Dict[str, Any]] = Field(default=None, description="라운드별 결정적 발언, 입장 변화 데이터")

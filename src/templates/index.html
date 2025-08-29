@@ -811,41 +811,53 @@
             const actionPanel = document.getElementById('user-action-panel');
             if (!actionPanel) return;
 
-            const voteTopic = "현재 논점은 '성장 잠재력'과 '금리 리스크'입니다. 어떤 요소를 더 중요하게 생각하시나요?";
-            const voteOptions = ["성장 잠재력", "금리 리스크"];
+            // [수정] discussionData에서 동적 투표 정보를 가져옵니다.
+            const voteData = discussionData.current_vote;
 
-            let optionsHtml = '';
-            voteOptions.forEach(option => {
-                optionsHtml += `<button class="btn btn-subtle vote-option" data-vote="${option}">${option}</button>`;
-            });
+            // 투표 정보가 없으면 패널을 렌더링하지 않거나, 다른 메시지를 표시할 수 있습니다.
+            if (!voteData || !voteData.topic || !voteData.options) {
+                actionPanel.innerHTML = `
+                    <div class="flex justify-center gap-4 mt-6">
+                        <button id="next-round-btn" class="btn btn-primary">다음 라운드 진행</button>
+                        <button id="end-debate-btn" class="btn btn-secondary">이대로 토론 종료</button>
+                    </div>`;
+            } else {
+                // [수정] voteData.options 배열을 순회하며 투표 버튼을 동적으로 생성합니다.
+                let optionsHtml = '';
+                voteData.options.forEach(option => {
+                    optionsHtml += `<button class="btn btn-subtle vote-option" data-vote="${option}">${option}</button>`;
+                });
 
-            actionPanel.innerHTML = `
-                <div class="bg-amber-100 border-l-4 border-amber-500 p-4 rounded-r-lg shadow-lg animate-fade-in">
-                    <p class="font-bold text-amber-800">사회자의 투표 제안</p>
-                    <p class="mt-2 text-base text-amber-900">"${voteTopic}"</p>
-                    <div id="vote-options-container" class="flex flex-wrap gap-3 justify-center mt-4">
-                        ${optionsHtml}
+                actionPanel.innerHTML = `
+                    <div class="bg-amber-100 border-l-4 border-amber-500 p-4 rounded-r-lg shadow-lg animate-fade-in">
+                        <p class="font-bold text-amber-800">사회자의 투표 제안 (Round ${discussionData.turn_number})</p>
+                        <p class="mt-2 text-base text-amber-900">"${voteData.topic}"</p>
+                        <div id="vote-options-container" class="flex flex-wrap gap-3 justify-center mt-4">
+                            ${optionsHtml}
+                        </div>
                     </div>
-                </div>
-                <div class="flex justify-center gap-4 mt-6">
-                    <button id="next-round-btn" class="btn btn-primary">다음 라운드 진행</button>
-                    <button id="end-debate-btn" class="btn btn-secondary">이대로 토론 종료</button>
-                </div>
-            `;
-            
-            // 생성된 버튼들에 이벤트 리스너 연결
+                    <div class="flex justify-center gap-4 mt-6">
+                        <button id="next-round-btn" class="btn btn-primary">투표하고 다음 라운드 진행</button>
+                        <button id="end-debate-btn" class="btn btn-secondary">이대로 토론 종료</button>
+                    </div>
+                `;
+            }
+
+            // [유지] 생성된 버튼들에 이벤트 리스너 연결 (기존 로직과 동일하게 작동)
             document.getElementById('next-round-btn').addEventListener('click', handleNextRound);
             document.getElementById('end-debate-btn').addEventListener('click', handleEndDebate);
             
             const voteOptionsContainer = document.getElementById('vote-options-container');
-            voteOptionsContainer.addEventListener('click', (event) => {
-                if (event.target.classList.contains('vote-option')) {
-                    voteOptionsContainer.querySelectorAll('.vote-option').forEach(btn => {
-                        btn.classList.remove('bg-blue-600', 'text-white');
-                    });
-                    event.target.classList.add('bg-blue-600', 'text-white');
-                }
-            });
+            if (voteOptionsContainer) {
+                voteOptionsContainer.addEventListener('click', (event) => {
+                    if (event.target.classList.contains('vote-option')) {
+                        voteOptionsContainer.querySelectorAll('.vote-option').forEach(btn => {
+                            btn.classList.remove('bg-blue-600', 'text-white');
+                        });
+                        event.target.classList.add('bg-blue-600', 'text-white');
+                    }
+                });
+            }
         }
 
         /**

@@ -14,6 +14,7 @@ from app.models.discussion import AgentSettings, DiscussionLog
 from app.core.config import logger
 
 from app.schemas.orchestration import AgentDetail # AgentDetail 스키마 추가
+from app.schemas.discussion import VoteContent
 
 # 입장 변화 분석 결과 Pydantic 모델
 class StanceAnalysis(BaseModel):
@@ -209,6 +210,37 @@ def _analyze_flow_data(transcript: List[dict], jury_members: List[dict]) -> dict
                 interactions.append({"from": speaker, "to": mentioned_agent})
                 
     return {"interactions": interactions}
+
+# 투표 생성을 위한 별도의 헬퍼 함수
+async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_number: int) -> Optional[dict]:
+    """대화록을 분석하여 투표 주제와 선택지를 생성합니다."""
+    logger.info(f"--- [Vote Generation] Turn: {turn_number} 투표 생성 시작 ---")
+    try:
+        vote_caster_setting = await AgentSettings.find_one(
+            AgentSettings.name == "Vote Caster", AgentSettings.status == "active"
+        )
+        if not vote_caster_setting:
+            logger.error("!!! 'Vote Caster' 에이전트를 찾을 수 없습니다.")
+            return None
+
+        vote_caster_agent = ChatGoogleGenerativeAI(model=vote_caster_setting.config.model)
+        structured_llm = vote_caster_agent.with_structured_output(VoteContent)
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", vote_caster_setting.config.prompt),
+            ("human", "아래 대화록을 분석하여 투표를 생성해주세요:\n\n{transcript}")
+        ])
+        
+        chain = prompt | structured_llm
+        vote_content = await chain.ainvoke(
+            {"transcript": transcript_str},
+            config={"tags": [f"discussion_id:{discussion_id}", f"turn:{turn_number}", "task:generate_vote"]}
+        )
+        logger.info(f"--- [Vote Generation] 투표 생성 완료: {vote_content.topic} ---")
+        return vote_content.model_dump() # Pydantic 모델을 dict로 변환하여 반환
+    except Exception as e:
+        logger.error(f"!!! [Vote Generation] 투표 생성 중 오류 발생: {e}", exc_info=True)
+        return None
     
 async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] = None):
     """
@@ -284,6 +316,11 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
 
         # 3. 토론 흐름도 데이터 생성 (대화 내용 기반)
         discussion_log.flow_data = _analyze_flow_data(discussion_log.transcript, jury_members)
+
+        # 전체 대화록을 기반으로 다음 라운드를 위한 투표 생성
+        discussion_log.current_vote = await _generate_vote_options(
+            history_str, discussion_log.discussion_id, discussion_log.turn_number
+        )
 
     # 5. 최종 상태 변경
     discussion_log.status = "waiting_for_vote"
