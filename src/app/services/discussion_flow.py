@@ -2,12 +2,13 @@
 # 미래에 구현될 복잡한 토론 로직을 임시로 대체하는 '기능적인 목업(Functional Mock)' 
 
 import asyncio
+import json
 from typing import List, Literal, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.schemas.orchestration import DebateTeam
 from app.models.discussion import AgentSettings, DiscussionLog
@@ -215,36 +216,45 @@ def _analyze_flow_data(transcript: List[dict], jury_members: List[dict]) -> dict
 async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_number: int) -> Optional[dict]:
     """대화록을 분석하여 투표 주제와 선택지를 생성합니다."""
     logger.info(f"--- [Vote Generation] Turn: {turn_number} 투표 생성 시작 ---")
+    raw_response = "" # 오류 로깅을 위해 변수 초기화
     try:
         vote_caster_setting = await AgentSettings.find_one(
             AgentSettings.name == "Vote Caster", AgentSettings.status == "active"
         )
         if not vote_caster_setting:
-            logger.error("!!! 'Vote Caster' 에이전트를 찾을 수 없습니다.")
+            logger.error("!!! [Vote Generation] 'Vote Caster' 에이전트를 DB에서 찾을 수 없습니다.")
             return None
+            
+        logger.info(f"[로그 추가] Vote Caster 설정 로드 완료: {vote_caster_setting.config.model}")
+        logger.info(f"[로그 추가] Vote Caster에게 전달될 대화록 길이: {len(transcript_str)} 자")
 
         vote_caster_agent = ChatGoogleGenerativeAI(model=vote_caster_setting.config.model)
-        
-        # Use with_structured_output to parse the JSON response into the VoteContent model
-        structured_llm = vote_caster_agent.with_structured_output(VoteContent)
         
         prompt = ChatPromptTemplate.from_messages([
             ("system", vote_caster_setting.config.prompt),
             ("human", "아래 대화록을 분석하여 투표를 생성해주세요:\n\n{transcript}")
         ])
         
-        chain = prompt | structured_llm
-        vote_content = await chain.ainvoke(
+        chain = prompt | vote_caster_agent
+        response = await chain.ainvoke(
             {"transcript": transcript_str},
             config={"tags": [f"discussion_id:{discussion_id}", f"turn:{turn_number}", "task:generate_vote"]}
         )
-        logger.info(f"--- [Vote Generation] 투표 생성 완료: {vote_content.topic} ---")
+
+        raw_response = response.content
+        logger.info(f"[로그 추가] Vote Caster로부터 받은 원본 응답:\n---\n{raw_response}\n---")
+
+        # 원본 응답을 VoteContent Pydantic 모델로 직접 파싱
+        vote_content = VoteContent.model_validate_json(raw_response)
         
-        # Return the parsed content as a dictionary
+        logger.info(f"--- [Vote Generation] 투표 생성 및 파싱 완료: {vote_content.topic} ---")
         return vote_content.model_dump()
+        
+    except (ValidationError, json.JSONDecodeError) as e:
+        logger.error(f"!!! [Vote Generation] JSON 파싱 오류. 오류: {e}\n원본 응답: {raw_response}")
+        return None
     except Exception as e:
-        # It's possible the LLM returns a non-JSON string. Log the error.
-        logger.error(f"!!! [Vote Generation] 투표 생성 또는 파싱 중 오류 발생: {e}", exc_info=True)
+        logger.error(f"!!! [Vote Generation] 투표 생성 중 알 수 없는 오류 발생: {e}", exc_info=True)
         return None
     
 async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] = None):
