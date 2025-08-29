@@ -606,7 +606,7 @@
                     const discussionData = await response.json();
                     
                     // [로그 추가] 백엔드로부터 받은 데이터 원본을 그대로 콘솔에 출력
-                    console.log('%c[Polling Response Received]', 'color: blue; font-weight: bold;', discussionData);
+                    //console.log('%c[Polling Response Received]', 'color: blue; font-weight: bold;', discussionData);
                     
                     await updateTranscript(discussionData.transcript, discussionData.participants);
 
@@ -918,10 +918,41 @@
         /**
          * '토론 종료' 버튼의 로직을 처리하는 함수
          */
-        function handleEndDebate() {
+        async function handleEndDebate() {
             console.log("토론을 종료하고 보고서 화면으로 이동합니다.");
-            isPollingActive = false; // 폴링 루프 즉시 중단
-            showScreen('screen-6');
+            isPollingActive = false; // 진행 중인 폴링 즉시 중단
+
+            const endDebateBtn = document.getElementById('end-debate-btn');
+            if (endDebateBtn) {
+                endDebateBtn.disabled = true;
+                endDebateBtn.textContent = '종료 처리 중...';
+            }
+
+            if (!currentDiscussionId) {
+                showScreen('screen-6'); // 토론 ID가 없으면 그냥 화면만 전환
+                return;
+            }
+
+            const token = localStorage.getItem('accessToken');
+            try {
+                // 백엔드에 토론 완료를 알리는 API 호출
+                const response = await fetch(`/api/v1/discussions/${currentDiscussionId}/complete`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    console.log("서버에 토론 완료 상태가 성공적으로 저장되었고, 세션 데이터가 정리되었습니다.");
+                } else {
+                    const errorData = await response.json();
+                    console.error("서버에 토론 완료를 알리는 데 실패했습니다:", errorData.detail);
+                }
+            } catch (error) {
+                console.error("토론 완료 API 호출 중 네트워크 오류가 발생했습니다:", error);
+            } finally {
+                // API 호출 성공 여부와 관계없이 사용자는 보고서 화면으로 이동
+                showScreen('screen-6'); 
+            }
         }
 
         /**

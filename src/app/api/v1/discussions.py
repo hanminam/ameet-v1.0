@@ -1,5 +1,7 @@
 # src/app/api/v1/discussions.py
 
+from asyncio.log import logger
+from datetime import datetime
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Form, UploadFile, File
 from typing import List, Optional
@@ -10,6 +12,7 @@ from app.services.discussion_flow import execute_turn
 from app.schemas.orchestration import DebateTeam
 from app.schemas.discussion import DiscussionLogItem, DiscussionLogDetail
 from app.api.v1.users import get_current_user
+from app.db import redis_client
 from app.models.user import User as UserModel
 from app.models.discussion import DiscussionLog
 
@@ -160,3 +163,38 @@ async def get_discussion_detail(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this discussion.")
         
     return discussion
+
+# 토론을 완료하고 세션 데이터를 정리하는 엔드포인트 추가
+@router.post(
+    "/{discussion_id}/complete",
+    status_code=status.HTTP_200_OK,
+    summary="토론을 수동으로 완료 처리"
+)
+async def complete_discussion(
+    discussion_id: str,
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    사용자가 토론 종료를 요청했을 때 호출됩니다.
+    토론 상태를 'completed'로 변경하고, Redis에 저장된 세션 데이터를 삭제합니다.
+    """
+    discussion_log = await DiscussionLog.find_one(DiscussionLog.discussion_id == discussion_id)
+    
+    if not discussion_log:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discussion not found.")
+    if discussion_log.user_email != current_user.email:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this discussion.")
+
+    discussion_log.status = "completed"
+    discussion_log.completed_at = datetime.utcnow()
+    await discussion_log.save()
+
+    # Redis에서 해당 토론의 투표 기록 키 삭제
+    redis_key = f"vote_history:{discussion_id}"
+    try:
+        await redis_client.delete(redis_key)
+        logger.info(f"--- [Session Cleanup] Redis key '{redis_key}' has been deleted.")
+    except Exception as e:
+        logger.error(f"!!! [Redis Error] Failed to delete key '{redis_key}': {e}", exc_info=True)
+    
+    return {"message": "Discussion completed and session data cleared."}

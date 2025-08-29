@@ -10,6 +10,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ValidationError
 
+from app.db import redis_client
 from app.schemas.orchestration import DebateTeam
 from app.models.discussion import AgentSettings, DiscussionLog
 from app.core.config import logger
@@ -214,10 +215,11 @@ def _analyze_flow_data(transcript: List[dict], jury_members: List[dict]) -> dict
     return {"interactions": interactions}
 
 # 투표 생성을 위한 별도의 헬퍼 함수
-async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_number: int) -> Optional[dict]:
-    """대화록을 분석하여 투표 주제와 선택지를 생성합니다."""
+async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_number: int, vote_history: List[str]) -> Optional[dict]:
+    """대화록과 이전 투표 기록을 분석하여 새로운 투표 주제와 선택지를 생성합니다."""
     logger.info(f"--- [Vote Generation] Turn: {turn_number} 투표 생성 시작 ---")
-    raw_response = "" # 오류 로깅을 위해 변수 초기화
+    raw_response = ""
+    json_str = ""
     try:
         vote_caster_setting = await AgentSettings.find_one(
             AgentSettings.name == "Vote Caster", AgentSettings.status == "active"
@@ -227,42 +229,46 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
             return None
             
         logger.info(f"[로그 추가] Vote Caster 설정 로드 완료: {vote_caster_setting.config.model}")
-        logger.info(f"[로그 추가] Vote Caster에게 전달될 대화록 길이: {len(transcript_str)} 자")
+
+        history_prompt_section = "이전 투표에서 사용자가 선택한 항목이 없습니다."
+        if vote_history:
+            history_items = "\n".join([f"- {item}" for item in vote_history])
+            history_prompt_section = f"### 이전 투표에서 사용자가 선택한 항목 (이 항목들은 제외하고 새로운 관점을 제시하세요):\n{history_items}"
+
+        final_human_prompt = (
+            f"{history_prompt_section}\n\n"
+            f"### 현재 라운드 토론 대화록:\n{transcript_str}"
+        )
+        
+        logger.info(f"[로그 추가] Vote Caster에게 전달될 전체 프롬프트 길이: {len(final_human_prompt)} 자")
 
         vote_caster_agent = ChatGoogleGenerativeAI(model=vote_caster_setting.config.model)
         
         prompt = ChatPromptTemplate.from_messages([
             ("system", vote_caster_setting.config.prompt),
-            ("human", "아래 대화록을 분석하여 투표를 생성해주세요:\n\n{transcript}")
+            ("human", final_human_prompt)
         ])
         
         chain = prompt | vote_caster_agent
         response = await chain.ainvoke(
-            {"transcript": transcript_str},
+            {},
             config={"tags": [f"discussion_id:{discussion_id}", f"turn:{turn_number}", "task:generate_vote"]}
         )
 
         raw_response = response.content
-        logger.info(f"[로그 추가] Vote Caster로부터 받은 원본 응답:\n---\n{raw_response}\n---")
+        # logger.info(f"[로그 추가] Vote Caster로부터 받은 원본 응답:\n---\n{raw_response}\n---")
 
-        # LLM 응답에서 Markdown 코드 블록을 제거하는 전처리 로직
-        # 정규표현식을 사용하여 ```json 과 ```, 그리고 그 사이의 줄바꿈 문자를 찾아 제거합니다.
-        # re.DOTALL 플래그는 '.'이 줄바꿈 문자도 포함하도록 만듭니다.
         match = re.search(r"```(json)?\s*({.*?})\s*```", raw_response, re.DOTALL)
-        if match:
-            json_str = match.group(2)
-            logger.info(f"[로그 추가] 마크다운 블록 제거 후 추출된 JSON: {json_str}")
-        else:
-            json_str = raw_response # 마크다운 블록이 없으면 원본 그대로 사용
-
-        # 원본 응답을 VoteContent Pydantic 모델로 직접 파싱
+        json_str = match.group(2) if match else raw_response
+        # logger.info(f"[로그 추가] 마크다운 블록 제거 후 추출된 JSON: {json_str}")
+        
         vote_content = VoteContent.model_validate_json(json_str)
         
         logger.info(f"--- [Vote Generation] 투표 생성 및 파싱 완료: {vote_content.topic} ---")
         return vote_content.model_dump()
         
     except (ValidationError, json.JSONDecodeError) as e:
-        logger.error(f"!!! [Vote Generation] JSON 파싱 오류. 오류: {e}\n(전처리 후) 파싱 대상: {json_str}")
+        logger.error(f"!!! [Vote Generation] JSON 파싱 오류. 오류: {e}\n원본 응답: {raw_response}", exc_info=True)
         return None
     except Exception as e:
         logger.error(f"!!! [Vote Generation] 투표 생성 중 알 수 없는 오류 발생: {e}", exc_info=True)
