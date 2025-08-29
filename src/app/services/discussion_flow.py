@@ -229,22 +229,25 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
         if not vote_caster_setting:
             logger.error("!!! [Vote Generation] 'Vote Caster' 에이전트를 DB에서 찾을 수 없습니다.")
             return None
-            
-        logger.info(f"[로그 추가] Vote Caster 설정 로드 완료: {vote_caster_setting.config.model}")
 
-        history_prompt_section = "이전 투표에서 사용자가 선택한 항목이 없습니다."
+        # [수정] 이전 투표 기록을 프롬프트에 명확하게 포함
+        history_prompt_section = "아직 사용자의 이전 투표 기록이 없습니다."
         if vote_history:
-            history_items = "\n".join([f"- {item}" for item in vote_history])
-            history_prompt_section = f"### 이전 투표에서 사용자가 선택한 항목 (이 항목들은 제외하고 새로운 관점을 제시하세요):\n{history_items}"
+            history_items = "\n".join([f"- '{item}'" for item in vote_history])
+            history_prompt_section = f"### 이전 투표에서 사용자가 선택한 항목들 (이 항목들과 유사한 제안은 피하고, 더 심화된 새로운 관점을 제시하세요):\n{history_items}"
 
+        # [수정] 프롬프트를 더 명확하고 구조적으로 변경
         final_human_prompt = (
             f"{history_prompt_section}\n\n"
-            f"### 현재 라운드 토론 대화록:\n{transcript_str}"
+            f"### 현재 라운드까지의 전체 토론 대화록:\n{transcript_str}"
         )
-        
-        logger.info(f"[로그 추가] Vote Caster에게 전달될 전체 프롬프트 길이: {len(final_human_prompt)} 자")
 
-        vote_caster_agent = ChatGoogleGenerativeAI(model=vote_caster_setting.config.model)
+        vote_caster_agent = ChatGoogleGenerativeAI(
+            model=vote_caster_setting.config.model,
+            temperature=vote_caster_setting.config.temperature,
+            # [추가] JSON 응답을 더 안정적으로 받기 위한 설정
+            model_kwargs={"response_mime_type": "application/json"}
+        )
         
         prompt = ChatPromptTemplate.from_messages([
             ("system", vote_caster_setting.config.prompt),
@@ -252,18 +255,19 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
         ])
         
         chain = prompt | vote_caster_agent
+
         response = await chain.ainvoke(
             {},
             config={"tags": [f"discussion_id:{discussion_id}", f"turn:{turn_number}", "task:generate_vote"]}
         )
 
         raw_response = response.content
-        # logger.info(f"[로그 추가] Vote Caster로부터 받은 원본 응답:\n---\n{raw_response}\n---")
-
+        
+        # [수정] LLM이 때때로 markdown 코드 블록을 포함하는 경우를 대비한 안정적인 파싱 로직
         match = re.search(r"```(json)?\s*({.*?})\s*```", raw_response, re.DOTALL)
         json_str = match.group(2) if match else raw_response
-        # logger.info(f"[로그 추가] 마크다운 블록 제거 후 추출된 JSON: {json_str}")
         
+        # Pydantic 모델을 사용하여 유효성 검증
         vote_content = VoteContent.model_validate_json(json_str)
         
         logger.info(f"--- [Vote Generation] 투표 생성 및 파싱 완료: {vote_content.topic} ---")
@@ -271,7 +275,11 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
         
     except (ValidationError, json.JSONDecodeError) as e:
         logger.error(f"!!! [Vote Generation] JSON 파싱 오류. 오류: {e}\n원본 응답: {raw_response}", exc_info=True)
-        return None
+        # 파싱 실패 시, 사용자에게 다음 라운드로 넘어갈 수 있는 기본 옵션 제공
+        return {
+            "topic": "다음으로 어떤 토론을 진행할까요?",
+            "options": ["가장 의견이 엇갈리는 쟁점에 대해 추가 반론", "새로운 관점의 전문가 추가 투입 요청", "현재까지 내용 중간 요약"]
+        }
     except Exception as e:
         logger.error(f"!!! [Vote Generation] 투표 생성 중 알 수 없는 오류 발생: {e}", exc_info=True)
         return None

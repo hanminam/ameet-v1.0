@@ -19,6 +19,7 @@ class DiscussionLogDetail(DiscussionLogItem):
     """토론 상세 조회를 위한 스키마"""
     transcript: List[Dict[str, Any]]
     participants: Optional[List[Dict[str, Any]]] = None
+    turn_number: int = Field(default=0, description="현재 토론 라운드 번호 (0부터 시작)")
     completed_at: Optional[datetime] = None
     report_summary: Optional[str] = None
     
