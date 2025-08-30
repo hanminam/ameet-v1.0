@@ -200,7 +200,14 @@ async def _run_single_agent_turn(
         # 4. 도구 사용 여부에 따라 에이전트 실행 방식을 분기합니다.
         if agent_tools:
             logger.info(f"--- [Flow] Agent '{agent_name}' is using tools: {[t.name for t in agent_tools]} ---")
-            # 도구를 사용하는 경우: AgentExecutor를 생성하여 실행
+            
+            # 도구를 사용하는 에이전트 전용 프롬프트 (agent_scratchpad 포함)
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", agent_config.get("prompt", "You are a helpful assistant.")),
+                ("human", "{input}"),
+                MessagesPlaceholder(variable_name="agent_scratchpad"),
+            ])
+            
             agent = create_tool_calling_agent(llm, agent_tools, prompt)
             agent_executor = AgentExecutor(agent=agent, tools=agent_tools, verbose=True)
             
@@ -211,7 +218,12 @@ async def _run_single_agent_turn(
             return response.get("output", "오류: 응답을 생성하지 못했습니다.")
 
         else:
-            # 도구를 사용하지 않는 경우: 기존 방식으로 LLM 직접 호출
+            # 도구를 사용하지 않는 에이전트 전용 프롬프트 (agent_scratchpad 없음)
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", agent_config.get("prompt", "You are a helpful assistant.")),
+                ("human", "{input}")
+            ])
+            
             chain = prompt | llm
             response = await chain.ainvoke(
                 {"input": final_human_prompt},
