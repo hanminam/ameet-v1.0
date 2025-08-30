@@ -22,6 +22,9 @@ class DiscussionLog(Document):
 
     # --- 토론 참여자 정보를 저장하는 필드 ---
     participants: Optional[List[Dict[str, Any]]] = None # 유연한 저장을 위해 Dict 사용
+
+    # 초기 분석 단계에서 수집된 증거 자료집을 저장할 필드
+    evidence_briefing: Optional[Dict[str, Any]] = Field(default=None, description="오케스트레이션 단계에서 수집된 웹/파일 증거 자료집")
     
     topic: str
     user_email: Annotated[str, Indexed()]

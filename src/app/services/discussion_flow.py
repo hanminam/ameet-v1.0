@@ -154,6 +154,7 @@ async def _run_single_agent_turn(
     agent_config: dict, 
     topic: str, 
     history: str, 
+    evidence: str,
     special_directive: str, 
     discussion_id: str,
     turn_count: int
@@ -178,10 +179,12 @@ async def _run_single_agent_turn(
 
         # 최종 프롬프트 구성
         final_human_prompt = (
-            f"주제: {topic}\n\n"
-            f"지금까지의 토론 내용:\n{history}\n\n"
+            f"당신은 다음 토론에 참여하는 AI 에이전트입니다. 주어진 참고 자료와 토론 내용을 바탕으로 당신의 임무를 수행하세요.\n\n"
+            f"### 전체 토론 주제: {topic}\n\n"
+            f"### 참고 자료 (초기 분석 정보)\n{evidence}\n"
+            f"### 지금까지의 토론 내용:\n{history if history else '아직 토론 내용이 없습니다.'}\n\n"
             f"{special_directive}\n"
-            f"--- 당신의 임무 ---\n{human_instruction}"
+            f"### 당신의 임무\n{human_instruction}"
         )
 
         prompt = ChatPromptTemplate.from_messages([
@@ -285,7 +288,7 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
 
         raw_response = response.content
         
-        # [수정] LLM이 때때로 markdown 코드 블록을 포함하는 경우를 대비한 안정적인 파싱 로직
+        # LLM이 때때로 markdown 코드 블록을 포함하는 경우를 대비한 안정적인 파싱 로직
         match = re.search(r"```(json)?\s*({.*?})\s*```", raw_response, re.DOTALL)
         json_str = match.group(2) if match else raw_response
         
@@ -333,6 +336,18 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     current_turn = discussion_log.turn_number
     history_str = "\n\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript])
 
+    # DB에 저장된 증거 자료를 불러와 프롬프트에 포함할 문자열로 만듭니다.
+    evidence_str = ""
+    if discussion_log.evidence_briefing:
+        web_evidence = "\n".join([f"- {item['summary']} (출처: {item['source']})" for item in discussion_log.evidence_briefing.get('web_evidence', [])])
+        file_evidence = "\n".join([f"- {item['summary']} (출처: {item['source']})" for item in discussion_log.evidence_briefing.get('file_evidence', [])])
+        
+        evidence_str += "--- [참고 자료: 웹 검색 결과 요약] ---\n"
+        evidence_str += web_evidence + "\n" if web_evidence else "관련 웹 검색 결과가 없습니다.\n"
+        evidence_str += "--- [참고 자료: 제출 파일 요약] ---\n"
+        evidence_str += file_evidence + "\n" if file_evidence else "제출된 파일이 없습니다.\n"
+
+
     special_directive = ""
     if user_vote:
         special_directive = (
@@ -356,6 +371,7 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
             agent_config, 
             discussion_log.topic, 
             history_str, 
+            evidence_str,  # 증거 자료 전달
             special_directive,
             discussion_log.discussion_id,
             current_turn
