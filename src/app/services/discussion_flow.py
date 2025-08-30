@@ -5,7 +5,7 @@ import asyncio
 import json
 from typing import List, Literal, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from datetime import datetime
 
 from pydantic import BaseModel, ValidationError
@@ -189,7 +189,9 @@ async def _run_single_agent_turn(
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", agent_config.get("prompt", "You are a helpful assistant.")),
-            ("human", "{input}") # AgentExecutor는 'input'이라는 키를 사용합니다.
+            ("human", "{input}"),
+            # 에이전트의 중간 작업 및 도구 사용 결과를 기록할 공간을 추가합니다.
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
         ])
 
         # 3. 에이전트가 사용할 도구를 설정합니다.
