@@ -3,6 +3,7 @@
 import asyncio
 from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper
 from app.core.config import settings
+from langchain_core.tools import Tool
 
 # Tavily API 키가 설정되어 있는지 확인
 if not settings.TAVILY_API_KEY:
@@ -31,3 +32,15 @@ async def perform_web_search(query: str) -> list:
     except Exception as e:
         print(f"--- [Tool Error] 웹 검색 중 오류 발생: {e} ---")
         return []
+    
+# perform_web_search 함수를 LangChain Tool로 포장합니다.
+web_search_tool = Tool(
+    name="web_search",
+    func=perform_web_search,
+    description="최신 뉴스, 주가, 시장 동향, 특정 주제에 대한 최신 정보 등 실시간 정보가 필요할 때 사용하는 웹 검색 도구입니다. 정확한 검색을 위해 구체적인 키워드를 사용하세요."
+)
+
+# 사용 가능한 모든 도구를 딕셔너리 형태로 관리합니다.
+available_tools = {
+    "web_search": web_search_tool
+}

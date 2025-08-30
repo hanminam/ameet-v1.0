@@ -21,6 +21,10 @@ from app.schemas.orchestration import AgentDetail # AgentDetail 스키마 추가
 from app.schemas.discussion import VoteContent
 import re
 
+# 에이전트 및 도구 실행을 위한 LangChain 모듈 임포트
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from app.tools.search import available_tools
+
 # 입장 변화 분석 결과 Pydantic 모델
 class StanceAnalysis(BaseModel):
     change: Literal['유지', '강화', '수정', '약화']
@@ -154,46 +158,64 @@ async def _run_single_agent_turn(
     discussion_id: str,
     turn_count: int
 ) -> str:
-    """단일 에이전트의 발언(turn)을 생성합니다."""
+    """단일 에이전트의 발언(turn)을 생성합니다. 에이전트 설정에 따라 웹 검색 도구를 사용할 수 있습니다."""
     agent_name = agent_config.get("name", "Unknown Agent")
     logger.info(f"--- [Flow] Running turn for agent: {agent_name} (Discussion: {discussion_id}, Turn: {turn_count}) ---")
     
     try:
+        # 1. LLM 모델을 준비합니다.
         llm = ChatGoogleGenerativeAI(
             model=agent_config.get("model", "gemini-1.5-flash"),
             temperature=agent_config.get("temperature", 0.2)
         )
         
         # 토론 라운드 수에 따라 동적으로 지시사항을 변경
-        if turn_count == 0:  # 첫 번째 라운드 (모두 변론)
-            human_instruction = "지금은 '모두 변론' 시간입니다. 위 내용을 바탕으로 당신의 초기 입장을 최소 100자에서 최대 1000자 이내로 설명해주세요."
-        else:  # 두 번째 라운드 이후 (반론)
-            human_instruction = f"지금은 '{turn_count + 1}차 토론' 시간입니다. 이전의 에이전트들의 의견을 고려하여 다른 에이전트의 주장을 반박하거나 다른 에이전트의 의견에 적극 동조하거나 아니면 다른 에이전트의 의견을 수렴하여 의견을 수정한 당신의 의견을 주장합니다. 다른 에이전트의 논리적 모순이나 사실에 위배되는 주장이 있다고 생각한다면 적극적으로 반박하십시요. 또한, 다른 에이전트가 생각하지 못하는 새로운 아이디어, 독창적인 주장, 그리고 토론의 주제를 심화할 수 있다고 생각되는 내용을 적극적으로 주장합니다. 또한, 이전 토론 차수에서 주장한 내용을 바탕으로 자신의 주장중에 보다 구체적인 대안, 구체적인 방안등으로 자신의 주장을 심화 발전하는 것이 중요합니다. 주장은 최소 200자 최대 1000자 이내로 추가해주세요."
+        human_instruction = (
+            "지금은 '모두 변론' 시간입니다. 위 내용을 바탕으로 당신의 초기 입장을 최소 100자에서 최대 1000자 이내로 설명해주세요."
+            if turn_count == 0 else
+            f"지금은 '{turn_count + 1}차 토론' 시간입니다. 이전의 에이전트들의 의견을 고려하여 다른 에이전트의 주장을 반박하거나 다른 에이전트의 의견에 적극 동조하거나 아니면 다른 에이전트의 의견을 수렴하여 의견을 수정한 당신의 의견을 주장합니다. 다른 에이전트의 논리적 모순이나 사실에 위배되는 주장이 있다고 생각한다면 적극적으로 반박하십시요. 또한, 다른 에이전트가 생각하지 못하는 새로운 아이디어, 독창적인 주장, 그리고 토론의 주제를 심화할 수 있다고 생각되는 내용을 적극적으로 주장합니다. 또한, 이전 토론 차수에서 주장한 내용을 바탕으로 자신의 주장중에 보다 구체적인 대안, 구체적인 방안등으로 자신의 주장을 심화 발전하는 것이 중요합니다. 토론의 차수가 높아질수록 이전 자신의 주장을 동어반복하기 보단 보다 구체적인 대안을 주장합니다. 주장은 최소 200자 최대 1000자 이내로 추가해주세요."
+        )
 
         # 최종 프롬프트 구성
         final_human_prompt = (
             f"주제: {topic}\n\n"
             f"지금까지의 토론 내용:\n{history}\n\n"
             f"{special_directive}\n"
-            f"{human_instruction}"
+            f"--- 당신의 임무 ---\n{human_instruction}"
         )
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", agent_config.get("prompt", "You are a helpful assistant.")),
-            ("human", final_human_prompt)
+            ("human", "{input}") # AgentExecutor는 'input'이라는 키를 사용합니다.
         ])
-        
-        chain = prompt | llm
-        
-        response = await chain.ainvoke(
-            {"topic": topic, "history": history, "special_directive": special_directive},
-            config={"tags": [f"discussion_id:{discussion_id}", f"agent_name:{agent_name}", f"turn:{turn_count}"]}
-        )
-        
-        return response.content
+
+        # 3. 에이전트가 사용할 도구를 설정합니다.
+        agent_tools = [available_tools[tool_name] for tool_name in agent_config.get("tools", []) if tool_name in available_tools]
+
+        # 4. 도구 사용 여부에 따라 에이전트 실행 방식을 분기합니다.
+        if agent_tools:
+            logger.info(f"--- [Flow] Agent '{agent_name}' is using tools: {[t.name for t in agent_tools]} ---")
+            # 도구를 사용하는 경우: AgentExecutor를 생성하여 실행
+            agent = create_tool_calling_agent(llm, agent_tools, prompt)
+            agent_executor = AgentExecutor(agent=agent, tools=agent_tools, verbose=True)
+            
+            response = await agent_executor.ainvoke(
+                {"input": final_human_prompt},
+                config={"tags": [f"discussion_id:{discussion_id}", f"agent_name:{agent_name}", f"turn:{turn_count}"]}
+            )
+            return response.get("output", "오류: 응답을 생성하지 못했습니다.")
+
+        else:
+            # 도구를 사용하지 않는 경우: 기존 방식으로 LLM 직접 호출
+            chain = prompt | llm
+            response = await chain.ainvoke(
+                {"input": final_human_prompt},
+                config={"tags": [f"discussion_id:{discussion_id}", f"agent_name:{agent_name}", f"turn:{turn_count}"]}
+            )
+            return response.content
         
     except Exception as e:
-        logger.error(f"--- [Flow Error] Agent '{agent_name}' turn failed: {e} ---")
+        logger.error(f"--- [Flow Error] Agent '{agent_name}' turn failed: {e} ---", exc_info=True)
         return f"({agent_name} 발언 생성 중 오류 발생)"
     
 # 토론 흐름도 분석을 위한 헬퍼 함수
