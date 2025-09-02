@@ -5,6 +5,7 @@ import json
 from typing import List, Dict, Tuple
 from fastapi import UploadFile
 
+from beanie.operators import In
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 
@@ -317,7 +318,7 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
     final_jury_names = [agent.name for agent in final_jury_details]
     if final_jury_names:
         await AgentSettings.find_many(
-            AgentSettings.name.is_in(final_jury_names)
+            In(AgentSettings.name, final_jury_names)
         ).update({"$inc": {AgentSettings.discussion_participation_count: 1}})
         print(f"--- [Orchestrator] 참여 에이전트 카운트 업데이트 완료: {final_jury_names} ---")
 
