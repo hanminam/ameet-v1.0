@@ -197,6 +197,8 @@ async def _run_single_agent_turn(
             f"{system_level_instruction}" # 시스템 레벨 지시사항 삽입
         )
 
+        logger.info(f"--- [PROMPT FOR {agent_name}] ---\\n{final_human_prompt}\\n--- [END PROMPT] ---")
+
         prompt = ChatPromptTemplate.from_messages([
             ("system", agent_config.get("prompt", "You are a helpful assistant.")),
             ("human", "{input}"),
