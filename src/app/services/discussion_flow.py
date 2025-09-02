@@ -26,6 +26,29 @@ import re
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from app.tools.search import available_tools
 
+# ReAct 패턴을 적용한 강력한 시스템 레벨 도구 사용 규칙 정의
+SYSTEM_TOOL_INSTRUCTION_BLOCK = """
+---
+### Tools Guide (VERY IMPORTANT)
+
+You have access to the following tools. You must adhere to the following strict process for using them:
+
+1.  **THOUGHT:** First, analyze the user's request, the debate topic, and the conversation history. Critically assess whether your internal knowledge is sufficient and up-to-date. If the topic involves recent events, specific data, or potentially controversial facts, you MUST consider using a tool.
+
+2.  **ACTION:** If you decide to use a tool, you must format your response as a JSON object for the tool call. For example:
+    ```json
+    {
+      "tool": "web_search",
+      "tool_input": "Query to search on the web"
+    }
+    ```
+
+3.  **FINAL ANSWER:** After you have gathered the necessary information from the tool (or decided that no tool is needed), formulate your comprehensive final answer based on all the information available to you.
+
+**CRITICAL RULE:** Do NOT write about your intention to search in your final answer. Do NOT output text like `web_search(...)` or "I will search for...". You must either use the tool correctly by outputting the JSON action or provide a final answer without mentioning the tool.
+---
+"""
+
 # 입장 변화 분석 결과 Pydantic 모델
 class StanceAnalysis(BaseModel):
     change: Literal['유지', '강화', '수정', '약화']
@@ -198,13 +221,9 @@ async def _run_single_agent_turn(
         )
 
         # 모든 에이전트의 시스템 프롬프트에 도구 사용법을 동적으로 추가
+        # 모든 에이전트의 시스템 프롬프트에 ReAct 기반 도구 사용 규칙을 '앞에' 추가
         original_system_prompt = agent_config.get("prompt", "You are a helpful assistant.")
-        tool_system_prompt = (
-            original_system_prompt +
-            "\n\n--- [TOOL INSTRUCTIONS] ---\n"
-            "You have access to a 'web_search' tool. Use it to find the latest information or verify facts about recent events. "
-            "Think step-by-step and decide if you need to use the tool before formulating your final answer."
-        )
+        tool_system_prompt = SYSTEM_TOOL_INSTRUCTION_BLOCK + "\n\n" + original_system_prompt
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", agent_config.get("prompt", "You are a helpful assistant.")),
