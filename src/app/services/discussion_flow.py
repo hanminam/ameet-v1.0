@@ -33,14 +33,15 @@ SYSTEM_TOOL_INSTRUCTION_BLOCK = """
 
 You have access to a `web_search` tool. Follow this process:
 
-1.  **THOUGHT:** Analyze the request and conversation. If your knowledge is outdated or lacks specific data (like recent events, statistics, or controversial facts), you MUST use the web_search tool.
-2.  **ACTION:** To use the tool, you MUST output a JSON object with "tool" and "tool_input" keys.
-3.  **FINAL ANSWER:** After using the tool, you MUST provide your comprehensive final answer in natural Korean.
+1.  **THOUGHT:** Analyze the request. If you need up-to-date information (recent events, data, etc.), you MUST use the web_search tool.
+2.  **ACTION:** Output a JSON object to call the tool.
+3.  **EVALUATION (NEW STEP):** After receiving the search results from the Observation, you MUST critically evaluate them. Consider the source's credibility, check for biases, and see if multiple sources confirm the information. Do not blindly trust a single source.
+4.  **FINAL ANSWER:** Based on your critical evaluation of the search results, formulate your comprehensive final answer in natural Korean.
 
 **CRITICAL RULES:**
--   Your final answer MUST NOT be a JSON object.
 -   Your final answer MUST be a complete, natural language response.
--   Do not mention your tool usage (e.g., "I searched for...") in your final answer.
+-   Your final answer MUST NOT be a JSON object.
+-   Do not mention your tool usage (e.g., "I searched for...") in your final answer. If you found conflicting information, you can state that "there are differing views on this topic."
 ---
 """
 
@@ -268,6 +269,9 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
             history_items = "\n".join([f"- '{item}'" for item in vote_history])
             history_prompt_section = f"### 이전 투표에서 사용자가 선택한 항목들 (이 항목들과 유사한 제안은 피하고, 더 심화된 새로운 관점을 제시하세요):\n{history_items}"
 
+        # 토론 주제를 바탕으로 '핵심 용어' 가이드라인을 동적으로 생성합니다.
+        key_terms_guide = "### Key Terms (Use these exact Korean spellings):\n"
+
         # 대화록에 포함될 수 있는 중괄호를 이스케이프 처리하여 KeyError를 원천 방지합니다.
         safe_transcript_str = transcript_str.replace('{', '{{').replace('}', '}}')
 
@@ -429,7 +433,8 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
         full_history_str, 
         discussion_log.discussion_id, 
         discussion_log.turn_number,
-        vote_history
+        vote_history,
+        discussion_log.topic
     )
     
     discussion_log.status = "waiting_for_vote"
