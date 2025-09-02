@@ -36,14 +36,13 @@ You have access to the following tools. You must adhere to the following strict 
 1.  **THOUGHT:** First, analyze the user's request, the debate topic, and the conversation history. Critically assess whether your internal knowledge is sufficient and up-to-date. If the topic involves recent events, specific data, or potentially controversial facts, you MUST consider using a tool.
 2.  **ACTION:** If you decide to use a tool, you must format your response as a JSON object for the tool call. For example:
     ```json
-    {
+    {{
       "tool": "web_search",
       "tool_input": "Query to search on the web"
-    }
+    }}
     ```
 
-3.  **FINAL ANSWER:** After you have gathered the necessary information from the tool (or decided that no tool is needed), formulate your comprehensive final answer based on all the information available to you.
-**CRITICAL RULE:** Do NOT write about your intention to search in your final answer. Do NOT output text like `web_search(...)` or "I will search for...". You must either use the tool correctly by outputting the JSON action or provide a final answer without mentioning the tool.
+3.  **FINAL ANSWER:** After you have gathered the necessary information from the tool (or decided that no tool is needed), formulate your comprehensive final answer based on all the information available to you. **CRITICAL RULE:** Do NOT write about your intention to search in your final answer. Do NOT output text like `web_search(...)` or "I will search for...". You must either use the tool correctly by outputting the JSON action or provide a final answer without mentioning the tool.
 ---
 """
 
