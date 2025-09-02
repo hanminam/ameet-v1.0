@@ -97,6 +97,12 @@
         .flow-line-color-5::after { border-color: #ec4899; }
         .flow-line-color-6 { background-color: #f97316; } /* orange-500 */
         .flow-line-color-6::after { border-color: #f97316; }
+
+        /* 긴 텍스트 (주로 URL) 줄바꿈 처리 */
+        .break-word-container {
+            word-wrap: break-word; /* 오래된 브라우저 호환 */
+            word-break: break-word; /* 최신 브라우저 (Chrome, Firefox 등) */
+        }
     </style>
 </head>
 <body class="antialiased">
@@ -603,22 +609,43 @@
                 return;
             }
 
+            // URL 유효성 검사 및 <a> 태그 생성 헬퍼 함수
+            function formatSource(source) {
+                // 간단한 URL 형식 검사 (http/https로 시작하는지)
+                if (source.startsWith('http://') || source.startsWith('https://')) {
+                    return `<a href="${source}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline break-word-container">${source}</a>`;
+                }
+                return `<span class="break-word-container">${source}</span>`;
+            }
+
             const webHtml = data.web_evidence && data.web_evidence.length > 0
-                ? data.web_evidence.map(item => `<p><strong>[${item.source}]</strong> ${item.summary}</p>`).join('')
-                : '<p>관련 웹 검색 결과가 없습니다.</p>';
+                ? data.web_evidence.map(item => `
+                    <div class="mb-3 p-3 border border-gray-200 rounded-md bg-white shadow-sm">
+                        <p class="font-semibold text-gray-700 mb-1">출처: ${formatSource(item.source)}</p>
+                        <p class="text-gray-800">${item.summary}</p>
+                        <p class="text-sm text-gray-500 mt-1">발행일: ${item.publication_date || '알 수 없음'}</p>
+                    </div>
+                `).join('')
+                : '<p class="text-gray-600">관련 웹 검색 결과가 없습니다.</p>';
 
             const fileHtml = data.file_evidence && data.file_evidence.length > 0
-                ? data.file_evidence.map(item => `<p><strong>[첨부파일: ${item.source}]</strong> ${item.summary}</p>`).join('')
-                : '<p>첨부된 파일이 없습니다.</p>';
+                ? data.file_evidence.map(item => `
+                    <div class="mb-3 p-3 border border-gray-200 rounded-md bg-white shadow-sm">
+                        <p class="font-semibold text-gray-700 mb-1">첨부 파일: <span class="break-word-container">${item.source}</span></p>
+                        <p class="text-gray-800">${item.summary}</p>
+                        <p class="text-sm text-gray-500 mt-1">확인일: ${item.publication_date || '알 수 없음'}</p>
+                    </div>
+                `).join('')
+                : '<p class="text-gray-600">첨부된 파일이 없습니다.</p>';
 
             container.innerHTML = `
                 <div class="mb-6">
-                    <h3 class="font-bold text-lg mb-2 text-primary">웹 검색 결과 요약</h3>
-                    <div class="bg-slate-50 p-4 rounded-lg text-sm space-y-3">${webHtml}</div>
+                    <h3 class="font-bold text-lg mb-3 text-primary-dark">🌐 웹 검색 결과 요약</h3>
+                    <div class="bg-gray-50 p-4 rounded-lg shadow-inner space-y-4">${webHtml}</div>
                 </div>
                 <div>
-                    <h3 class="font-bold text-lg mb-2 text-primary">사용자 첨부 파일 요약</h3>
-                    <div class="bg-slate-50 p-4 rounded-lg text-sm space-y-3">${fileHtml}</div>
+                    <h3 class="font-bold text-lg mb-3 text-primary-dark">📁 사용자 첨부 파일 요약</h3>
+                    <div class="bg-gray-50 p-4 rounded-lg shadow-inner space-y-4">${fileHtml}</div>
                 </div>
             `;
         }
