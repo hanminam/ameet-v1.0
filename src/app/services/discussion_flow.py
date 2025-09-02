@@ -31,22 +31,16 @@ SYSTEM_TOOL_INSTRUCTION_BLOCK = """
 ---
 ### Tools Guide (VERY IMPORTANT)
 
-You have access to the following tools. You must adhere to the following strict process for using them:
+You have access to a `web_search` tool. Follow this process:
 
-1.  **THOUGHT:** First, analyze the user's request, the debate topic, and the conversation history. Critically assess whether your internal knowledge is sufficient and up-to-date. If the topic involves recent events, specific data, or potentially controversial facts, you MUST consider using a tool.
-2.  **ACTION:** If you decide to use a tool, you must format your response as a JSON object for the tool call. For example:
-    ```json
-    {{
-      "tool": "web_search",
-      "tool_input": "Query to search on the web"
-    }}
-    ```
+1.  **THOUGHT:** Analyze the request and conversation. If your knowledge is outdated or lacks specific data (like recent events, statistics, or controversial facts), you MUST use the web_search tool.
+2.  **ACTION:** To use the tool, you MUST output a JSON object with "tool" and "tool_input" keys.
+3.  **FINAL ANSWER:** After using the tool, you MUST provide your comprehensive final answer in natural Korean.
 
-3.  **FINAL ANSWER:** After you have gathered the necessary information from the tool (or decided that no tool is needed), formulate your comprehensive final answer based on all the information available to you.
-    **CRITICAL RULES:**
-    - Your final answer MUST be a complete, natural language response in Korean.
-    - Your final answer MUST NOT be a JSON object or contain any tool call syntax.
-    - Do NOT write about your intention to search in your final answer. Do NOT output text like `web_search(...)` or "I will search for...". You must either use the tool correctly by outputting the JSON action or provide a final answer without mentioning the tool.
+**CRITICAL RULES:**
+-   Your final answer MUST NOT be a JSON object.
+-   Your final answer MUST be a complete, natural language response.
+-   Do not mention your tool usage (e.g., "I searched for...") in your final answer.
 ---
 """
 
@@ -267,24 +261,6 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
         if not vote_caster_setting:
             logger.error("!!! [Vote Generation] 'Vote Caster' 에이전트를 DB에서 찾을 수 없습니다.")
             return None
-
-         # --- ▼▼▼ 진단 코드 시작 ▼▼▼ ---
-        prompt_from_db = vote_caster_setting.config.prompt
-        
-        # 1. DB에서 가져온 프롬프트 자체에 문제가 있는지 확인
-        if '{' in prompt_from_db and not '{{' in prompt_from_db:
-            logger.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-            logger.error("!!! [DIAGNOSIS] 문제 발견: DB의 'Vote Caster' 프롬프트에 이스케이프 처리되지 않은 '{'가 있습니다!")
-            logger.error(f"!!! 프롬프트 내용: {prompt_from_db}")
-            logger.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        
-        # 2. 대화록(transcript)에 문제가 있는지 확인
-        if '{' in transcript_str and not '{{' in transcript_str:
-            logger.warning("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-            logger.warning("!!! [DIAGNOSIS] 경고: 대화록(transcript)에 날것의 JSON이 포함된 것 같습니다.")
-            logger.warning(f"!!! 대화록 일부: {transcript_str[-500:]}") # 마지막 500자만 출력
-            logger.warning("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        # --- ▲▲▲ 진단 코드 종료 ▲▲▲ ---
         
         # 이전 투표 기록을 프롬프트에 명확하게 포함
         history_prompt_section = "아직 사용자의 이전 투표 기록이 없습니다."
@@ -292,7 +268,10 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
             history_items = "\n".join([f"- '{item}'" for item in vote_history])
             history_prompt_section = f"### 이전 투표에서 사용자가 선택한 항목들 (이 항목들과 유사한 제안은 피하고, 더 심화된 새로운 관점을 제시하세요):\n{history_items}"
 
-        # [수정] 프롬프트를 더 명확하고 구조적으로 변경
+        # 대화록에 포함될 수 있는 중괄호를 이스케이프 처리하여 KeyError를 원천 방지합니다.
+        safe_transcript_str = transcript_str.replace('{', '{{').replace('}', '}}')
+
+        # 프롬프트를 더 명확하고 구조적으로 변경
         final_human_prompt = (
             f"{history_prompt_section}\n\n"
             f"### 현재 라운드까지의 전체 토론 대화록:\n{transcript_str}"
