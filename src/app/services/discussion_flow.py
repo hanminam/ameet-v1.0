@@ -197,7 +197,14 @@ async def _run_single_agent_turn(
             f"{system_level_instruction}" # 시스템 레벨 지시사항 삽입
         )
 
-        logger.info(f"--- [PROMPT FOR {agent_name}] ---\\n{final_human_prompt}\\n--- [END PROMPT] ---")
+        # 모든 에이전트의 시스템 프롬프트에 도구 사용법을 동적으로 추가
+        original_system_prompt = agent_config.get("prompt", "You are a helpful assistant.")
+        tool_system_prompt = (
+            original_system_prompt +
+            "\n\n--- [TOOL INSTRUCTIONS] ---\n"
+            "You have access to a 'web_search' tool. Use it to find the latest information or verify facts about recent events. "
+            "Think step-by-step and decide if you need to use the tool before formulating your final answer."
+        )
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", agent_config.get("prompt", "You are a helpful assistant.")),
