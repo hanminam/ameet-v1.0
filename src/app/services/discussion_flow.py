@@ -208,48 +208,27 @@ async def _run_single_agent_turn(
             f"### 당신의 임무\n{human_instruction}"
         )
 
-        # 도구 사용 여부에 따라 분기
-        agent_tools_config = agent_config.get("tools", [])
-        if "web_search" in agent_tools_config:
-            logger.info(f"--- [Flow] Agent '{agent_name}' is using tools: ['web_search'] ---")
-            
-            # ReAct 기반 도구 사용 규칙을 에이전트의 원래 시스템 프롬프트 앞에 추가
-            original_system_prompt = agent_config.get("prompt", "You are a helpful assistant.")
-            tool_system_prompt = SYSTEM_TOOL_INSTRUCTION_BLOCK + "\n\n" + original_system_prompt
-
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", tool_system_prompt),
-                ("human", "{input}"),
-                MessagesPlaceholder(variable_name="agent_scratchpad"),
-            ])
-            
-            tools = [web_search_tool]
-            agent = create_tool_calling_agent(llm, tools, prompt)
-            agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
-            
-            response = await agent_executor.ainvoke(
-                {"input": final_human_prompt},
-                config={"tags": [f"discussion_id:{discussion_id}", f"agent_name:{agent_name}", f"turn:{turn_count}"]}
-            )
-            return response.get("output", "오류: 응답을 생성하지 못했습니다.")
-
-        else:
-            # 도구를 사용하지 않는 에이전트는 기존 방식대로 실행
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", agent_config.get("prompt", "You are a helpful assistant.")),
-                ("human", "{input}")
-            ])
-            
-            chain = prompt | llm
-            response = await chain.ainvoke(
-                {"input": final_human_prompt},
-                config={"tags": [f"discussion_id:{discussion_id}", f"agent_name:{agent_name}", f"turn:{turn_count}"]}
-            )
-            return response.content
+        logger.info(f"--- [Flow] Agent '{agent_name}' will now decide on tool usage autonomously. ---")
         
-    except Exception as e:
-        logger.error(f"--- [Flow Error] Agent '{agent_name}' turn failed: {e} ---", exc_info=True)
-        return f"({agent_name} 발언 생성 중 오류 발생)"
+        # ReAct 기반 도구 사용 규칙을 에이전트의 원래 시스템 프롬프트 앞에 추가
+        original_system_prompt = agent_config.get("prompt", "You are a helpful assistant.")
+        tool_system_prompt = SYSTEM_TOOL_INSTRUCTION_BLOCK + "\n\n" + original_system_prompt
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", tool_system_prompt),
+            ("human", "{input}"),
+            MessagesPlaceholder(variable_name="agent_scratchpad"),
+        ])
+        
+        tools = [web_search_tool]
+        agent = create_tool_calling_agent(llm, tools, prompt)
+        agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+        
+        response = await agent_executor.ainvoke(
+            {"input": final_human_prompt},
+            config={"tags": [f"discussion_id:{discussion_id}", f"agent_name:{agent_name}", f"turn:{turn_count}"]}
+        )
+        return response.get("output", "오류: 응답을 생성하지 못했습니다.")
     
 # 토론 흐름도 분석을 위한 헬퍼 함수
 def _analyze_flow_data(transcript: List[dict], jury_members: List[dict]) -> dict:
