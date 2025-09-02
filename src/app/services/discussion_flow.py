@@ -34,7 +34,6 @@ SYSTEM_TOOL_INSTRUCTION_BLOCK = """
 You have access to the following tools. You must adhere to the following strict process for using them:
 
 1.  **THOUGHT:** First, analyze the user's request, the debate topic, and the conversation history. Critically assess whether your internal knowledge is sufficient and up-to-date. If the topic involves recent events, specific data, or potentially controversial facts, you MUST consider using a tool.
-
 2.  **ACTION:** If you decide to use a tool, you must format your response as a JSON object for the tool call. For example:
     ```json
     {
@@ -44,7 +43,6 @@ You have access to the following tools. You must adhere to the following strict 
     ```
 
 3.  **FINAL ANSWER:** After you have gathered the necessary information from the tool (or decided that no tool is needed), formulate your comprehensive final answer based on all the information available to you.
-
 **CRITICAL RULE:** Do NOT write about your intention to search in your final answer. Do NOT output text like `web_search(...)` or "I will search for...". You must either use the tool correctly by outputting the JSON action or provide a final answer without mentioning the tool.
 ---
 """
@@ -175,25 +173,24 @@ async def _get_round_summary(transcript_str: str, discussion_id: str, turn_numbe
         return None
 
 async def _run_single_agent_turn(
-    agent_config: dict, 
-    topic: str, 
-    history: str, 
+    agent_config: dict,
+    topic: str,
+    history: str,
     evidence: str,
-    special_directive: str, 
+    special_directive: str,
     discussion_id: str,
     turn_count: int
 ) -> str:
     """단일 에이전트의 발언(turn)을 생성합니다. 에이전트 설정에 따라 웹 검색 도구를 사용할 수 있습니다."""
     agent_name = agent_config.get("name", "Unknown Agent")
     logger.info(f"--- [Flow] Running turn for agent: {agent_name} (Discussion: {discussion_id}, Turn: {turn_count}) ---")
-    
+
     try:
-        # 1. LLM 모델을 준비합니다.
         llm = ChatGoogleGenerativeAI(
             model=agent_config.get("model", "gemini-1.5-flash"),
             temperature=agent_config.get("temperature", 0.2)
         )
-        
+
         # 토론 라운드 수에 따라 동적으로 지시사항을 변경
         human_instruction = (
             "지금은 '모두 변론' 시간입니다. 위 내용을 바탕으로 당신의 초기 입장을 최소 100자에서 최대 500자 이내로 설명해주세요."
@@ -201,15 +198,7 @@ async def _run_single_agent_turn(
             f"지금은 '{turn_count + 1}차 토론' 시간입니다. 이전의 에이전트들의 의견을 고려하여 다른 에이전트의 주장을 반박하거나 다른 에이전트의 의견에 적극 동조하거나 아니면 다른 에이전트의 의견을 수렴하여 의견을 수정한 당신의 의견을 주장합니다. 다른 에이전트의 논리적 모순이나 사실에 위배되는 주장이 있다고 생각한다면 적극적으로 반박하십시요. 또한, 다른 에이전트가 생각하지 못하는 새로운 아이디어, 독창적인 주장, 그리고 토론의 주제를 심화할 수 있다고 생각되는 내용을 적극적으로 주장합니다. 또한, 이전 토론 차수에서 주장한 내용을 바탕으로 자신의 주장중에 보다 구체적인 대안, 구체적인 방안등으로 자신의 주장을 심화 발전하는 것이 중요합니다. 토론의 차수가 높아질수록 이전 자신의 주장을 동어반복하기 보단 보다 구체적인 대안을 주장합니다. 주장은 최소 200자 최대 500자 이내로 추가해주세요."
         )
 
-        # 모든 프롬프트에 웹 검색 사용을 강제하는 시스템 지시사항 추가
-        system_level_instruction = (
-            "\n\n--- [System Directive] ---\n"
-            "VERY IMPORTANT: If the discussion topic concerns recent events, do not rely solely on your internal knowledge. "
-            "You MUST use the provided 'web_search' tool to verify facts and get the latest information before answering. "
-            "Treat the provided reference materials as factual context for the debate."
-        )
-
-        # 최종 프롬프트 구성
+        # 최종 프롬프트 구성 (기존의 불필요한 시스템 지시사항 제거)
         final_human_prompt = (
             f"당신은 다음 토론에 참여하는 AI 에이전트입니다. 주어진 참고 자료와 토론 내용을 바탕으로 당신의 임무를 수행하세요.\n\n"
             f"### 전체 토론 주제: {topic}\n\n"
@@ -217,38 +206,26 @@ async def _run_single_agent_turn(
             f"### 지금까지의 토론 내용:\n{history if history else '아직 토론 내용이 없습니다.'}\n\n"
             f"{special_directive}\n"
             f"### 당신의 임무\n{human_instruction}"
-            f"{system_level_instruction}" # 시스템 레벨 지시사항 삽입
         )
 
-        # 모든 에이전트의 시스템 프롬프트에 도구 사용법을 동적으로 추가
-        # 모든 에이전트의 시스템 프롬프트에 ReAct 기반 도구 사용 규칙을 '앞에' 추가
-        original_system_prompt = agent_config.get("prompt", "You are a helpful assistant.")
-        tool_system_prompt = SYSTEM_TOOL_INSTRUCTION_BLOCK + "\n\n" + original_system_prompt
-
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", agent_config.get("prompt", "You are a helpful assistant.")),
-            ("human", "{input}"),
-            # 에이전트의 중간 작업 및 도구 사용 결과를 기록할 공간을 추가합니다.
-            MessagesPlaceholder(variable_name="agent_scratchpad"),
-        ])
-
-        # 3. 에이전트가 사용할 도구를 설정합니다.
-        # agent_tools = [available_tools[tool_name] for tool_name in agent_config.get("tools", []) if tool_name in available_tools]
-        agent_tools = [web_search_tool]
-
-        # 4. 도구 사용 여부에 따라 에이전트 실행 방식을 분기합니다.
-        if agent_tools:
-            logger.info(f"--- [Flow] Agent '{agent_name}' is using tools: {[t.name for t in agent_tools]} ---")
+        # 도구 사용 여부에 따라 분기
+        agent_tools_config = agent_config.get("tools", [])
+        if "web_search" in agent_tools_config:
+            logger.info(f"--- [Flow] Agent '{agent_name}' is using tools: ['web_search'] ---")
             
-            # 도구를 사용하는 에이전트 전용 프롬프트 (agent_scratchpad 포함)
+            # ReAct 기반 도구 사용 규칙을 에이전트의 원래 시스템 프롬프트 앞에 추가
+            original_system_prompt = agent_config.get("prompt", "You are a helpful assistant.")
+            tool_system_prompt = SYSTEM_TOOL_INSTRUCTION_BLOCK + "\n\n" + original_system_prompt
+
             prompt = ChatPromptTemplate.from_messages([
-                ("system", agent_config.get("prompt", "You are a helpful assistant.")),
+                ("system", tool_system_prompt),
                 ("human", "{input}"),
                 MessagesPlaceholder(variable_name="agent_scratchpad"),
             ])
             
-            agent = create_tool_calling_agent(llm, agent_tools, prompt)
-            agent_executor = AgentExecutor(agent=agent, tools=agent_tools, verbose=True)
+            tools = [web_search_tool]
+            agent = create_tool_calling_agent(llm, tools, prompt)
+            agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
             
             response = await agent_executor.ainvoke(
                 {"input": final_human_prompt},
@@ -257,7 +234,7 @@ async def _run_single_agent_turn(
             return response.get("output", "오류: 응답을 생성하지 못했습니다.")
 
         else:
-            # 도구를 사용하지 않는 에이전트 전용 프롬프트 (agent_scratchpad 없음)
+            # 도구를 사용하지 않는 에이전트는 기존 방식대로 실행
             prompt = ChatPromptTemplate.from_messages([
                 ("system", agent_config.get("prompt", "You are a helpful assistant.")),
                 ("human", "{input}")
