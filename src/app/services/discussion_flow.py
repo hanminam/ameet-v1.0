@@ -42,7 +42,11 @@ You have access to the following tools. You must adhere to the following strict 
     }}
     ```
 
-3.  **FINAL ANSWER:** After you have gathered the necessary information from the tool (or decided that no tool is needed), formulate your comprehensive final answer based on all the information available to you. **CRITICAL RULE:** Do NOT write about your intention to search in your final answer. Do NOT output text like `web_search(...)` or "I will search for...". You must either use the tool correctly by outputting the JSON action or provide a final answer without mentioning the tool.
+3.  **FINAL ANSWER:** After you have gathered the necessary information from the tool (or decided that no tool is needed), formulate your comprehensive final answer based on all the information available to you.
+    **CRITICAL RULES:**
+    - Your final answer MUST be a complete, natural language response in Korean.
+    - Your final answer MUST NOT be a JSON object or contain any tool call syntax.
+    - Do NOT write about your intention to search in your final answer. Do NOT output text like `web_search(...)` or "I will search for...". You must either use the tool correctly by outputting the JSON action or provide a final answer without mentioning the tool.
 ---
 """
 
@@ -264,7 +268,13 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
             logger.error("!!! [Vote Generation] 'Vote Caster' 에이전트를 DB에서 찾을 수 없습니다.")
             return None
 
-        # [수정] 이전 투표 기록을 프롬프트에 명확하게 포함
+        # 데이터베이스에서 가져온 프롬프트 내용을 터미널에 그대로 출력합니다.
+        # 여기서 출력된 내용에 이스케이프 처리 안 된 '{'가 보인다면 그것이 원인입니다.
+        logger.info("--- [DEBUG] Loaded 'Vote Caster' Prompt from DB ---")
+        logger.info(vote_caster_setting.config.prompt)
+        logger.info("----------------------------------------------------")
+        
+        # 이전 투표 기록을 프롬프트에 명확하게 포함
         history_prompt_section = "아직 사용자의 이전 투표 기록이 없습니다."
         if vote_history:
             history_items = "\n".join([f"- '{item}'" for item in vote_history])
