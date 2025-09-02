@@ -268,11 +268,23 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
             logger.error("!!! [Vote Generation] 'Vote Caster' 에이전트를 DB에서 찾을 수 없습니다.")
             return None
 
-        # 데이터베이스에서 가져온 프롬프트 내용을 터미널에 그대로 출력합니다.
-        # 여기서 출력된 내용에 이스케이프 처리 안 된 '{'가 보인다면 그것이 원인입니다.
-        logger.info("--- [DEBUG] Loaded 'Vote Caster' Prompt from DB ---")
-        logger.info(vote_caster_setting.config.prompt)
-        logger.info("----------------------------------------------------")
+         # --- ▼▼▼ 진단 코드 시작 ▼▼▼ ---
+        prompt_from_db = vote_caster_setting.config.prompt
+        
+        # 1. DB에서 가져온 프롬프트 자체에 문제가 있는지 확인
+        if '{' in prompt_from_db and not '{{' in prompt_from_db:
+            logger.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            logger.error("!!! [DIAGNOSIS] 문제 발견: DB의 'Vote Caster' 프롬프트에 이스케이프 처리되지 않은 '{'가 있습니다!")
+            logger.error(f"!!! 프롬프트 내용: {prompt_from_db}")
+            logger.error("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        
+        # 2. 대화록(transcript)에 문제가 있는지 확인
+        if '{' in transcript_str and not '{{' in transcript_str:
+            logger.warning("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            logger.warning("!!! [DIAGNOSIS] 경고: 대화록(transcript)에 날것의 JSON이 포함된 것 같습니다.")
+            logger.warning(f"!!! 대화록 일부: {transcript_str[-500:]}") # 마지막 500자만 출력
+            logger.warning("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        # --- ▲▲▲ 진단 코드 종료 ▲▲▲ ---
         
         # 이전 투표 기록을 프롬프트에 명확하게 포함
         history_prompt_section = "아직 사용자의 이전 투표 기록이 없습니다."
