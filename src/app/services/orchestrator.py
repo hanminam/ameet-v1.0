@@ -21,7 +21,7 @@ from app.schemas.orchestration import (
     AgentDetail
 )
 
-from app.tools.search import perform_web_search
+from app.tools.search import perform_web_search_async
 from app.services.document_processor import process_uploaded_file
 from app.services.summarizer import summarize_text
 
@@ -156,7 +156,7 @@ async def gather_evidence(
 
 async def _get_web_evidence(report: IssueAnalysisReport, topic: str, discussion_id: str) -> List[EvidenceItem]:
     search_query = f"{topic}: {', '.join(report.core_keywords)}"
-    search_results = await perform_web_search(search_query) # 웹 검색 자체는 LLM 호출이 아님
+    search_results = await perform_web_search_async(search_query) # 웹 검색 자체는 LLM 호출이 아님
     
     if not search_results:
         return []
