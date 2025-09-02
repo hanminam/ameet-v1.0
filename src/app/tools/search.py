@@ -4,6 +4,7 @@ import asyncio
 from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper
 from app.core.config import settings
 from langchain_core.tools import Tool
+from langsmith import traceable
 
 # Tavily API 키가 설정되어 있는지 확인
 if not settings.TAVILY_API_KEY:
@@ -13,6 +14,7 @@ if not settings.TAVILY_API_KEY:
 # --- Tool 대신 API Wrapper 인스턴스를 생성합니다. ---
 tavily_api_wrapper = TavilySearchAPIWrapper(tavily_api_key=settings.TAVILY_API_KEY)
 
+@traceable
 async def perform_web_search(query: str) -> list:
     """
     Tavily API 래퍼를 사용하여 웹 검색을 수행하고,
