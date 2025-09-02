@@ -22,6 +22,9 @@ class DiscussionLogDetail(DiscussionLogItem):
     turn_number: int = Field(default=0, description="현재 토론 라운드 번호 (0부터 시작)")
     completed_at: Optional[datetime] = None
     report_summary: Optional[str] = None
+
+    # API 응답에 핵심 자료집 필드 추가
+    evidence_briefing: Optional[Dict[str, Any]] = None
     
     # UX 데이터 필드 추가
     round_summary: Optional[Dict[str, Any]] = None

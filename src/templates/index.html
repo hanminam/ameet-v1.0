@@ -179,7 +179,21 @@
     <div id="screen-5" class="screen screen-card" style="max-width: 80rem;">
         <div class="screen-header">
             <span>실시간 토론</span>
+            <button id="view-evidence-btn" class="btn btn-subtle text-sm py-2 px-4">📂 핵심 자료집 보기</button>
         </div>
+
+        <div id="evidence-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden opacity-0 z-50">
+            <div class="screen-card w-full max-w-2xl max-h-[80vh] flex flex-col">
+                <div class="screen-header">
+                    <span>📂 핵심 자료집</span>
+                    <button class="text-2xl font-bold" onclick="toggleModal('evidence-modal')">&times;</button>
+                </div>
+                <div id="evidence-modal-body" class="screen-body overflow-y-auto">
+                    <p>데이터를 불러오는 중입니다...</p>
+                </div>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 bg-slate-50">
             <div class="lg:col-span-2 h-[70vh] flex flex-col">
                 <div id="chatbox" class="flex-1 overflow-y-auto space-y-6 p-4 border rounded-lg bg-white shadow-inner">
@@ -224,6 +238,8 @@
     </div>
     
     <script>
+        let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
+
         // --- DOM Elements ---
         const loginScreen = document.getElementById('screen-login');
         const topicScreen = document.getElementById('screen-topic');
@@ -527,6 +543,87 @@
         }
 
         /**
+         * 모달창을 토글하는 헬퍼 함수
+         */
+        function toggleModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                setTimeout(() => modal.classList.remove('opacity-0'), 10);
+            } else {
+                modal.classList.add('opacity-0');
+                setTimeout(() => modal.classList.add('hidden'), 300);
+            }
+        }
+
+        /**
+         * '핵심 자료집 보기' 버튼 클릭 시 실행되는 함수
+         */
+        async function showEvidenceModal() {
+            // 이미 데이터를 불러왔으면 캐시된 데이터로 모달을 즉시 표시
+            if (evidenceDataCache) {
+                renderEvidenceModal(evidenceDataCache);
+                toggleModal('evidence-modal');
+                return;
+            }
+
+            // 데이터를 처음 불러오는 경우
+            if (!currentDiscussionId) {
+                alert("오류: 현재 토론 ID를 찾을 수 없습니다.");
+                return;
+            }
+            const token = localStorage.getItem('accessToken');
+            
+            try {
+                const response = await fetch(`/api/v1/discussions/${currentDiscussionId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('Failed to fetch discussion details.');
+                
+                const discussionData = await response.json();
+                evidenceDataCache = discussionData.evidence_briefing; // 결과 캐싱
+                
+                renderEvidenceModal(evidenceDataCache);
+                toggleModal('evidence-modal');
+
+            } catch (error) {
+                console.error("Error fetching evidence data:", error);
+                document.getElementById('evidence-modal-body').innerHTML = '<p>데이터를 불러오는 데 실패했습니다.</p>';
+                toggleModal('evidence-modal');
+            }
+        }
+
+        /**
+         * 받아온 데이터로 모달 내용을 채우는 함수
+         */
+        function renderEvidenceModal(data) {
+            const container = document.getElementById('evidence-modal-body');
+            if (!data) {
+                container.innerHTML = '<p>핵심 자료집 데이터가 없습니다.</p>';
+                return;
+            }
+
+            const webHtml = data.web_evidence && data.web_evidence.length > 0
+                ? data.web_evidence.map(item => `<p><strong>[${item.source}]</strong> ${item.summary}</p>`).join('')
+                : '<p>관련 웹 검색 결과가 없습니다.</p>';
+
+            const fileHtml = data.file_evidence && data.file_evidence.length > 0
+                ? data.file_evidence.map(item => `<p><strong>[첨부파일: ${item.source}]</strong> ${item.summary}</p>`).join('')
+                : '<p>첨부된 파일이 없습니다.</p>';
+
+            container.innerHTML = `
+                <div class="mb-6">
+                    <h3 class="font-bold text-lg mb-2 text-primary">웹 검색 결과 요약</h3>
+                    <div class="bg-slate-50 p-4 rounded-lg text-sm space-y-3">${webHtml}</div>
+                </div>
+                <div>
+                    <h3 class="font-bold text-lg mb-2 text-primary">사용자 첨부 파일 요약</h3>
+                    <div class="bg-slate-50 p-4 rounded-lg text-sm space-y-3">${fileHtml}</div>
+                </div>
+            `;
+        }
+
+        /**
          * '토론 시작하기' 버튼 클릭 시, 백엔드에 토론 실행을 요청하는 함수
          */
         async function startDebate() {
@@ -565,6 +662,10 @@
                     showGeneralTypingIndicator(true); 
 
                     startPolling(currentDiscussionId); // 폴링 시작
+
+                    // '핵심 자료집 보기' 버튼에 이벤트 리스너 연결
+                    const evidenceBtn = document.getElementById('view-evidence-btn');
+                    evidenceBtn.addEventListener('click', showEvidenceModal);
                 } else {
                     const errorData = await response.json();
                     alert(`토론 시작에 실패했습니다: ${errorData.detail}`);
