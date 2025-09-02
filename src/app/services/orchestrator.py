@@ -316,10 +316,9 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
 
     final_jury_names = [agent.name for agent in final_jury_details]
     if final_jury_names:
-        await AgentSettings.update_all(
-            {"name": {"$in": final_jury_names}},
-            {"$inc": {"discussion_participation_count": 1}}
-        )
+        await AgentSettings.find_many(
+            AgentSettings.name.is_in(final_jury_names)
+        ).update({"$inc": {AgentSettings.discussion_participation_count: 1}})
         print(f"--- [Orchestrator] 참여 에이전트 카운트 업데이트 완료: {final_jury_names} ---")
 
     judge_config = special_agents.get(JUDGE_AGENT_NAME)
