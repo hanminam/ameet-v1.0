@@ -80,6 +80,9 @@ class AgentSettings(Document):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     # user.email과 연결하여 어떤 관리자가 수정했는지 추적 가능
     last_modified_by: Optional[str] = Field(default=None)
+    # 토론 참여 횟수 필드 추가
+    discussion_participation_count: int = Field(default=0, description="이 에이전트가 토론에 참여한 횟수")
+
 
     class Settings:
         name = "agents"

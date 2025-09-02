@@ -40,11 +40,18 @@ class CoreEvidenceBriefing(BaseModel):
 # --- 배심원단 선정 단계에서 사용할 모델 ---
 class SelectedJury(BaseModel):
     """LLM이 선택한 배심원단과 그 선정 이유를 정의하는 모델"""
-    agent_names: List[str] = Field(
-        description="토론에 참여할 5~10명의 전문가 에이전트 이름 목록입니다."
+    selected_agents: List[str] = Field(
+        description="토론에 참여할 기존 전문가 에이전트 이름 목록입니다."
     )
+
+    # 새로운 에이전트 제안 필드 추가
+    new_agent_proposals: Optional[List[str]] = Field(
+        default_factory=list,
+        description="기존 풀에 없어 새로 생성이 필요하다고 판단되는 전문가 역할 목록입니다."
+    )
+
     reason: str = Field(
-        description="이 배심원단을 구성한 이유에 대한 간략한 설명입니다."
+        description="이 배심원단을 구성하고, 새로운 전문가를 제안한 이유에 대한 설명입니다."
     )
 
 class DebateTeam(BaseModel):

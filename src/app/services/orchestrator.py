@@ -9,7 +9,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 
 from app.core.config import settings
-from app.models.discussion import AgentSettings
+from app.models.discussion import AgentSettings, AgentConfig
 
 from app.schemas.orchestration import (
     IssueAnalysisReport, 
@@ -29,6 +29,45 @@ JUDGE_AGENT_NAME = "재판관"
 CRITICAL_AGENT_NAME = "비판적 관점"
 TOPIC_ANALYST_NAME = "Topic Analyst"
 JURY_SELECTOR_NAME = "Jury Selector"
+
+# --- 아이콘 생성을 위한 헬퍼 함수 및 상수 ---
+ICON_MAP = {
+    # 역할/직업
+    "재판관": "🧑", "분석가": "📊", "경제": "🌍", "산업": "🏭", "재무": "💹",
+    "트렌드": "📈", "비판": "🤔", "전문가": "🧑", "미시": "🛒", "미래학자": "🔭",
+    "물리학": "⚛️", "양자": "🌀", "의학": "⚕️", "심리학": "🧠", "뇌과학": "⚡️",
+    "문학": "✍️", "역사": "🏛️", "생물학": "🧬", "법의학": "🔬", "법률": "⚖️",
+    "회계": "🧾", "인사": "👥", "인류학": "🗿", "IT": "💻", "개발": "👨‍💻",
+    # 고유명사/인물
+    "버핏": "👴", "린치": "👨‍💼", "잡스": "💡", "머스크": "🚀", "베이조스": "📦",
+    "웰치": "🏆", "아인슈타인": "🌌",
+    # 기타 키워드
+    "선정": "📋", "분석": "🔎"
+}
+DEFAULT_ICON = "🧑"
+
+def _get_icon_for_agent(agent_data: dict) -> str:
+    """
+    에이전트의 이름과 프롬프트를 기반으로 가장 적합한 아이콘 '하나'를 반환합니다.
+    일치하는 키워드가 여러 개일 경우, 가장 긴 키워드를 우선합니다.
+    """
+    name = agent_data.get("name", "")
+    prompt = agent_data.get("prompt", "")
+
+    # 1순위: 이름에서 가장 길게 일치하는 키워드 찾기
+    name_matches = [keyword for keyword in ICON_MAP if keyword in name]
+    if name_matches:
+        best_match = max(name_matches, key=len)
+        return ICON_MAP[best_match]
+
+    # 2순위: 프롬프트에서 가장 길게 일치하는 키워드 찾기
+    prompt_matches = [keyword for keyword in ICON_MAP if keyword in prompt]
+    if prompt_matches:
+        best_match = max(prompt_matches, key=len)
+        return ICON_MAP[best_match]
+
+    # 3순위: 기본 아이콘 반환
+    return DEFAULT_ICON
 
 # --- DB에서 Active 상태의 에이전트를 조회하는 함수 ---
 async def get_active_agents_from_db() -> Tuple[Dict[str, Dict], Dict[str, Dict]]:
@@ -183,12 +222,11 @@ def _load_available_agents() -> List[Dict[str, str]]:
         raise ValueError("에이전트 설정 파일(app/core/settings/agents.json)을 찾을 수 없습니다.")
 
 async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, special_agents: Dict, discussion_id: str) -> DebateTeam:
+    """
+    분석 보고서를 기반으로 AI 배심원단을 선정하고, 필요 시 새로운 에이전트를 생성한 후 재판관을 지정합니다.
+    """
     print(f"--- [Orchestrator] 3단계: 배심원단 선정 시작 (ID: {discussion_id}) ---")
-    """
-    분석 보고서를 기반으로 AI 배심원단을 선정하고 재판관을 지정합니다.
-    """
-    print(f"--- [Orchestrator] 3단계: 배심원단 선정 시작 ---")
-    
+
     selector_config = special_agents.get(JURY_SELECTOR_NAME)
     if not selector_config:
         raise ValueError(f"'{JURY_SELECTOR_NAME}' 설정을 찾을 수 없습니다.")
@@ -199,59 +237,101 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
     ]
     agent_pool_description = "\n".join(agent_pool_description_list)
 
+    system_prompt = f"""
+    You are a master moderator and an expert talent scout assembling a panel of AI experts for a debate. Your primary goal is to create the most insightful and diverse debate panel possible for the given topic.
+
+    **Your Tasks:**
+    1.  **Select from Existing Experts:** From the `Available Expert Agents Pool`, select the 4 to 6 most relevant experts.
+    2.  **Propose New Experts:** Critically evaluate your selection. If you believe a crucial perspective is missing, propose 1 to 2 **new, highly specific expert roles** that do not exist in the current pool. These should be roles that will significantly enhance the quality of the debate. If the current pool is sufficient, you can propose an empty list.
+    3.  **Provide Justification:** Write a concise reason explaining your selections and any new proposals, detailing why this specific combination of experts is optimal for the given debate topic.
+
+    **Available Expert Agents Pool (Name: Role Summary):**
+    {agent_pool_description}
+
+    You must only respond with a single, valid JSON object that strictly adheres to the required schema.
+    """
+
     llm = ChatGoogleGenerativeAI(
         model=selector_config["model"],
         temperature=selector_config["temperature"]
     )
     structured_llm = llm.with_structured_output(SelectedJury)
 
-    # --- 2. 시스템 프롬프트에서 단순 이름 목록 대신, 역할 설명이 포함된 목록을 사용합니다. ---
-    system_prompt = f"""
-    You are a master moderator assembling a panel of AI experts for a debate. Your task is to select a jury of 5 to 7 experts from the `Available Expert Agents Pool` ONLY.
-    Do not invent names or select agents not on the list.
-    **Available Expert Agents Pool (Name: Role Summary):**
-    {agent_pool_description}
-
-    Based on the debate context provided by the user, select the most relevant experts to form a diverse and effective jury. Ensure your selection covers the key issues and anticipated perspectives. Provide a concise reason for your team composition in Korean.
-    You must only respond with a single, valid JSON object. Do NOT select a "Judge" or "Moderator"; that role is assigned separately.
-    """
-
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
         ("human", "Here is the debate context (Issue Analysis Report):\n\n{report_json}")
     ])
-    
-    chain = prompt | structured_llm
-    # LLM 호출 시 config에 태그 추가
-    selected_jury = await chain.ainvoke(
-        {"report_json": report.model_dump_json(indent=2)},
-        config={"tags": [f"discussion_id:{discussion_id}"]}
-    )
-    
-    # --- 규칙 강제 적용 로직 ---
-    available_agent_names = list(jury_pool.keys())
-    validated_names = [name for name in selected_jury.agent_names if name in available_agent_names]
-    
-    if CRITICAL_AGENT_NAME not in validated_names and CRITICAL_AGENT_NAME in available_agent_names:
-        print(f"--- [규칙 적용] '{CRITICAL_AGENT_NAME}'이 누락되어 강제로 추가합니다. ---")
-        validated_names.append(CRITICAL_AGENT_NAME)
-    
-    final_jury_names = list(dict.fromkeys(validated_names))
 
-    final_jury_details = [
-        AgentDetail(**jury_pool[name]) for name in final_jury_names if name in jury_pool
-    ]
-    
+    chain = prompt | structured_llm
+    selected_jury: SelectedJury = await chain.ainvoke(
+        {"report_json": report.model_dump_json(indent=2)},
+        config={"tags": [f"discussion_id:{discussion_id}", f"agent_name:{JURY_SELECTOR_NAME}"]}
+    )
+
+    newly_created_agents = []
+    if selected_jury.new_agent_proposals:
+        for agent_name in selected_jury.new_agent_proposals:
+            existing_agent = await AgentSettings.find_one(AgentSettings.name == agent_name)
+            if not existing_agent:
+                PROMPT_TEMPLATE = (
+                    "당신의 역할은 '{role}'이며 지정된 역할 관점에서 말하세요.\n"
+                    "당신의 역할에 맞는 대화스타일을 사용하세요.\n"
+                    "토의 규칙을 숙지하고 토론의 목표를 달성하기 위해 제시된 의견들을 바탕으로 보완의견을 제시하거나, 주장을 강화,철회,수정 하세요.\n"
+                    "모든 의견은 논리적이고 일관성이 있어야 하며 신뢰할 수 있는 출처에 기반해야하고 자세하게 답변하여야 합니다.\n"
+                    "사용자가 질문한 언어로 답변하여야 합니다."
+                )
+                agent_prompt = PROMPT_TEMPLATE.format(role=agent_name)
+
+                agent_info_for_icon = {"name": agent_name, "prompt": agent_prompt}
+                selected_icon = _get_icon_for_agent(agent_info_for_icon)
+
+                new_agent_config = AgentConfig(
+                    prompt=agent_prompt,
+                    model="gemini-1.5-pro",
+                    temperature=0.3,
+                    tools=[],
+                    icon=selected_icon # 생성된 아이콘 할당
+                )
+
+                new_agent = AgentSettings(
+                    name=agent_name,
+                    agent_type="expert",
+                    version=1,
+                    status="active",
+                    config=new_agent_config,
+                    last_modified_by="Jury_Selector_AI",
+                    discussion_participation_count=0
+                )
+                await new_agent.insert()
+                print(f"--- [Orchestrator] 신규 에이전트 생성 및 DB 저장 완료: {agent_name} (Icon: {selected_icon}) ---")
+
+                newly_created_agents.append(AgentDetail(**{"name": agent_name, **new_agent_config.model_dump()}))
+
+    final_jury_details = [AgentDetail(**jury_pool[name]) for name in selected_jury.selected_agents if name in jury_pool]
+    final_jury_details.extend(newly_created_agents)
+
+    if CRITICAL_AGENT_NAME in jury_pool and not any(agent.name == CRITICAL_AGENT_NAME for agent in final_jury_details):
+        print(f"--- [규칙 적용] '{CRITICAL_AGENT_NAME}'이 누락되어 강제로 추가합니다. ---")
+        final_jury_details.append(AgentDetail(**jury_pool[CRITICAL_AGENT_NAME]))
+
+    final_jury_names = [agent.name for agent in final_jury_details]
+    if final_jury_names:
+        await AgentSettings.update_many(
+            {"name": {"$in": final_jury_names}},
+            {"$inc": {"discussion_participation_count": 1}}
+        )
+        print(f"--- [Orchestrator] 참여 에이전트 카운트 업데이트 완료: {final_jury_names} ---")
+
     judge_config = special_agents.get(JUDGE_AGENT_NAME)
     if not judge_config:
         raise ValueError(f"'{JUDGE_AGENT_NAME}'의 설정을 찾을 수 없습니다.")
 
     final_team = DebateTeam(
-        discussion_id=discussion_id, # 최종 응답 객체에 discussion_id 포함
+        discussion_id=discussion_id,
         judge=AgentDetail(**judge_config),
         jury=final_jury_details,
         reason=selected_jury.reason
     )
-    
+
     print(f"--- [Orchestrator] 3단계: 배심원단 선정 완료 ---")
     return final_team
