@@ -181,7 +181,7 @@ async def _run_single_agent_turn(
     discussion_id: str,
     turn_count: int
 ) -> str:
-    """단일 에이전트의 발언(turn)을 생성합니다. 에이전트 설정에 따라 웹 검색 도구를 사용할 수 있습니다."""
+    """단일 에이전트의 발언(turn)을 생성합니다. 모든 에이전트는 필요 시 웹 검색 도구를 사용할 수 있습니다."""
     agent_name = agent_config.get("name", "Unknown Agent")
     logger.info(f"--- [Flow] Running turn for agent: {agent_name} (Discussion: {discussion_id}, Turn: {turn_count}) ---")
 
@@ -191,14 +191,12 @@ async def _run_single_agent_turn(
             temperature=agent_config.get("temperature", 0.2)
         )
 
-        # 토론 라운드 수에 따라 동적으로 지시사항을 변경
         human_instruction = (
             "지금은 '모두 변론' 시간입니다. 위 내용을 바탕으로 당신의 초기 입장을 최소 100자에서 최대 500자 이내로 설명해주세요."
             if turn_count == 0 else
-            f"지금은 '{turn_count + 1}차 토론' 시간입니다. 이전의 에이전트들의 의견을 고려하여 다른 에이전트의 주장을 반박하거나 다른 에이전트의 의견에 적극 동조하거나 아니면 다른 에이전트의 의견을 수렴하여 의견을 수정한 당신의 의견을 주장합니다. 다른 에이전트의 논리적 모순이나 사실에 위배되는 주장이 있다고 생각한다면 적극적으로 반박하십시요. 또한, 다른 에이전트가 생각하지 못하는 새로운 아이디어, 독창적인 주장, 그리고 토론의 주제를 심화할 수 있다고 생각되는 내용을 적극적으로 주장합니다. 또한, 이전 토론 차수에서 주장한 내용을 바탕으로 자신의 주장중에 보다 구체적인 대안, 구체적인 방안등으로 자신의 주장을 심화 발전하는 것이 중요합니다. 토론의 차수가 높아질수록 이전 자신의 주장을 동어반복하기 보단 보다 구체적인 대안을 주장합니다. 주장은 최소 200자 최대 500자 이내로 추가해주세요."
+            f"지금은 '{turn_count + 1}차 토론' 시간입니다. 이전의 에이전트들의 의견을 고려하여 다른 에이전트의 주장을 반박하거나 다른 에이전트의 의견에 적극 동조하거나 아니면 다른 에이전트의 의견을 수렴하여 의견을 수정한 당신의 의견을 주장합니다. 다른 에이전트의 논리적 모순이나 사실에 위배되는 주장이 있다고 생각한다면 적극적으로 반박하십시요. 다른 에이전트가 생각하지 못하는 새로운 아이디어, 독창적인 주장, 그리고 토론의 주제를 심화할 수 있다고 생각되는 내용을 적극적으로 주장합니다. 또한, 이전 토론 차수에서 주장한 내용을 바탕으로 자신의 주장중에 보다 구체적인 대안, 구체적인 방안등으로 자신의 주장을 심화 발전하는 것이 중요합니다. 토론의 차수가 높아질수록 이전 자신의 주장을 동어반복하기 보단 보다 구체적인 대안을 주장합니다. 주장은 최소 200자 최대 500자 이내로 추가해주세요."
         )
 
-        # 최종 프롬프트 구성 (기존의 불필요한 시스템 지시사항 제거)
         final_human_prompt = (
             f"당신은 다음 토론에 참여하는 AI 에이전트입니다. 주어진 참고 자료와 토론 내용을 바탕으로 당신의 임무를 수행하세요.\n\n"
             f"### 전체 토론 주제: {topic}\n\n"
@@ -210,7 +208,6 @@ async def _run_single_agent_turn(
 
         logger.info(f"--- [Flow] Agent '{agent_name}' will now decide on tool usage autonomously. ---")
         
-        # ReAct 기반 도구 사용 규칙을 에이전트의 원래 시스템 프롬프트 앞에 추가
         original_system_prompt = agent_config.get("prompt", "You are a helpful assistant.")
         tool_system_prompt = SYSTEM_TOOL_INSTRUCTION_BLOCK + "\n\n" + original_system_prompt
 
@@ -229,6 +226,10 @@ async def _run_single_agent_turn(
             config={"tags": [f"discussion_id:{discussion_id}", f"agent_name:{agent_name}", f"turn:{turn_count}"]}
         )
         return response.get("output", "오류: 응답을 생성하지 못했습니다.")
+
+    except Exception as e:
+        logger.error(f"--- [Flow Error] Agent '{agent_name}' turn failed: {e} ---", exc_info=True)
+        return f"({agent_name} 발언 생성 중 오류 발생)"
     
 # 토론 흐름도 분석을 위한 헬퍼 함수
 def _analyze_flow_data(transcript: List[dict], jury_members: List[dict]) -> dict:
