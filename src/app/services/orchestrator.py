@@ -243,8 +243,8 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
 
     **Your Tasks:**
     1.  **Select from Existing Experts:** From the `Available Expert Agents Pool`, select the 4 to 6 most relevant experts.
-    2.  **Propose New Experts:** Critically evaluate your selection. If you believe a crucial perspective is missing, propose 1 to 2 new, highly specific expert roles that do not exist in the current pool. **The proposed role names must be in KOREAN.**
-    3.  **Provide Justification:** Write a concise reason explaining your selections and any new proposals, detailing why this specific combination of experts is optimal for the given debate topic. **The justification must be written in KOREAN.**
+    2.  **Propose New Experts:** Critically evaluate your selection. If you believe a crucial perspective is missing, propose 1 to 2 new, highly specific expert roles that do not exist in the current pool. The proposed role names must be in KOREAN. **The names should be concise and simple, without any parentheses or repeated phrases (e.g., use '여론조사 전문가', not '여론조사 전문가(여론조사 전문가)').**
+    3.  **Provide Justification:** Write a concise reason explaining your selections and any new proposals, detailing why this specific combination of experts is optimal for the given debate topic. The justification must be written in KOREAN.
 
     **Available Expert Agents Pool (Name: Role Summary):**
     {agent_pool_description}
@@ -286,12 +286,12 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
                 agent_info_for_icon = {"name": agent_name, "prompt": agent_prompt}
                 selected_icon = _get_icon_for_agent(agent_info_for_icon)
 
+                # 신규 에이전트 설정에서 'tools' 필드 완전 삭제
                 new_agent_config = AgentConfig(
                     prompt=agent_prompt,
                     model="gemini-1.5-pro",
                     temperature=0.3,
-                    tools=[],
-                    icon=selected_icon # 생성된 아이콘 할당
+                    icon=selected_icon
                 )
 
                 new_agent = AgentSettings(

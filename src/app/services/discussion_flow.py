@@ -6,6 +6,7 @@ import json
 from typing import List, Literal, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from app.tools.search import web_search_tool
 from datetime import datetime
 
 from pydantic import BaseModel, ValidationError
@@ -177,6 +178,14 @@ async def _run_single_agent_turn(
             f"지금은 '{turn_count + 1}차 토론' 시간입니다. 이전의 에이전트들의 의견을 고려하여 다른 에이전트의 주장을 반박하거나 다른 에이전트의 의견에 적극 동조하거나 아니면 다른 에이전트의 의견을 수렴하여 의견을 수정한 당신의 의견을 주장합니다. 다른 에이전트의 논리적 모순이나 사실에 위배되는 주장이 있다고 생각한다면 적극적으로 반박하십시요. 또한, 다른 에이전트가 생각하지 못하는 새로운 아이디어, 독창적인 주장, 그리고 토론의 주제를 심화할 수 있다고 생각되는 내용을 적극적으로 주장합니다. 또한, 이전 토론 차수에서 주장한 내용을 바탕으로 자신의 주장중에 보다 구체적인 대안, 구체적인 방안등으로 자신의 주장을 심화 발전하는 것이 중요합니다. 토론의 차수가 높아질수록 이전 자신의 주장을 동어반복하기 보단 보다 구체적인 대안을 주장합니다. 주장은 최소 200자 최대 500자 이내로 추가해주세요."
         )
 
+        # 모든 프롬프트에 웹 검색 사용을 강제하는 시스템 지시사항 추가
+        system_level_instruction = (
+            "\n\n--- [System Directive] ---\n"
+            "VERY IMPORTANT: If the discussion topic concerns recent events, do not rely solely on your internal knowledge. "
+            "You MUST use the provided 'web_search' tool to verify facts and get the latest information before answering. "
+            "Treat the provided reference materials as factual context for the debate."
+        )
+
         # 최종 프롬프트 구성
         final_human_prompt = (
             f"당신은 다음 토론에 참여하는 AI 에이전트입니다. 주어진 참고 자료와 토론 내용을 바탕으로 당신의 임무를 수행하세요.\n\n"
@@ -185,6 +194,7 @@ async def _run_single_agent_turn(
             f"### 지금까지의 토론 내용:\n{history if history else '아직 토론 내용이 없습니다.'}\n\n"
             f"{special_directive}\n"
             f"### 당신의 임무\n{human_instruction}"
+            f"{system_level_instruction}" # 시스템 레벨 지시사항 삽입
         )
 
         prompt = ChatPromptTemplate.from_messages([
@@ -195,7 +205,8 @@ async def _run_single_agent_turn(
         ])
 
         # 3. 에이전트가 사용할 도구를 설정합니다.
-        agent_tools = [available_tools[tool_name] for tool_name in agent_config.get("tools", []) if tool_name in available_tools]
+        # agent_tools = [available_tools[tool_name] for tool_name in agent_config.get("tools", []) if tool_name in available_tools]
+        agent_tools = [web_search_tool]
 
         # 4. 도구 사용 여부에 따라 에이전트 실행 방식을 분기합니다.
         if agent_tools:
