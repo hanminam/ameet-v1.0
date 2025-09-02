@@ -251,7 +251,13 @@ def _analyze_flow_data(transcript: List[dict], jury_members: List[dict]) -> dict
 
 # 투표 생성을 위한 별도의 헬퍼 함수
 async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_number: int, vote_history: List[str], topic: str) -> Optional[dict]:
-    """대화록과 이전 투표 기록을 분석하여 새로운 투표 주제와 선택지를 생성합니다."""
+    """
+    [최종본] 대화록과 토론 주제를 분석하여 새로운 투표 주제와 선택지를 생성합니다.
+    - TypeError 방지를 위해 topic 인자를 받습니다.
+    - KeyError 방지를 위해 대화록의 중괄호를 이스케이프 처리합니다.
+    - JSON 파싱 오류 방지를 위해 안정적인 2단계 파싱 로직을 사용합니다.
+    - 한글 오타 방지를 위해 '핵심 용어' 가이드라인을 동적으로 생성합니다.
+    """
     logger.info(f"--- [Vote Generation] Turn: {turn_number} 투표 생성 시작 ---")
     raw_response = ""
     json_str = ""
@@ -262,29 +268,30 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
         if not vote_caster_setting:
             logger.error("!!! [Vote Generation] 'Vote Caster' 에이전트를 DB에서 찾을 수 없습니다.")
             return None
-        
-        # 이전 투표 기록을 프롬프트에 명확하게 포함
+
+        # 이전 투표 기록 섹션 생성
         history_prompt_section = "아직 사용자의 이전 투표 기록이 없습니다."
         if vote_history:
             history_items = "\n".join([f"- '{item}'" for item in vote_history])
-            history_prompt_section = f"### 이전 투표에서 사용자가 선택한 항목들 (이 항목들과 유사한 제안은 피하고, 더 심화된 새로운 관점을 제시하세요):\n{history_items}"
+            history_prompt_section = f"### 이전 투표에서 사용자가 선택한 항목들:\n{history_items}"
 
-        # 토론 주제를 바탕으로 '핵심 용어' 가이드라인을 동적으로 생성합니다.
+        # 토론 주제를 바탕으로 '핵심 용어' 가이드라인을 동적으로 생성
         key_terms_guide = "### Key Terms (Use these exact Korean spellings):\n"
-
-        # 대화록에 포함될 수 있는 중괄호를 이스케이프 처리하여 KeyError를 원천 방지합니다.
+        
+        # 대화록에 포함될 수 있는 중괄호를 이스케이프 처리하여 KeyError를 원천 방지
         safe_transcript_str = transcript_str.replace('{', '{{').replace('}', '}}')
 
-        # 프롬프트를 더 명확하고 구조적으로 변경
+        # 최종 프롬프트 조립
         final_human_prompt = (
+            f"{key_terms_guide}\n"
             f"{history_prompt_section}\n\n"
-            f"### 현재 라운드까지의 전체 토론 대화록:\n{transcript_str}"
+            f"### 현재 라운드까지의 전체 토론 대화록:\n{safe_transcript_str}"
         )
 
+        # LLM 호출
         vote_caster_agent = ChatGoogleGenerativeAI(
             model=vote_caster_setting.config.model,
             temperature=vote_caster_setting.config.temperature,
-            # [추가] JSON 응답을 더 안정적으로 받기 위한 설정
             model_kwargs={"response_mime_type": "application/json"}
         )
         
@@ -294,7 +301,6 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
         ])
         
         chain = prompt | vote_caster_agent
-
         response = await chain.ainvoke(
             {},
             config={"tags": [f"discussion_id:{discussion_id}", f"turn:{turn_number}", "task:generate_vote"]}
@@ -302,18 +308,22 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
 
         raw_response = response.content
         
-        # LLM이 때때로 markdown 코드 블록을 포함하는 경우를 대비한 안정적인 파싱 로직
+        # 안정적인 2단계 파싱 로직
+        # 1. LLM 응답에서 마크다운 코드 블록 제거
         match = re.search(r"```(json)?\s*({.*?})\s*```", raw_response, re.DOTALL)
         json_str = match.group(2) if match else raw_response
+
+        # 2. Python 기본 json 라이브러리로 먼저 파싱
+        parsed_json = json.loads(json_str)
         
-        # Pydantic 모델을 사용하여 유효성 검증
-        vote_content = VoteContent.model_validate_json(json_str)
+        # 3. 파싱된 딕셔너리를 Pydantic으로 검증
+        vote_content = VoteContent.model_validate(parsed_json)
         
         logger.info(f"--- [Vote Generation] 투표 생성 및 파싱 완료: {vote_content.topic} ---")
         return vote_content.model_dump()
         
     except (ValidationError, json.JSONDecodeError) as e:
-        logger.error(f"!!! [Vote Generation] JSON 파싱 오류. 오류: {e}\n원본 응답: {raw_response}", exc_info=True)
+        logger.error(f"!!! [Vote Generation] JSON 파싱/검증 오류. 오류: {e}\n원본 응답: {raw_response}", exc_info=True)
         # 파싱 실패 시, 사용자에게 다음 라운드로 넘어갈 수 있는 기본 옵션 제공
         return {
             "topic": "다음으로 어떤 토론을 진행할까요?",
