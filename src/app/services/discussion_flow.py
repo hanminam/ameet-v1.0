@@ -250,7 +250,7 @@ def _analyze_flow_data(transcript: List[dict], jury_members: List[dict]) -> dict
     return {"interactions": interactions}
 
 # 투표 생성을 위한 별도의 헬퍼 함수
-async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_number: int, vote_history: List[str]) -> Optional[dict]:
+async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_number: int, vote_history: List[str], topic: str) -> Optional[dict]:
     """대화록과 이전 투표 기록을 분석하여 새로운 투표 주제와 선택지를 생성합니다."""
     logger.info(f"--- [Vote Generation] Turn: {turn_number} 투표 생성 시작 ---")
     raw_response = ""
