@@ -280,18 +280,30 @@ async def _analyze_flow_data(transcript: List[dict], jury_members: List[dict], d
         ]
 
         # --- 중복된 상호작용을 제거하는 로직 추가 ---
-        unique_interactions = []
-        seen_interactions = set() # 이미 처리한 상호작용을 기록하기 위한 set
+        # (from, to)를 키로 사용하는 딕셔너리를 사용하여 관계를 관리합니다.
+        prioritized_interactions = {}
 
         for interaction in interactions_list:
-            # (from, to, type)을 튜플로 만들어 고유성을 체크합니다.
-            interaction_tuple = (interaction['from'], interaction['to'], interaction['type'])
-            if interaction_tuple not in seen_interactions:
-                unique_interactions.append(interaction)
-                seen_interactions.add(interaction_tuple)
+            # (from, to) 쌍을 고유 키로 사용합니다.
+            interaction_key = (interaction['from'], interaction['to'])
+            
+            # 1. 이 관계가 처음 발견된 경우, 사전에 추가합니다.
+            if interaction_key not in prioritized_interactions:
+                prioritized_interactions[interaction_key] = interaction
+            else:
+                # 2. 이미 관계가 존재할 경우, 우선순위 규칙을 적용합니다.
+                existing_type = prioritized_interactions[interaction_key]['type']
+                new_type = interaction['type']
+                
+                # 기존 관계가 'agreement'이고 새로운 관계가 'disagreement'일 때만 교체합니다.
+                if existing_type == 'agreement' and new_type == 'disagreement':
+                    prioritized_interactions[interaction_key] = interaction
+
+        # 최종적으로 필터링된 상호작용 목록을 딕셔너리의 값들로 생성합니다.
+        final_interactions = list(prioritized_interactions.values())
         
-        logger.info(f"--- [Flow Analysis] Analysis complete. Found {len(interactions_list)} interactions, returning {len(unique_interactions)} unique interactions. ---")
-        return {"interactions": unique_interactions} # 중복이 제거된 리스트를 반환        
+        logger.info(f"--- [Flow Analysis] Analysis complete. Found {len(interactions_list)} interactions, returning {len(final_interactions)} prioritized interactions. ---")
+        return {"interactions": final_interactions} # 우선순위가 적용된 최종 리스트를 반환
 
     except Exception as e:
         logger.error(f"!!! [Flow Analysis] Error during interaction analysis: {e}", exc_info=True)
