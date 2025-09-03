@@ -340,6 +340,27 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     사용자의 투표 기록은 Redis를 통해 세션으로 관리합니다.
     """
     logger.info(f"--- [BG Task] Executing turn for Discussion ID: {discussion_log.discussion_id} ---")
+
+    # --- 사회자 안내 메시지 추가 ---
+    # 사용자 투표가 있고, 첫 턴(모두 변론)이 아닐 때 사회자 안내 메시지를 먼저 추가합니다.
+    if user_vote and discussion_log.turn_number > 0:
+        round_name = "모두 변론" if discussion_log.turn_number == 1 else f"{discussion_log.turn_number - 1}차 토론"
+        
+        # '을(를)' 조사 처리
+        last_char = user_vote[-1]
+        postposition = "을" if (ord(last_char) - 0xAC00) % 28 > 0 else "를"
+
+        moderator_message = (
+            f"{round_name}이 종료되었습니다. "
+            f"사용자는 '{discussion_log.current_vote['topic']}' 투표에 "
+            f"'{user_vote}'{postposition} 선택하였습니다. 다음 토론을 시작합니다."
+        )
+        moderator_turn_data = {
+            "agent_name": "사회자", 
+            "message": moderator_message, 
+            "timestamp": datetime.utcnow()
+        }
+        discussion_log.transcript.append(moderator_turn_data)
     
     redis_key = f"vote_history:{discussion_log.discussion_id}"
     vote_history = []
@@ -435,6 +456,16 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
                 "timestamp": datetime.utcnow()
             }
             discussion_log.transcript.append(verifier_turn_data)
+
+    # --- 라운드 종료 구분선 추가] ---
+    round_name_for_separator = "모두 변론" if discussion_log.turn_number == 0 else f"{discussion_log.turn_number}차 토론"
+    separator_message = f"---------- {round_name_for_separator} 종료 ----------"
+    separator_turn_data = {
+        "agent_name": "구분선", 
+        "message": separator_message, 
+        "timestamp": datetime.utcnow()
+    }
+    discussion_log.transcript.append(separator_turn_data)
     
     logger.info(f"--- [BG Task] 라운드 {current_turn} 완료. 분석을 시작합니다... (ID: {discussion_log.discussion_id})")
     

@@ -1132,6 +1132,50 @@
         }
 
         /**
+         * Staff 및 시스템 메시지를 위한 통합 렌더링 함수
+         */
+        function appendSystemMessage(turn) {
+            const chatbox = document.getElementById('chatbox');
+            let contentHtml = '';
+            
+            if (turn.agent_name === 'SNR 전문가' || turn.agent_name === '정보 검증부') {
+                const data = JSON.parse(turn.message);
+                let icon = '';
+                let colorClass = '';
+
+                if (turn.agent_name === 'SNR 전문가') {
+                    icon = '📈';
+                    colorClass = 'text-blue-600';
+                    contentHtml = `<strong>SNR Score:</strong> ${data.snr_score} - ${data.reason}`;
+                } else { // 정보 검증부
+                    icon = '✅';
+                    colorClass = 'text-green-600';
+                    if (data.status === '주의 필요') {
+                        icon = '⚠️';
+                        colorClass = 'text-orange-600';
+                    }
+                    contentHtml = `<strong>검증 상태:</strong> ${data.reason}`;
+                }
+                contentHtml = `<div class="flex justify-center items-center gap-2 my-2 text-xs font-semibold animate-fade-in ${colorClass}">
+                                 <span>${icon}</span>
+                                 <span>[${turn.agent_name}]</span>
+                                 <span>${contentHtml}</span>
+                               </div>`;
+
+            } else if (turn.agent_name === '사회자' || turn.agent_name === '재판관') {
+                contentHtml = `<div class="flex justify-center items-center gap-2 my-4 text-sm text-amber-800 animate-fade-in">
+                                 <span class="text-xl">🧑</span>
+                                 <span class="font-semibold">${turn.message}</span>
+                               </div>`;
+            } else if (turn.agent_name === '구분선') {
+                contentHtml = `<div class="text-center my-6 font-bold text-gray-400 animate-fade-in">${turn.message}</div>`;
+            }
+
+            chatbox.insertAdjacentHTML('beforeend', contentHtml);
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+
+        /**
          * 수신된 대화록을 기반으로 새 메시지만 순차적으로 화면에 추가하는 함수
          */
         async function updateTranscript(transcript, participants) {
@@ -1147,11 +1191,12 @@
             const newMessages = transcript.slice(displayedMessagesCount);
             
             for (const turn of newMessages) {
-                // Staff 에이전트인 경우 다른 렌더링 함수를 호출
-                if (turn.agent_name === 'SNR 전문가' || turn.agent_name === '정보 검증부') {
-                    appendStaffMessage(turn);
+                // Staff 및 시스템 에이전트인 경우 새로운 렌더링 함수 호출
+                const systemAgents = ['SNR 전문가', '정보 검증부', '사회자', '구분선'];
+                if (systemAgents.includes(turn.agent_name)) {
+                    appendSystemMessage(turn); // 통합된 시스템 메시지 렌더러 호출
                     displayedMessagesCount++;
-                    await new Promise(resolve => setTimeout(resolve, 300)); // Staff 메시지는 짧은 딜레이만 줌
+                    await new Promise(resolve => setTimeout(resolve, 300));
                 } else {
                     // 1. 이 메시지를 보낼 에이전트의 "입력 중..." 인디케이터를 표시합니다.
                     const indicator = showTypingIndicator(turn, participants);

@@ -30,16 +30,14 @@ def run_snr_agent(source_text: str) -> dict | None:
 
 def run_verifier_agent(statement: str) -> dict | None:
     """
-    정보 검증부 에이전트 (규칙 기반) - 인용 또는 단정적 표현이 있을 때 작동하여 검증 상태를 평가합니다.
+    정보 검증부 에이전트 (규칙 기반) - 모든 발언에 대해 작동하며, 단정적 표현 사용 여부를 평가합니다.
     """
-    trigger_keywords = ["따르면", "출처", "기사", "인용", "반드시", "무조건", "100%", "명백히", "확실히"]
-    if not any(keyword in statement for keyword in trigger_keywords):
-        return None
+    
+    # '기본 검증 완료' 상태를 기본값으로 설정
+    status = "기본 검증 완료"
+    reason = "발언에 특별한 주의가 필요한 단정적 표현은 발견되지 않았습니다."
 
-    status = "부분 검증"
-    reason = "인용된 근거가 있으나, 진위 여부의 추가 확인이 필요합니다."
-
-    # 할루시네이션 가능성이 있는 단정적 표현 탐지 로직 추가
+    # 할루시네이션 가능성이 있는 단정적 표현은 여전히 탐지
     strong_claims = [k for k in ["반드시", "무조건", "100%", "명백히", "확실히"] if k in statement]
     if strong_claims:
         status = "주의 필요"
