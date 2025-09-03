@@ -42,3 +42,13 @@ class VoteContent(BaseModel):
 
     class Config:
         from_attributes = True
+
+class Interaction(BaseModel):
+    """단일 상호작용을 정의하는 모델"""
+    from_agent: str = Field(..., alias="from")
+    to_agent: str = Field(..., alias="to")
+    interaction_type: Literal["agreement", "disagreement"] = Field(..., alias="type")
+
+class InteractionAnalysisResult(BaseModel):
+    """Interaction Analyst의 분석 결과를 담는 모델"""
+    interactions: List[Interaction]

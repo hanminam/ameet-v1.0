@@ -21,6 +21,7 @@ from app.core.config import logger
 
 from app.schemas.orchestration import AgentDetail # AgentDetail 스키마 추가
 from app.schemas.discussion import VoteContent
+from app.schemas.discussion import InteractionAnalysisResult
 import re
 
 # 에이전트 및 도구 실행을 위한 LangChain 모듈 임포트
@@ -231,24 +232,59 @@ async def _run_single_agent_turn(
         return f"({agent_name} 발언 생성 중 오류 발생)"
     
 # 토론 흐름도 분석을 위한 헬퍼 함수
-def _analyze_flow_data(transcript: List[dict], jury_members: List[dict]) -> dict:
-    interactions = []
-    agent_names = [agent['name'] for agent in jury_members]
+async def _analyze_flow_data(transcript: List[dict], jury_members: List[dict], discussion_id: str, turn_number: int) -> dict:
+    """
+    LLM 기반 'Interaction Analyst'를 사용하여 토론의 상호작용을 분석합니다.
+    """
+    logger.info(f"--- [Flow Analysis] LLM-based interaction analysis started for Turn: {turn_number} ---")
     
-    # 현재 라운드의 대화만 분석 (transcript는 전체 대화록)
-    # 간단하게 마지막 jury_members 수만큼의 대화만 분석
-    current_round_transcript = transcript[-len(jury_members):]
+    # 1. 현재 라운드의 대화만 문자열로 추출
+    current_round_transcript_str = "\n\n".join(
+        [f"{turn['agent_name']}: {turn['message']}" for turn in transcript[-len(jury_members):]]
+    )
 
-    for turn in current_round_transcript:
-        speaker = turn['agent_name']
-        message = turn['message']
+    try:
+        # 2. DB에서 Interaction Analyst 에이전트 설정을 가져옵니다.
+        analyst_setting = await AgentSettings.find_one(
+            AgentSettings.name == "Interaction Analyst", AgentSettings.status == "active"
+        )
+        if not analyst_setting:
+            logger.error("!!! [Flow Analysis] 'Interaction Analyst' 에이전트를 DB에서 찾을 수 없습니다.")
+            return {"interactions": []}
+
+        # 3. LLM 및 체인 구성
+        llm = ChatGoogleGenerativeAI(model=analyst_setting.config.model, temperature=analyst_setting.config.temperature)
+        structured_llm = llm.with_structured_output(InteractionAnalysisResult)
         
-        # 다른 에이전트의 이름이 언급되었는지 확인
-        for mentioned_agent in agent_names:
-            if speaker != mentioned_agent and mentioned_agent in message:
-                interactions.append({"from": speaker, "to": mentioned_agent})
-                
-    return {"interactions": interactions}
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", analyst_setting.config.prompt),
+            ("human", "Please analyze the following transcript:\n\n{transcript}")
+        ])
+        chain = prompt | structured_llm
+
+        # 4. LLM 호출하여 분석 실행
+        analysis_result = await chain.ainvoke(
+            {"transcript": current_round_transcript_str},
+            config={"tags": [f"discussion_id:{discussion_id}", f"turn:{turn_number}", "task:flow_analysis"]}
+        )
+
+        # 5. Pydantic 모델을 프론트엔드가 사용하는 딕셔너리 리스트로 변환
+        # Pydantic 모델의 alias('from', 'to', 'type')를 원래 필드명으로 변환
+        interactions_list = [
+            {
+                "from": interaction.from_agent,
+                "to": interaction.to_agent,
+                "type": interaction.interaction_type
+            }
+            for interaction in analysis_result.interactions
+        ]
+        
+        logger.info(f"--- [Flow Analysis] Analysis complete. Found {len(interactions_list)} interactions. ---")
+        return {"interactions": interactions_list}
+
+    except Exception as e:
+        logger.error(f"!!! [Flow Analysis] Error during interaction analysis: {e}", exc_info=True)
+        return {"interactions": []}
 
 # 투표 생성을 위한 별도의 헬퍼 함수
 async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_number: int, vote_history: List[str], topic: str) -> Optional[dict]:
