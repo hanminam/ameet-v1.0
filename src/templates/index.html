@@ -890,25 +890,28 @@
          * @param {HTMLElement} el2 - 도착 요소
          * @returns {HTMLElement} - 스타일이 적용된 화살표 선 div 요소
          */
+        /**
+         * 두 HTML 요소를 연결하는 화살표 선을 생성하는 안정화된 함수
+         * getBoundingClientRect() 대신 offsetLeft/Top을 사용하여 위치 계산의 정확성을 높입니다.
+         */
         function createFlowLine(el1, el2, colorClass) {
-            // 1. 필요한 요소(아이콘)와 부모 컨테이너의 좌표 정보를 가져옵니다.
-            const containerRect = el1.closest('#flow-diagram-container').getBoundingClientRect();
+            // 1. 각 에이전트 노드(el1, el2) 내부의 아이콘 div를 직접 참조합니다.
             const icon1 = el1.querySelector('div:first-child');
             const icon2 = el2.querySelector('div:first-child');
-            const icon1Rect = icon1.getBoundingClientRect();
-            const icon2Rect = icon2.getBoundingClientRect();
 
-            // 2. 각 아이콘의 '중앙'을 시작점과 끝점으로 계산합니다.
-            const x1 = icon1Rect.left + icon1Rect.width / 2 - containerRect.left;
-            const y1 = icon1Rect.top + icon1Rect.height / 2 - containerRect.top;
-            const x2 = icon2Rect.left + icon2Rect.width / 2 - containerRect.left;
-            const y2 = icon2Rect.top + icon2Rect.height / 2 - containerRect.top;
+            // 2. offset 속성을 사용하여 부모 컨테이너 내에서의 상대적 위치를 계산합니다.
+            // el.offsetLeft: 부모로부터의 가로 이격 거리
+            // icon.offsetWidth: 아이콘 자체의 너비
+            const x1 = el1.offsetLeft + icon1.offsetWidth / 2;
+            const y1 = el1.offsetTop + icon1.offsetHeight / 2;
+            const x2 = el2.offsetLeft + icon2.offsetWidth / 2;
+            const y2 = el2.offsetTop + icon2.offsetHeight / 2;
 
-            // 3. 계산된 좌표를 바탕으로 화살표의 길이와 각도를 계산합니다.
+            // 3. 두 점 사이의 거리(화살표 길이)와 각도 계산
             const length = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
             const angle = Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI);
-            
-            // 4. 스타일이 적용된 화살표 div 요소를 생성하여 반환합니다.
+
+            // 4. 계산된 값을 바탕으로 화살표 DOM 요소를 생성
             const line = document.createElement('div');
             line.className = `flow-line ${colorClass}`;
             line.style.width = `${length}px`;
