@@ -278,9 +278,20 @@ async def _analyze_flow_data(transcript: List[dict], jury_members: List[dict], d
             }
             for interaction in analysis_result.interactions
         ]
+
+        # --- 중복된 상호작용을 제거하는 로직 추가 ---
+        unique_interactions = []
+        seen_interactions = set() # 이미 처리한 상호작용을 기록하기 위한 set
+
+        for interaction in interactions_list:
+            # (from, to, type)을 튜플로 만들어 고유성을 체크합니다.
+            interaction_tuple = (interaction['from'], interaction['to'], interaction['type'])
+            if interaction_tuple not in seen_interactions:
+                unique_interactions.append(interaction)
+                seen_interactions.add(interaction_tuple)
         
-        logger.info(f"--- [Flow Analysis] Analysis complete. Found {len(interactions_list)} interactions. ---")
-        return {"interactions": interactions_list}
+        logger.info(f"--- [Flow Analysis] Analysis complete. Found {len(interactions_list)} interactions, returning {len(unique_interactions)} unique interactions. ---")
+        return {"interactions": unique_interactions} # 중복이 제거된 리스트를 반환        
 
     except Exception as e:
         logger.error(f"!!! [Flow Analysis] Error during interaction analysis: {e}", exc_info=True)
