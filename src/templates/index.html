@@ -1448,10 +1448,28 @@
          */
         function renderCircularFlowDiagram(interactions, participants) {
             const container = document.getElementById('flow-diagram-container');
-            if (!container || !interactions) return;
+            
+            // --- [로그 #1: 데이터 수신 확인] ---
+            // 이 로그는 백엔드에서 상호작용 데이터가 정상적으로 넘어왔는지 확인하는 첫 관문입니다.
+            console.log('%c[Flow Diagram] 1. Rendering Started', 'color: blue; font-weight: bold;', {
+                'Received Interactions': interactions,
+                'Received Participants': participants
+            });
+
+            if (!container) {
+                console.error('[Flow Diagram] Error: Container element #flow-diagram-container not found!');
+                return;
+            }
+            // [로그 추가] interactions 데이터가 없거나 비어있는 경우, 명시적으로 로그를 남기고 함수를 종료합니다.
+            if (!interactions || interactions.length === 0) {
+                console.warn('[Flow Diagram] ⚠️ Warning: No interactions data to display. Arrow rendering will be skipped.');
+                container.innerHTML = '<p class="text-sm text-center text-slate-500">이번 라운드에서는 에이전트 간의 직접적인 상호작용이 감지되지 않았습니다.</p>';
+                container.style.height = 'auto'; // 높이 초기화
+                return;
+            }
 
             container.innerHTML = ''; // 컨테이너 초기화
-            container.style.height = '250px'; // 다이어그램을 위한 높이 확보
+            container.style.height = '250px';
 
             const participantMap = getParticipantMap(participants);
             const juryNames = participants
@@ -1459,15 +1477,15 @@
                 .map(p => p.name);
 
             const agentNodes = {};
-            const radius = 100; // 원의 반지름
+            const radius = 100;
             const centerX = container.offsetWidth / 2;
             const centerY = container.offsetHeight / 2;
 
-            // 1. 에이전트 아이콘을 원형으로 배치
+            // 에이전트 아이콘을 원형으로 배치 (이 부분은 정상 동작하므로 로그 생략)
             juryNames.forEach((name, i) => {
-                const angle = (i / juryNames.length) * 2 * Math.PI - (Math.PI / 2); // 위쪽 중앙에서 시작
-                const x = centerX + radius * Math.cos(angle) - 24; // 24는 아이콘 너비의 절반
-                const y = centerY + radius * Math.sin(angle) - 24; // 24는 아이콘 높이의 절반
+                const angle = (i / juryNames.length) * 2 * Math.PI - (Math.PI / 2);
+                const x = centerX + radius * Math.cos(angle) - 24;
+                const y = centerY + radius * Math.sin(angle) - 24;
 
                 const agentNode = document.createElement('div');
                 agentNode.id = `agent-node-${name.replace(/[^a-zA-Z0-9]/g, '-')}`;
@@ -1482,25 +1500,42 @@
                 agentNodes[name] = agentNode;
             });
 
-            // 2. DOM 렌더링 후 화살표 그리기
+            // DOM 렌더링 후 화살표 그리기
             setTimeout(() => {
                 const lines = [];
-                interactions.forEach(flow => {
-                    const fromEl = agentNodes[flow.from];
-                    const toEl = agentNodes[flow.to];
+                
+                // --- [로그 #2: 상호작용 루프 실행 확인] ---
+                // 이 로그는 수신된 interactions 배열을 순회하며 화살표를 그리려는 시도가 시작되었음을 보여줍니다.
+                console.log(`[Flow Diagram] 2. Processing ${interactions.length} interactions to draw arrows...`);
 
+                interactions.forEach(flow => {
+                    const fromId = `agent-node-${flow.from.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                    const toId = `agent-node-${flow.to.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                    const fromEl = document.getElementById(fromId);
+                    const toEl = document.getElementById(toId);
+                    
+                    // --- [로그 #3: DOM 요소 탐색 확인] ---
+                    // 화살표의 시작점과 끝점이 되는 DOM 요소를 제대로 찾았는지 확인합니다. 여기서 에러가 나면 ID 생성 규칙에 문제가 있을 수 있습니다.
                     if (fromEl && toEl) {
-                        // 상호작용 유형(type)에 따라 다른 CSS 클래스 부여
+                        console.log(`[Flow Diagram] 3. ✅ Found nodes for: ${flow.from} -> ${flow.to}`);
+                        
                         const typeClass = `flow-line-${flow.type || 'disagreement'}`;
                         const line = createFlowLine(fromEl, toEl, typeClass);
                         line.dataset.from = flow.from;
                         line.dataset.to = flow.to;
                         container.appendChild(line);
                         lines.push(line);
+
+                        // --- [로그 #4: 화살표 생성 및 추가 확인] ---
+                        // 최종적으로 생성된 화살표(line) 객체와 DOM에 추가되었음을 확인합니다.
+                        console.log(`[Flow Diagram] 4. Appended arrow element to container for: ${flow.from} -> ${flow.to}`, line);
+
+                    } else {
+                        console.error(`[Flow Diagram] 3. ❌ Failed to find nodes for interaction: ${flow.from} -> ${flow.to}. Check element IDs.`, { fromId, toId });
                     }
                 });
 
-                // 3. 마우스 오버 이벤트 리스너 추가
+                // 마우스 오버 이벤트 리스너 추가 (이 부분은 정상 동작하므로 로그 생략)
                 Object.values(agentNodes).forEach(node => {
                     const agentName = node.querySelector('p').textContent;
                     node.addEventListener('mouseover', () => {
@@ -1508,7 +1543,7 @@
                             if (line.dataset.from === agentName || line.dataset.to === agentName) {
                                 line.classList.add('highlighted');
                             } else {
-                                line.classList.add('hidden'); // 관련 없는 선은 숨김
+                                line.classList.add('hidden');
                             }
                         });
                     });
