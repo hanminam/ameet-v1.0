@@ -252,7 +252,7 @@ def _analyze_flow_data(transcript: List[dict], jury_members: List[dict]) -> dict
 # 투표 생성을 위한 별도의 헬퍼 함수
 async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_number: int, vote_history: List[str], topic: str) -> Optional[dict]:
     """
-    [최종본] 대화록과 토론 주제를 분석하여 새로운 투표 주제와 선택지를 생성합니다.
+    대화록과 토론 주제를 분석하여 새로운 투표 주제와 선택지를 생성합니다.
     - TypeError 방지를 위해 topic 인자를 받습니다.
     - KeyError 방지를 위해 대화록의 중괄호를 이스케이프 처리합니다.
     - JSON 파싱 오류 방지를 위해 안정적인 2단계 파싱 로직을 사용합니다.
@@ -275,15 +275,15 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
             history_items = "\n".join([f"- '{item}'" for item in vote_history])
             history_prompt_section = f"### 이전 투표에서 사용자가 선택한 항목들:\n{history_items}"
 
-        # 토론 주제를 바탕으로 '핵심 용어' 가이드라인을 동적으로 생성
-        key_terms_guide = "### Key Terms (Use these exact Korean spellings):\n"
-        
+        # 2. 토론 주제를 바탕으로 '핵심 용어' 가이드라인을 동적으로 생성 (핵심 수정!)
+        key_terms_guide = f"### Key Terms (Use these exact Korean spellings):\n- '{topic}'"
+
         # 대화록에 포함될 수 있는 중괄호를 이스케이프 처리하여 KeyError를 원천 방지
         safe_transcript_str = transcript_str.replace('{', '{{').replace('}', '}}')
 
         # 최종 프롬프트 조립
         final_human_prompt = (
-            f"{key_terms_guide}\n"
+            f"{key_terms_guide}\n\n" # <--- 한 줄 띄워서 가독성 확보
             f"{history_prompt_section}\n\n"
             f"### 현재 라운드까지의 전체 토론 대화록:\n{safe_transcript_str}"
         )
@@ -385,7 +385,7 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     excluded_roles = ["재판관", "사회자"]
     jury_members = [p for p in discussion_log.participants if p.get('name') not in excluded_roles]
 
-    # --- [핵심 수정] 에이전트 발언을 순차 실행에서 동시 실행으로 변경 ---
+    # --- 에이전트 발언을 순차 실행에서 동시 실행으로 변경 ---
 
     # 1. 모든 에이전트의 비동기 작업을 담을 리스트를 생성합니다.
     tasks = []
@@ -412,9 +412,7 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
         agent_name = jury_members[i]['name']
         turn_data = {"agent_name": agent_name, "message": message, "timestamp": datetime.utcnow()}
         discussion_log.transcript.append(turn_data)
-
-    # --- [수정 완료] ---
-        
+    
     logger.info(f"--- [BG Task] 라운드 {current_turn} 완료. 분석을 시작합니다... (ID: {discussion_log.discussion_id})")
     
     # 분석에 필요한 최신 대화록 문자열 생성 (이번 라운드 발언만)
