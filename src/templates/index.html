@@ -146,6 +146,42 @@
         .flow-line-agreement::after { border-color: #22c55e; }
         .flow-line-disagreement { background-color: #ef4444; } /* red-500 */
         .flow-line-disagreement::after { border-color: #ef4444; }
+
+        /* 단순화된 토론 흐름도 리스트 스타일 */
+        .flow-list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f5f9; /* slate-100 */
+        }
+        .flow-agent-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-basis: 40%; /* 양쪽 에이전트 박스가 공간을 차지하도록 */
+        }
+        .flow-agent-box.from {
+            justify-content: flex-start;
+        }
+        .flow-agent-box.to {
+            justify-content: flex-end;
+            text-align: right;
+        }
+        .flow-arrow {
+            flex-grow: 1;
+            text-align: center;
+        }
+        .flow-arrow svg {
+            width: 100%;
+            height: 16px;
+        }
+        .arrow-agreement path {
+            stroke: #22c55e; /* green-500 */
+        }
+        .arrow-disagreement path {
+            stroke: #ef4444; /* red-500 */
+        }
     </style>
 </head>
 <body class="antialiased">
@@ -875,10 +911,66 @@
         }
 
         /**
+         * 상호작용을 단순한 목록 형태로 렌더링하는 함수
+         */
+        function renderInteractionList(interactions, participants) {
+            const container = document.getElementById('flow-diagram-container');
+            
+            // 로그는 유지하여 데이터 수신 여부 계속 확인
+            console.log('%c[Flow Diagram] 1. Rendering list view.', 'color: blue; font-weight: bold;', {
+                'Received Interactions': interactions
+            });
+
+            if (!container) {
+                console.error('[Flow Diagram] Error: Container element not found!');
+                return;
+            }
+
+            // 상호작용 데이터가 없는 경우 메시지 표시
+            if (!interactions || interactions.length === 0) {
+                container.innerHTML = '<p class="text-sm text-center text-slate-500">이번 라운드에서는 에이전트 간의 직접적인 상호작용이 감지되지 않았습니다.</p>';
+                container.style.height = 'auto';
+                return;
+            }
+
+            const participantMap = getParticipantMap(participants);
+            container.style.height = 'auto'; // 컨테이너 높이를 내용에 맞게 자동 조절
+
+            // 각 상호작용에 대한 HTML 행(row)을 생성
+            const interactionRowsHtml = interactions.map(flow => {
+                const fromAgent = participantMap[flow.from] || { icon: '🤖' };
+                const toAgent = participantMap[flow.to] || { icon: '🤖' };
+                
+                // 상호작용 유형(agreement/disagreement)에 따라 화살표 색상 결정
+                const arrowClass = flow.type === 'agreement' ? 'arrow-agreement' : 'arrow-disagreement';
+
+                return `
+                    <div class="flow-list-item">
+                        <div class="flow-agent-box from">
+                            <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xl flex-shrink-0">${fromAgent.icon}</div>
+                            <span class="text-xs font-bold truncate">${flow.from}</span>
+                        </div>
+
+                        <div class="flow-arrow">
+                            <svg class="${arrowClass}" viewBox="0 0 100 16" preserveAspectRatio="none"><path d="M0,8 L100,8 M90,2 L100,8 L90,14" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+
+                        <div class="flow-agent-box to">
+                            <span class="text-xs font-bold truncate">${flow.to}</span>
+                            <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xl flex-shrink-0">${toAgent.icon}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = `<div class="w-full">${interactionRowsHtml}</div>`;
+        }
+
+        /**
          * '토론 흐름도' 패널을 렌더링하는 함수
          */
         function renderFlowDiagram(interactions, participants) {
-            renderCircularFlowDiagram(interactions, participants);
+            renderInteractionList(interactions, participants);
         }
 
         /**
