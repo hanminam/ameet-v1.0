@@ -101,43 +101,56 @@ async def _get_single_stance_change(
 
 # 모든 참여자의 입장 변화를 병렬로 분석하는 메인 함수
 async def _analyze_stance_changes(transcript: List[dict], jury_members: List[dict], discussion_id: str, turn_number: int) -> List[dict]:
-    num_jury = len(jury_members)
-    # logger.info(f"--- [Stance Analysis] 입장 변화 분석 시작. Turn: {turn_number}, Transcript Lenth: {len(transcript)}, Jury Members: {num_jury} ---")
-    
-    # 1. 분석을 실행할 조건이 맞는지 확인
-    if turn_number < 1 or len(transcript) < num_jury * 2:
-        # logger.warning(f"분석 조건 미충족으로 입장 변화 분석을 건너뜁니다. (Turn: {turn_number}, Transcript Lenth: {len(transcript)})")
+    """
+    [고도화 버전] 전체 토론 기록을 바탕으로 각 에이전트의 최신 발언 2개를 정확히 찾아
+    입장 변화를 안정적으로 분석합니다.
+    """
+    logger.info(f"--- [Stance Analysis] Robust analysis started for Turn: {turn_number} ---")
+
+    # 1. 토론이 최소 1라운드는 진행되어야 비교가 가능하므로 이 조건은 유효합니다.
+    if turn_number < 1:
+        logger.warning(f"Analysis conditions not met (Turn: {turn_number} < 1). Skipping analysis.")
         return []
 
-    current_round_map = {turn['agent_name']: turn['message'] for turn in transcript[-num_jury:]}
-    prev_round_map = {turn['agent_name']: turn['message'] for turn in transcript[-num_jury*2:-num_jury]}
+    # 2. [핵심 로직] 전체 transcript를 순회하며 전문가 에이전트들의 발언만 따로 수집합니다.
+    jury_names = {member['name'] for member in jury_members}
+    statements_by_agent = {name: [] for name in jury_names}
 
-    # 2. 이전 라운드와 현재 라운드의 발언이 올바르게 추출되었는지 확인
-    # logger.info(f"이전 라운드 발언자: {list(prev_round_map.keys())}")
-    # logger.info(f"현재 라운드 발언자: {list(current_round_map.keys())}")
+    for turn in transcript:
+        agent_name = turn.get('agent_name')
+        if agent_name in jury_names:
+            statements_by_agent[agent_name].append(turn['message'])
 
+    # 3. 각 에이전트별로 2개 이상의 발언이 쌓였는지 확인하고 분석 작업을 생성합니다.
     tasks = []
-    for agent in jury_members:
-        agent_name = agent['name']
-        if agent_name in prev_round_map and agent_name in current_round_map:
+    for agent_config in jury_members:
+        agent_name = agent_config['name']
+        agent_statements = statements_by_agent[agent_name]
+
+        # 해당 에이전트의 발언이 2개 이상일 경우에만 분석 목록에 추가합니다.
+        if len(agent_statements) >= 2:
+            prev_statement = agent_statements[-2]   # 뒤에서 두 번째 발언
+            current_statement = agent_statements[-1] # 가장 최신 발언
+
             task = _get_single_stance_change(
-                agent_name, 
-                prev_round_map[agent_name], 
-                current_round_map[agent_name], 
-                discussion_id, 
+                agent_name,
+                prev_statement,
+                current_statement,
+                discussion_id,
                 turn_number
             )
             tasks.append(task)
         else:
-            # 3. 특정 에이전트의 발언이 누락되었는지 확인
-            logger.warning(f"!!! '{agent_name}' 에이전트의 이전 또는 현재 발언이 없어 분석에서 제외됩니다.")
-    
+            logger.info(f"--- [Stance Analysis] Agent '{agent_name}' has only {len(agent_statements)} statement(s), not enough for comparison yet.")
+
     if not tasks:
-        # logger.warning("분석할 에이전트가 없습니다.")
+        logger.warning("No agents have enough statements for stance change analysis in this round.")
         return []
-        
+
+    # 4. 생성된 분석 작업들을 병렬로 실행하고 결과를 반환합니다.
     results = await asyncio.gather(*tasks)
-    # logger.info(f"--- [Stance Analysis] 입장 변화 분석 완료. 결과 수: {len(results)} ---")
+    logger.info(f"--- [Stance Analysis] Analysis complete. Returning {len(results)} results. ---")
+    
     return results
 
 # 라운드 요약 분석을 위한 Pydantic 모델
