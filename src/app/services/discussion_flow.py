@@ -16,6 +16,7 @@ from app.db import redis_client
 
 from app.schemas.orchestration import DebateTeam
 from app.models.discussion import AgentSettings, DiscussionLog
+from app.services.utility_agents import run_snr_agent, run_verifier_agent
 from app.core.config import logger
 
 from app.schemas.orchestration import AgentDetail # AgentDetail 스키마 추가
@@ -410,8 +411,30 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     # 4. 이제 모든 답변이 도착했으므로, 결과를 순서대로 transcript에 추가합니다.
     for i, message in enumerate(messages):
         agent_name = jury_members[i]['name']
-        turn_data = {"agent_name": agent_name, "message": message, "timestamp": datetime.utcnow()}
-        discussion_log.transcript.append(turn_data)
+        
+        # 1. 전문가의 메인 발언을 추가합니다.
+        main_turn_data = {"agent_name": agent_name, "message": message, "timestamp": datetime.utcnow()}
+        discussion_log.transcript.append(main_turn_data)
+
+        # 2. 메인 발언에 대해 Staff 에이전트들을 동기적으로 실행합니다.
+        # (asyncio.to_thread를 사용해 non-blocking 방식으로 호출)
+        snr_result = await asyncio.to_thread(run_snr_agent, message)
+        if snr_result:
+            snr_turn_data = {
+                "agent_name": "SNR 전문가", 
+                "message": json.dumps(snr_result, ensure_ascii=False), # 결과를 JSON 문자열로 저장
+                "timestamp": datetime.utcnow()
+            }
+            discussion_log.transcript.append(snr_turn_data)
+
+        verifier_result = await asyncio.to_thread(run_verifier_agent, message)
+        if verifier_result:
+            verifier_turn_data = {
+                "agent_name": "정보 검증부", 
+                "message": json.dumps(verifier_result, ensure_ascii=False), # 결과를 JSON 문자열로 저장
+                "timestamp": datetime.utcnow()
+            }
+            discussion_log.transcript.append(verifier_turn_data)
     
     logger.info(f"--- [BG Task] 라운드 {current_turn} 완료. 분석을 시작합니다... (ID: {discussion_log.discussion_id})")
     

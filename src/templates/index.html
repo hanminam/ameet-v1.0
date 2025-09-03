@@ -1145,25 +1145,67 @@
             const newMessages = transcript.slice(displayedMessagesCount);
             
             for (const turn of newMessages) {
-                // 1. 이 메시지를 보낼 에이전트의 "입력 중..." 인디케이터를 표시합니다.
-                const indicator = showTypingIndicator(turn, participants);
-                
-                // 2. 현실감을 위해 1.5초 ~ 2.5초 사이의 랜덤한 시간 동안 기다립니다.
-                await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
-                
-                // 3. 인디케이터를 제거합니다.
-                indicator.remove();
+                // Staff 에이전트인 경우 다른 렌더링 함수를 호출
+                if (turn.agent_name === 'SNR 전문가' || turn.agent_name === '정보 검증부') {
+                    appendStaffMessage(turn);
+                    displayedMessagesCount++;
+                    await new Promise(resolve => setTimeout(resolve, 300)); // Staff 메시지는 짧은 딜레이만 줌
+                } else {
+                    // 1. 이 메시지를 보낼 에이전트의 "입력 중..." 인디케이터를 표시합니다.
+                    const indicator = showTypingIndicator(turn, participants);
+                    
+                    // 2. 현실감을 위해 1.5초 ~ 2.5초 사이의 랜덤한 시간 동안 기다립니다.
+                    await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
+                    
+                    // 3. 인디케이터를 제거합니다.
+                    indicator.remove();
 
-                // 4. 실제 메시지를 타이핑 효과와 함께 추가합니다.
-                const messageContainer = appendMessage(turn, participants);
-                const contentSpan = messageContainer.querySelector('.message-content');
-                await typeMessage(contentSpan, turn.message);
-                
-                // 5. 메시지 카운트를 증가시켜 중복 표시를 방지합니다.
-                displayedMessagesCount++;
+                    // 4. 실제 메시지를 타이핑 효과와 함께 추가합니다.
+                    const messageContainer = appendMessage(turn, participants);
+                    const contentSpan = messageContainer.querySelector('.message-content');
+                    await typeMessage(contentSpan, turn.message);
+                    
+                    // 5. 메시지 카운트를 증가시켜 중복 표시를 방지합니다.
+                    displayedMessagesCount++;
+                }
             }
 
             isRendering = false;
+        }
+
+        /**
+         * Staff 에이전트 메시지를 위한 렌더링 함수
+         */
+        function appendStaffMessage(turn) {
+            const chatbox = document.getElementById('chatbox');
+            const data = JSON.parse(turn.message);
+            let contentHtml = '';
+            let icon = '';
+            let colorClass = '';
+
+            if (turn.agent_name === 'SNR 전문가') {
+                icon = '📈';
+                colorClass = 'text-blue-600';
+                contentHtml = `<strong>SNR Score:</strong> ${data.snr_score} - ${data.reason}`;
+            } else { // 정보 검증부
+                icon = '✅';
+                colorClass = 'text-green-600';
+                if (data.status === '주의 필요') {
+                    icon = '⚠️';
+                    colorClass = 'text-orange-600';
+                }
+                contentHtml = `<strong>검증 상태:</strong> ${data.reason}`;
+            }
+
+            const staffMessageHtml = `
+                <div class="flex justify-center items-center gap-2 my-2 text-xs font-semibold animate-fade-in ${colorClass}">
+                    <span>${icon}</span>
+                    <span>[${turn.agent_name}]</span>
+                    <span>${contentHtml}</span>
+                </div>
+            `;
+            chatbox.insertAdjacentHTML('beforeend', staffMessageHtml);
+            chatbox.scrollTop = chatbox.scrollHeight;
         }
 
         /**
