@@ -103,6 +103,49 @@
             word-wrap: break-word; /* 오래된 브라우저 호환 */
             word-break: break-word; /* 최신 브라우저 (Chrome, Firefox 등) */
         }
+
+        /* 토론 흐름도 화살표 스타일 개선 */
+        .flow-line {
+            position: absolute;
+            background-color: #cbd5e1; /* slate-300 */
+            height: 2px;
+            transform-origin: 0 0;
+            transition: all 0.3s ease-in-out;
+            z-index: 10;
+            opacity: 0.15; /* 기본 상태를 흐리게 (요청사항 3) */
+        }
+        .flow-line::after {
+            content: '';
+            position: absolute;
+            right: -1px;
+            top: -3.5px;
+            border-style: solid;
+            border-width: 0 2px 2px 0;
+            display: inline-block;
+            padding: 3px;
+            transform: rotate(-45deg);
+            border-color: #cbd5e1; /* slate-300 */
+        }
+        /* 마우스 오버 시 하이라이트 스타일 */
+        .flow-line.highlighted {
+            height: 3px;
+            opacity: 1;
+            z-index: 20;
+        }
+        .flow-line.highlighted::after {
+            right: -1.5px;
+            top: -4.5px;
+            padding: 4px;
+        }
+        /* 다른 에이전트 오버 시 숨김 처리 */
+        .flow-line.hidden {
+            opacity: 0;
+        }
+        /* 상호작용 유형별 색상 */
+        .flow-line-agreement { background-color: #22c55e; } /* green-500 */
+        .flow-line-agreement::after { border-color: #22c55e; }
+        .flow-line-disagreement { background-color: #ef4444; } /* red-500 */
+        .flow-line-disagreement::after { border-color: #ef4444; }
     </style>
 </head>
 <body class="antialiased">
@@ -756,6 +799,8 @@
                     } else if (discussionData.status === 'completed' || discussionData.status === 'failed') {
                         console.log(`%c[Polling] Discussion finished with status: ${discussionData.status}. Stopping poll.`, 'color: red; font-weight: bold;');
                         isPollingActive = false;
+                        // 토론이 끝나도 최종 UX 패널을 렌더링하도록 보장
+                        renderUxPanels(discussionData);
                         showScreen('screen-6');
                     } else {
                         // [로그 추가] 폴링 계속 진행 상황
@@ -833,74 +878,7 @@
          * '토론 흐름도' 패널을 렌더링하는 함수
          */
         function renderFlowDiagram(interactions, participants) {
-            const container = document.getElementById('flow-diagram-container');
-            if (!container || !interactions) return;
-
-            const participantMap = getParticipantMap(participants);
-            const juryNames = participants
-                .filter(p => p.name !== '재판관' && interactions.some(i => i.from === p.name || i.to === p.name))
-                .map(p => p.name);
-
-            // 1. 에이전트 아이콘과 이름 노드를 생성합니다. (z-index 제거됨)
-            let agentHtml = '<div class="grid grid-cols-2 gap-x-8 gap-y-6">';
-            juryNames.forEach(name => {
-                const safeId = `agent-node-${name.replace(/[^a-zA-Z0-9]/g, '-')}`;
-                agentHtml += `
-                    <div id="${safeId}" class="flex flex-col items-center text-center cursor-pointer">
-                        <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-2xl">${participantMap[name].icon}</div>
-                        <p class="text-xs font-bold mt-1">${name}</p>
-                    </div>`;
-            });
-            agentHtml += '</div>';
-            container.innerHTML = agentHtml;
-
-            // 2. DOM 렌더링 후 화살표를 그리고, 마우스 이벤트 리스너를 추가합니다.
-            setTimeout(() => {
-                const lines = []; 
-                const colorClasses = Array.from({ length: 7 }, (_, i) => `flow-line-color-${i}`);
-
-                interactions.forEach(flow => {
-                    const fromId = `agent-node-${flow.from.replace(/[^a-zA-Z0-9]/g, '-')}`;
-                    const toId = `agent-node-${flow.to.replace(/[^a-zA-Z0-9]/g, '-')}`;
-                    const fromEl = document.getElementById(fromId);
-                    const toEl = document.getElementById(toId);
-
-                    if (fromEl && toEl) {
-                        const colorIndex = juryNames.indexOf(flow.from) % colorClasses.length;
-                        const colorClass = colorClasses[colorIndex];
-                        
-                        const line = createFlowLine(fromEl, toEl, colorClass);
-                        line.dataset.from = flow.from;
-                        line.dataset.to = flow.to;
-                        
-                        container.appendChild(line);
-                        lines.push(line);
-                    }
-                });
-
-                juryNames.forEach(name => {
-                    const safeId = `agent-node-${name.replace(/[^a-zA-Z0-9]/g, '-')}`;
-                    const agentNode = document.getElementById(safeId);
-                    if (agentNode) {
-                        agentNode.addEventListener('mouseover', () => {
-                            lines.forEach(line => {
-                                if (line.dataset.from === name || line.dataset.to === name) {
-                                    line.classList.remove('dimmed');
-                                    line.classList.add('highlighted');
-                                } else { 
-                                    line.classList.add('dimmed');
-                                    line.classList.remove('highlighted');
-                                }
-                            });
-                        });
-                        agentNode.addEventListener('mouseout', () => {
-                            lines.forEach(line => {
-                                line.classList.remove('dimmed', 'highlighted');
-                            });
-                        });
-                    }
-                });
-            }, 100);
+            renderCircularFlowDiagram(interactions, participants);
         }
 
         /**
@@ -1463,6 +1441,82 @@
             chatbox.appendChild(indicator);
             chatbox.scrollTop = chatbox.scrollHeight;
             return indicator;
+        }
+
+        /**
+         * '토론 흐름도' 패널을 원형으로 렌더링하는 새로운 함수
+         */
+        function renderCircularFlowDiagram(interactions, participants) {
+            const container = document.getElementById('flow-diagram-container');
+            if (!container || !interactions) return;
+
+            container.innerHTML = ''; // 컨테이너 초기화
+            container.style.height = '250px'; // 다이어그램을 위한 높이 확보
+
+            const participantMap = getParticipantMap(participants);
+            const juryNames = participants
+                .filter(p => p.name !== '재판관')
+                .map(p => p.name);
+
+            const agentNodes = {};
+            const radius = 100; // 원의 반지름
+            const centerX = container.offsetWidth / 2;
+            const centerY = container.offsetHeight / 2;
+
+            // 1. 에이전트 아이콘을 원형으로 배치
+            juryNames.forEach((name, i) => {
+                const angle = (i / juryNames.length) * 2 * Math.PI - (Math.PI / 2); // 위쪽 중앙에서 시작
+                const x = centerX + radius * Math.cos(angle) - 24; // 24는 아이콘 너비의 절반
+                const y = centerY + radius * Math.sin(angle) - 24; // 24는 아이콘 높이의 절반
+
+                const agentNode = document.createElement('div');
+                agentNode.id = `agent-node-${name.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                agentNode.className = 'flex flex-col items-center text-center cursor-pointer absolute';
+                agentNode.style.left = `${x}px`;
+                agentNode.style.top = `${y}px`;
+                agentNode.innerHTML = `
+                    <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-2xl">${participantMap[name].icon}</div>
+                    <p class="text-xs font-bold mt-1 w-20 truncate">${name}</p>
+                `;
+                container.appendChild(agentNode);
+                agentNodes[name] = agentNode;
+            });
+
+            // 2. DOM 렌더링 후 화살표 그리기
+            setTimeout(() => {
+                const lines = [];
+                interactions.forEach(flow => {
+                    const fromEl = agentNodes[flow.from];
+                    const toEl = agentNodes[flow.to];
+
+                    if (fromEl && toEl) {
+                        // 상호작용 유형(type)에 따라 다른 CSS 클래스 부여
+                        const typeClass = `flow-line-${flow.type || 'disagreement'}`;
+                        const line = createFlowLine(fromEl, toEl, typeClass);
+                        line.dataset.from = flow.from;
+                        line.dataset.to = flow.to;
+                        container.appendChild(line);
+                        lines.push(line);
+                    }
+                });
+
+                // 3. 마우스 오버 이벤트 리스너 추가
+                Object.values(agentNodes).forEach(node => {
+                    const agentName = node.querySelector('p').textContent;
+                    node.addEventListener('mouseover', () => {
+                        lines.forEach(line => {
+                            if (line.dataset.from === agentName || line.dataset.to === agentName) {
+                                line.classList.add('highlighted');
+                            } else {
+                                line.classList.add('hidden'); // 관련 없는 선은 숨김
+                            }
+                        });
+                    });
+                    node.addEventListener('mouseout', () => {
+                        lines.forEach(line => line.classList.remove('highlighted', 'hidden'));
+                    });
+                });
+            }, 100);
         }
         
         /**

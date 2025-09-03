@@ -35,7 +35,7 @@ def run_verifier_agent(statement: str) -> dict | None:
     
     # '기본 검증 완료' 상태를 기본값으로 설정
     status = "기본 검증 완료"
-    reason = "발언에 특별한 주의가 필요한 단정적 표현은 발견되지 않았습니다."
+    reason = "발언에 특별한 주의가 필요한 내용은 발견되지 않았습니다."
 
     # 할루시네이션 가능성이 있는 단정적 표현은 여전히 탐지
     strong_claims = [k for k in ["반드시", "무조건", "100%", "명백히", "확실히"] if k in statement]
