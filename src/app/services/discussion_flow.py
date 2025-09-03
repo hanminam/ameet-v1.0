@@ -6,7 +6,7 @@ import json
 from typing import List, Literal, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from app.tools.search import web_search_tool
+from app.tools.search import perform_web_search_async, web_search_tool
 from datetime import datetime
 
 from pydantic import BaseModel, ValidationError
@@ -33,17 +33,21 @@ SYSTEM_TOOL_INSTRUCTION_BLOCK = """
 ---
 ### Tools Guide (VERY IMPORTANT)
 
-You have access to a `web_search` tool. Follow this process:
+You have access to a `web_search` tool. Your decision to use it must follow a strict 2-step process:
 
-1.  **THOUGHT:** Analyze the request. If you need up-to-date information (recent events, data, etc.), you MUST use the web_search tool.
-2.  **ACTION:** Output a JSON object to call the tool.
-3.  **EVALUATION (NEW STEP):** After receiving the search results from the Observation, you MUST critically evaluate them. Consider the source's credibility, check for biases, and see if multiple sources confirm the information. Do not blindly trust a single source.
-4.  **FINAL ANSWER:** Based on your critical evaluation of the search results, formulate your comprehensive final answer in natural Korean.
+**Step 1: Evaluate Provided Information**
+First, thoroughly review the "[중앙 집중식 웹 검색 결과]" and "[참고 자료]" provided in the prompt. This is the baseline information for the current turn.
+
+**Step 2: Justify and Execute Supplemental Search (If Necessary)**
+You are authorized to use the `web_search` tool **ONLY IF** the provided information is insufficient for you to perform your specific role as an expert.
+
+-   **Justification (Internal Thought):** Before calling the tool, you must internally reason why a supplemental search is critical. For example: "As a Financial Analyst, the general overview of robotaxis is not enough. I need specific, recent financial data."
+-   **Execution:** If justified, perform **one, highly-specific** search to acquire the missing information. Do NOT repeat the general search that was already provided.
 
 **CRITICAL RULES:**
--   Your final answer MUST be a complete, natural language response.
--   Your final answer MUST NOT be a JSON object.
--   Do not mention your tool usage (e.g., "I searched for...") in your final answer. If you found conflicting information, you can state that "there are differing views on this topic."
+-   **DO NOT** use the `web_search` tool if the provided information is sufficient.
+-   Your final answer MUST be a complete, natural language response, not a JSON object.
+-   Do not mention your tool usage in your final answer. Integrate the findings naturally into your argument.
 ---
 """
 
@@ -51,6 +55,44 @@ You have access to a `web_search` tool. Follow this process:
 class StanceAnalysis(BaseModel):
     change: Literal['유지', '강화', '수정', '약화']
     reason: str
+
+# 검색 코디네이터를 호출하는 새로운 내부 함수
+async def _get_search_query(discussion_log: DiscussionLog, user_vote: Optional[str]) -> Optional[str]:
+    try:
+        coordinator_setting = await AgentSettings.find_one(
+            AgentSettings.name == "Search Coordinator", AgentSettings.status == "active"
+        )
+        if not coordinator_setting:
+            logger.warning("!!! 'Search Coordinator' 에이전트를 찾을 수 없습니다. 중앙 검색을 건너뜁니다.")
+            return None
+
+        history_str = "\n\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript])
+        
+        human_prompt = (
+            f"토론 주제: {discussion_log.topic}\n\n"
+            f"지금까지의 토론 내용:\n{history_str}\n\n"
+            f"사용자의 다음 라운드 지시사항: '{user_vote}'\n\n"
+            "위 내용을 바탕으로, 다음 토론에 가장 도움이 될 단 하나의 웹 검색어를 생성해주세요."
+        )
+
+        llm = ChatGoogleGenerativeAI(model=coordinator_setting.config.model)
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", coordinator_setting.config.prompt),
+            ("human", "{input}")
+        ])
+        chain = prompt | llm
+        
+        response = await chain.ainvoke(
+            {"input": human_prompt},
+            config={"tags": [f"discussion_id:{discussion_log.discussion_id}", "task:generate_search_query"]}
+        )
+        query = response.content.strip()
+        logger.info(f"--- [Search Coordinator] 생성된 검색어: {query} ---")
+        return query
+
+    except Exception as e:
+        logger.error(f"!!! 'Search Coordinator' 실행 중 오류 발생: {e}", exc_info=True)
+        return None
 
 # 개별 에이전트의 입장 변화를 분석하는 AI 호출 함수
 async def _get_single_stance_change(
@@ -150,7 +192,7 @@ async def _analyze_stance_changes(transcript: List[dict], jury_members: List[dic
     # 4. 생성된 분석 작업들을 병렬로 실행하고 결과를 반환합니다.
     results = await asyncio.gather(*tasks)
     logger.info(f"--- [Stance Analysis] Analysis complete. Returning {len(results)} results. ---")
-    
+
     return results
 
 # 라운드 요약 분석을 위한 Pydantic 모델
@@ -450,6 +492,21 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
             logger.info(f"--- [BG Task] 사용자 투표 '{user_vote}'를 Redis에 기록했습니다. 현재 기록: {vote_history} ---")
         except Exception as e:
             logger.error(f"!!! [Redis Error] Redis에 투표 기록을 저장하는 중 오류 발생: {e}", exc_info=True)
+
+    # --- 중앙 검색 로직 시작 ---
+    central_search_results_str = ""
+    # 첫 턴(모두 변론)이 아니면서 사용자 투표가 있을 때만 검색 수행
+    if discussion_log.turn_number > 0 and user_vote:
+        search_query = await _get_search_query(discussion_log, user_vote)
+        if search_query:
+            # search.py의 비동기 함수 사용
+            search_results = await perform_web_search_async(search_query)
+            if search_results:
+                formatted_results = "\n".join([
+                    f"- 출처: {res['url']}\n- 요약: {res['content']}" 
+                    for res in search_results
+                ])
+                central_search_results_str = f"--- [중앙 집중식 웹 검색 결과]\n{formatted_results}\n---"
 
     current_turn = discussion_log.turn_number
     history_str = "\n\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript])
