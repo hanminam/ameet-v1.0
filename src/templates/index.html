@@ -266,7 +266,8 @@
         // --- Global Variables ---
         let currentDiscussionId = null;     // 현재 토론 ID를 저장할 전역 변수
         let isPollingActive = false;        // 폴링 루프의 활성 상태를 관리
-        let displayedMessagesCount = 0;     // 화면에 표시된 메시지 수
+        let displayedMessagesCount = 0;     // 화면에 표시된 메시지 수 (전체)
+        let regularMessageCount = 0;        // 일반 에이전트 메시지 카운터 (좌/우 정렬용)
         let isRendering = false;
         
         // --- Functions ---
@@ -680,6 +681,7 @@
                 if (response.status === 202) { // 202 Accepted
                     console.log('백그라운드 토론 작업이 성공적으로 시작되었습니다.');
                     displayedMessagesCount = 0; // 새 토론 시작 시 카운트 초기화
+                    regularMessageCount = 0;    // 일반 메시지 카운트 초기화
                     const chatbox = document.getElementById('chatbox');
                     chatbox.innerHTML = '<div id="waiting-message" class="text-center text-slate-500">AI 에이전트들의 발언을 기다리고 있습니다...</div>'; // 초기 메시지 설정
                     // 다음 단계: 실시간 토론 화면으로 전환
@@ -1167,6 +1169,7 @@
                     
                     // 5. 메시지 카운트를 증가시켜 중복 표시를 방지합니다.
                     displayedMessagesCount++;
+                    regularMessageCount++; // 일반 메시지 카운터만 여기서 증가
                 }
             }
 
@@ -1216,8 +1219,8 @@
             const participantMap = getParticipantMap(participants);
             const agentName = turn.agent_name;
             const icon = participantMap[agentName]?.icon || '🤖';
-            const isOdd = (displayedMessagesCount + 1) % 2 !== 0; // 다음 메시지의 위치를 기준으로
-
+            const isOdd = (regularMessageCount) % 2 !== 0; // 다음 메시지의 위치를 기준으로
+            
             const indicator = document.createElement('div');
             if (isOdd) {
                 indicator.className = 'flex gap-3 my-4 justify-end items-end';
@@ -1257,7 +1260,7 @@
             const participantMap = getParticipantMap(participants);
             const agentName = turn.agent_name;
             const icon = participantMap[agentName]?.icon || '🤖';
-            const isOdd = displayedMessagesCount % 2 !== 0;
+            const isOdd = regularMessageCount % 2 !== 0;
 
             const messageContainer = document.createElement('div');
 
