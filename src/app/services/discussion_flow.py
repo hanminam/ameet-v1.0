@@ -522,6 +522,9 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
         evidence_str += "--- [참고 자료: 제출 파일 요약] ---\n"
         evidence_str += file_evidence + "\n" if file_evidence else "제출된 파일이 없습니다.\n"
 
+    # 중앙 검색 결과를 기존 evidence_str에 추가합니다.
+    if central_search_results_str:
+        evidence_str += "\n\n" + central_search_results_str
 
     special_directive = ""
     if user_vote:
