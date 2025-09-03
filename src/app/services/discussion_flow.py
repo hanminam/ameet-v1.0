@@ -511,7 +511,7 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     analysis_tasks = {
         "round_summary": _get_round_summary(final_transcript_str, discussion_log.discussion_id, discussion_log.turn_number),
         "stance_changes": _analyze_stance_changes(discussion_log.transcript, jury_members, discussion_log.discussion_id, discussion_log.turn_number),
-        "flow_data": asyncio.to_thread(_analyze_flow_data, discussion_log.transcript, jury_members)
+        "flow_data": _analyze_flow_data(discussion_log.transcript, jury_members, discussion_log.discussion_id, discussion_log.turn_number)
     }
     
     analysis_results = await asyncio.gather(*analysis_tasks.values())
