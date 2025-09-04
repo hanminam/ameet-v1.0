@@ -172,13 +172,15 @@ async def get_discussion_detail(
     status_code=status.HTTP_200_OK,
     summary="토론을 수동으로 완료 처리"
 )
-async def complete_discussion(
+async def complete_discussion_and_generate_report(
     discussion_id: str,
+    background_tasks: BackgroundTasks, # BackgroundTasks 추가
     current_user: UserModel = Depends(get_current_user)
 ):
     """
     사용자가 토론 종료를 요청했을 때 호출됩니다.
-    토론 상태를 'completed'로 변경하고, Redis에 저장된 세션 데이터를 삭제합니다.
+    1. 토론 상태를 'report_generating'으로 변경합니다.
+    2. 실제 보고서 생성 및 PDF 저장은 백그라운드 작업으로 위임합니다.
     """
     discussion_log = await DiscussionLog.find_one(DiscussionLog.discussion_id == discussion_id)
     
@@ -187,9 +189,15 @@ async def complete_discussion(
     if discussion_log.user_email != current_user.email:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this discussion.")
 
-    discussion_log.status = "completed"
-    discussion_log.completed_at = datetime.utcnow()
+    # 상태를 'report_generating'으로 변경
+    discussion_log.status = "report_generating"
+    discussion_log.completed_at = datetime.utcnow() # 토론 자체는 이 시점에 종료됨
     await discussion_log.save()
+
+    # --- [1-2 단계에서 구현 예정] ---
+    # TODO: 여기에 실제 보고서를 생성하는 백그라운드 함수를 등록해야 합니다.
+    # background_tasks.add_task(generate_report_background, discussion_id)
+    # --------------------------------
 
     # Redis에서 해당 토론의 투표 기록 키 삭제
     redis_key = f"vote_history:{discussion_id}"
@@ -199,4 +207,4 @@ async def complete_discussion(
     except Exception as e:
         logger.error(f"!!! [Redis Error] Failed to delete key '{redis_key}': {e}", exc_info=True)
     
-    return {"message": "Discussion completed and session data cleared."}
+    return {"message": "Discussion completed. Report generation has started in the background."}
