@@ -6,6 +6,14 @@ FROM python:3.11-slim
 # 2. 작업 디렉토리 설정
 WORKDIR /app
 
+# Debian/Ubuntu 기반 이미지에서 필요한 라이브러리들을 설치합니다.
+RUN apt-get update && apt-get install -y \
+    libpango-1.0-0 \
+    libharfbuzz0 \
+    libgdk-pixbuf-2.0-0 \
+    --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
+
 # 3. 의존성 파일만 먼저 복사 (가장 변경 빈도가 낮음)
 COPY requirements.txt .
 
