@@ -9,7 +9,7 @@ WORKDIR /app
 # Debian/Ubuntu 기반 이미지에서 필요한 라이브러리들을 설치합니다.
 RUN apt-get update && apt-get install -y \
     libpango-1.0-0 \
-    libharfbuzz0 \
+    libharfbuzz0b \
     libgdk-pixbuf-2.0-0 \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
