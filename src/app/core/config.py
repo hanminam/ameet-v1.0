@@ -45,6 +45,9 @@ class Settings(BaseSettings):
 
     MONGO_DB_URL: str = "mongodb+srv://root:Kimnc0624!%40@cluster0.6ckqorp.mongodb.net/ameet_db?retryWrites=true&w=majority"
 
+    # GCS 버킷 이름 환경 변수
+    GCS_BUCKET_NAME: str = "default-bucket"
+
     # JWT 서명을 위한 시크릿 키 (실제 운영 시에는 .env에서 관리)
     SECRET_KEY: str = "a_very_secret_key_that_should_be_changed"
 

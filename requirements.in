@@ -39,3 +39,6 @@ python-multipart
 # PDF 처리를 위한 라이브러리
 pypdf
 weasyprint
+
+# Google Cloud
+google-cloud-storage

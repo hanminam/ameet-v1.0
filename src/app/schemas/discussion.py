@@ -21,7 +21,12 @@ class DiscussionLogDetail(DiscussionLogItem):
     participants: Optional[List[Dict[str, Any]]] = None
     turn_number: int = Field(default=0, description="현재 토론 라운드 번호 (0부터 시작)")
     completed_at: Optional[datetime] = None
+    
+    # report_summary 필드를 아래 report_html과 pdf_url 필드로 대체하거나 함께 사용
     report_summary: Optional[str] = None
+    
+    report_html: Optional[str] = None
+    pdf_url: Optional[str] = None
 
     # API 응답에 핵심 자료집 필드 추가
     evidence_briefing: Optional[Dict[str, Any]] = None
@@ -33,8 +38,7 @@ class DiscussionLogDetail(DiscussionLogItem):
     current_vote: Optional[Dict[str, Any]] = Field(default=None, description="현재 진행 중인 투표의 주제와 선택지")
     
     class Config:
-        from_attributes = True 
-
+        from_attributes = True
 class VoteContent(BaseModel):
     """AI가 생성한 투표의 주제와 선택지를 정의하는 모델"""
     topic: str = Field(description="투표의 주제가 될 질문입니다.")

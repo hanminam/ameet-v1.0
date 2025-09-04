@@ -93,12 +93,27 @@ frozenlist==1.7.0
 google-ai-generativelanguage==0.6.18
     # via langchain-google-genai
 google-api-core[grpc]==2.25.1
-    # via google-ai-generativelanguage
+    # via
+    #   google-ai-generativelanguage
+    #   google-cloud-core
+    #   google-cloud-storage
 google-auth==2.40.3
     # via
     #   cloud-sql-python-connector
     #   google-ai-generativelanguage
     #   google-api-core
+    #   google-cloud-core
+    #   google-cloud-storage
+google-cloud-core==2.4.3
+    # via google-cloud-storage
+google-cloud-storage==3.3.1
+    # via -r requirements.in
+google-crc32c==1.7.1
+    # via
+    #   google-cloud-storage
+    #   google-resumable-media
+google-resumable-media==2.7.2
+    # via google-cloud-storage
 googleapis-common-protos==1.70.0
     # via
     #   google-api-core
@@ -303,6 +318,7 @@ requests==2.32.5
     # via
     #   cloud-sql-python-connector
     #   google-api-core
+    #   google-cloud-storage
     #   langchain
     #   langchain-community
     #   langsmith

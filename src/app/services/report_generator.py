@@ -1,10 +1,11 @@
 # src/app/services/report_generator.py
 
-from app.core.config import logger
+from app.core.config import logger, settings
 from app.models.discussion import DiscussionLog, AgentSettings
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 import weasyprint
+from google.cloud import storage
 
 async def generate_report_background(discussion_id: str):
     """
@@ -51,15 +52,20 @@ async def generate_report_background(discussion_id: str):
         )
         report_html = response.content
 
-        # 4. [신규] 생성된 HTML을 PDF로 변환
+        # 4. 생성된 HTML을 PDF로 변환
         logger.info(f"--- [Report BG Task] HTML generated. Converting to PDF... ---")
         pdf_bytes = weasyprint.HTML(string=report_html).write_pdf()
         
-        # 5. [신규] PDF를 Google Cloud Storage에 업로드 (시뮬레이션)
-        # 실제 프로덕션 환경에서는 여기에 GCS 업로드 코드가 들어갑니다.
-        # 예: pdf_url = await upload_to_gcs(pdf_bytes, f"reports/{discussion_id}.pdf")
-        pdf_url = f"https://storage.googleapis.com/your-bucket-name/reports/{discussion_id}.pdf" # 임시 URL
+        # 5. PDF를 Google Cloud Storage에 업로드
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(settings.GCS_BUCKET_NAME)
+        blob_name = f"reports/{discussion_id}.pdf"
+        blob = bucket.blob(blob_name)
+
+        blob.upload_from_string(pdf_bytes, content_type='application/pdf')
+        pdf_url = blob.public_url # 공개 URL 가져오기
         logger.info(f"--- [Report BG Task] PDF generated and uploaded. URL: {pdf_url} ---")
+
 
         # 6. 결과물을 DB에 저장하고 상태를 'completed'로 변경
         discussion_log.report_html = report_html
