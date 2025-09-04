@@ -819,27 +819,18 @@
                     
                     await updateTranscript(discussionData.transcript, discussionData.participants);
 
-                    // 상태에 따른 분기 처리
                     if (discussionData.status === 'waiting_for_vote') {
                         isPollingActive = false;
                         renderUxPanels(discussionData); 
                         renderUserActionPanel(discussionData); 
                     } else if (discussionData.status === 'report_generating') {
-                        // 보고서 생성 중일 때는 계속 폴링
                         console.log(`[Polling] Status is "report_generating". Continuing poll in 3 seconds.`);
                         setTimeout(() => pollDiscussionStatus(discussionId), 3000);
                     } else if (discussionData.status === 'completed') {
-                        // 보고서 생성이 완료되면 폴링을 멈추고 보고서를 표시
                         console.log(`%c[Polling] Report generation is "completed". Stopping poll and displaying report.`, 'color: blue; font-weight: bold;');
                         isPollingActive = false;
-                        
-                        // 다음 단계(1-3)에서 이 부분을 실제 보고서 표시 로직으로 채울 것입니다.
-                        document.getElementById('user-action-panel').innerHTML = `
-                            <div class="text-center p-8 border rounded-lg bg-green-50 border-green-400">
-                                <h3 class="text-xl font-bold text-green-800">✅ 보고서 생성 완료</h3>
-                                <p class="text-slate-600 mt-2">다음 단계에서 이곳에 보고서가 표시됩니다.</p>
-                            </div>
-                        `;
+                        // [핵심 구현] 보고서 표시 함수 호출
+                        displayReport(discussionData.report_html, discussionData.pdf_url); 
                     } else if (discussionData.status === 'failed') {
                         isPollingActive = false;
                         document.getElementById('user-action-panel').innerHTML = `
@@ -848,7 +839,7 @@
                                 <p class="text-slate-600 mt-2">오류가 발생했습니다. 관리자에게 문의하세요.</p>
                             </div>
                         `;
-                    } else { // turn_inprogress 등 다른 진행 상태
+                    } else {
                         console.log(`[Polling] Status is "${discussionData.status}". Continuing poll in 3 seconds.`);
                         setTimeout(() => pollDiscussionStatus(discussionId), 3000);
                     }
@@ -860,6 +851,50 @@
                 console.error('Polling network error:', error);
                 isPollingActive = false;
             }
+        }
+
+        /**
+        * 보고서와 PDF 다운로드 버튼을 화면에 표시하는 함수
+        */
+        function displayReport(reportHtml, pdfUrl) {
+            const actionPanel = document.getElementById('user-action-panel');
+            if (!actionPanel) return;
+
+            // 보고서 내용이 없을 경우를 대비한 예외 처리
+            if (!reportHtml) {
+                actionPanel.innerHTML = `
+                    <div class="text-center p-8 border rounded-lg bg-yellow-50 border-yellow-400">
+                        <h3 class="text-xl font-bold text-yellow-800">⚠️ 보고서 내용 없음</h3>
+                        <p class="text-slate-600 mt-2">보고서가 생성되었으나 내용이 비어있습니다.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            actionPanel.innerHTML = `
+                <div class="w-full animate-fade-in">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-bold text-slate-800">최종 분석 보고서</h3>
+                        <a href="${pdfUrl || '#'}" id="pdf-download-btn" target="_blank" class="btn btn-primary ${!pdfUrl ? 'bg-slate-400 cursor-not-allowed' : ''}" ${!pdfUrl ? 'disabled' : ''}>
+                            📥 PDF 다운로드
+                        </a>
+                    </div>
+                    <div class="border-2 border-slate-200 rounded-lg shadow-inner w-full h-[60vh] bg-white">
+                        <iframe srcdoc="" id="report-iframe" class="w-full h-full border-0"></iframe>
+                    </div>
+                </div>
+            `;
+
+            // srcdoc을 통해 iframe에 HTML 컨텐츠를 안전하게 삽입
+            // setTimeout을 사용하여 렌더링을 안정화
+            setTimeout(() => {
+                const iframe = document.getElementById('report-iframe');
+                if(iframe) {
+                    // reportHtml에 포함될 수 있는 스크립트가 부모 창에 영향을 주지 않도록 sandbox 속성 추가
+                    iframe.sandbox = 'allow-scripts allow-same-origin';
+                    iframe.srcdoc = reportHtml;
+                }
+            }, 100);
         }
 
         /**
