@@ -33,6 +33,10 @@ class DiscussionLog(Document):
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = None
+
+    # --- 보고서 관련 필드 ---
+    report_html: Optional[str] = Field(default=None, description="생성된 보고서의 HTML 콘텐츠")
+    pdf_url: Optional[str] = Field(default=None, description="GCS에 저장된 PDF 보고서의 URL")
     report_summary: Optional[str] = None
 
      # 현재 라운드의 투표 정보를 저장하는 필드
