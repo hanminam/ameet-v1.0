@@ -16,8 +16,9 @@ class DiscussionLog(Document):
         "turn_inprogress",    # 3. 특정 턴(예: 모두 변론)이 진행 중 
         "turn_complete",      # 4. 턴 완료, 다음 턴 또는 사용자 입력 대기 중
         "waiting_for_vote",   # 5. 사용자 투표/피드백 대기 중 
-        "completed",          # 6. 모든 토론 절차 완료 
-        "failed"              # 7. 오류로 인한 실패 
+        "report_generating",  # 6. 사용자가 토론을 종료하고, 보고서 생성이 진행 중인 상태
+        "completed",          # 7. 모든 토론 및 보고서 생성까지 완료된 상태
+        "failed"              # 8. 오류로 인한 실패 
     ] = "orchestrating"
 
     # --- 토론 참여자 정보를 저장하는 필드 ---
