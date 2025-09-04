@@ -16,6 +16,7 @@ from app.models.user import User as UserModel
 from app.models.discussion import DiscussionLog
 
 from pydantic import BaseModel
+from app.services.report_generator import generate_report_background
 
 class TurnRequest(BaseModel):
     user_vote: Optional[str] = None
@@ -169,12 +170,12 @@ async def get_discussion_detail(
 # 토론을 완료하고 세션 데이터를 정리하는 엔드포인트 추가
 @router.post(
     "/{discussion_id}/complete",
-    status_code=status.HTTP_200_OK,
-    summary="토론을 수동으로 완료 처리"
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="토론을 종료하고 보고서 생성을 시작"
 )
 async def complete_discussion_and_generate_report(
     discussion_id: str,
-    background_tasks: BackgroundTasks, # BackgroundTasks 추가
+    background_tasks: BackgroundTasks,
     current_user: UserModel = Depends(get_current_user)
 ):
     """
@@ -187,24 +188,13 @@ async def complete_discussion_and_generate_report(
     if not discussion_log:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discussion not found.")
     if discussion_log.user_email != current_user.email:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this discussion.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized.")
 
-    # 상태를 'report_generating'으로 변경
     discussion_log.status = "report_generating"
-    discussion_log.completed_at = datetime.utcnow() # 토론 자체는 이 시점에 종료됨
+    discussion_log.completed_at = datetime.utcnow()
     await discussion_log.save()
 
-    # --- [1-2 단계에서 구현 예정] ---
-    # TODO: 여기에 실제 보고서를 생성하는 백그라운드 함수를 등록해야 합니다.
-    # background_tasks.add_task(generate_report_background, discussion_id)
-    # --------------------------------
-
-    # Redis에서 해당 토론의 투표 기록 키 삭제
-    redis_key = f"vote_history:{discussion_id}"
-    try:
-        await redis_client.delete(redis_key)
-        logger.info(f"--- [Session Cleanup] Redis key '{redis_key}' has been deleted.")
-    except Exception as e:
-        logger.error(f"!!! [Redis Error] Failed to delete key '{redis_key}': {e}", exc_info=True)
+    # [핵심 수정] 1-2단계에서 구현한 보고서 생성 함수를 백그라운드 작업으로 등록
+    background_tasks.add_task(generate_report_background, discussion_id)
     
     return {"message": "Discussion completed. Report generation has started in the background."}
