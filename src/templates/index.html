@@ -321,6 +321,30 @@
             </div>
         </div>
     </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 bg-slate-50">
+        <div class="lg:col-span-2 h-[70vh] flex flex-col">
+            <div id="chatbox" class="flex-1 overflow-y-auto space-y-6 p-4 border rounded-lg bg-white shadow-inner">
+            </div>
+            <div id="user-action-panel" class="pt-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="report-modal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 hidden z-50">
+        <div class="screen-card w-full max-w-4xl h-[90vh] flex flex-col">
+            <div class="screen-header">
+                <span id="report-modal-title">최종 분석 보고서</span>
+                <div class="flex items-center gap-4">
+                    <a href="#" id="report-pdf-download-btn" target="_blank" class="btn btn-primary text-sm py-2 px-4">📥 PDF 다운로드</a>
+                    <button class="text-2xl font-bold" onclick="toggleModal('report-modal')">&times;</button>
+                </div>
+            </div>
+            <div class="screen-body overflow-hidden p-0 flex-1">
+                <iframe id="report-modal-iframe" class="w-full h-full border-0"></iframe>
+            </div>
+        </div>
+    </div>
     
     <script>
         let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
@@ -829,7 +853,7 @@
                     } else if (discussionData.status === 'completed') {
                         console.log(`%c[Polling] Report generation is "completed". Stopping poll and displaying report.`, 'color: blue; font-weight: bold;');
                         isPollingActive = false;
-                        // [핵심 구현] 보고서 표시 함수 호출
+                        // 보고서 표시 함수 호출
                         displayReport(discussionData.report_html, discussionData.pdf_url); 
                     } else if (discussionData.status === 'failed') {
                         isPollingActive = false;
@@ -860,41 +884,32 @@
             const actionPanel = document.getElementById('user-action-panel');
             if (!actionPanel) return;
 
-            // 보고서 내용이 없을 경우를 대비한 예외 처리
-            if (!reportHtml) {
-                actionPanel.innerHTML = `
-                    <div class="text-center p-8 border rounded-lg bg-yellow-50 border-yellow-400">
-                        <h3 class="text-xl font-bold text-yellow-800">⚠️ 보고서 내용 없음</h3>
-                        <p class="text-slate-600 mt-2">보고서가 생성되었으나 내용이 비어있습니다.</p>
-                    </div>
-                `;
-                return;
-            }
-
+            // 보고서 보기 버튼 생성
             actionPanel.innerHTML = `
-                <div class="w-full animate-fade-in">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xl font-bold text-slate-800">최종 분석 보고서</h3>
-                        <a href="${pdfUrl || '#'}" id="pdf-download-btn" target="_blank" class="btn btn-primary ${!pdfUrl ? 'bg-slate-400 cursor-not-allowed' : ''}" ${!pdfUrl ? 'disabled' : ''}>
-                            📥 PDF 다운로드
-                        </a>
-                    </div>
-                    <div class="border-2 border-slate-200 rounded-lg shadow-inner w-full h-[60vh] bg-white">
-                        <iframe srcdoc="" id="report-iframe" class="w-full h-full border-0"></iframe>
-                    </div>
+                <div class="text-center p-4 border rounded-lg bg-green-50 border-green-500 animate-fade-in">
+                    <button id="view-report-btn" class="btn btn-primary w-full">✅ 최종 분석 보고서 보기</button>
                 </div>
             `;
-
-            // srcdoc을 통해 iframe에 HTML 컨텐츠를 안전하게 삽입
-            // setTimeout을 사용하여 렌더링을 안정화
-            setTimeout(() => {
-                const iframe = document.getElementById('report-iframe');
-                if(iframe) {
-                    // reportHtml에 포함될 수 있는 스크립트가 부모 창에 영향을 주지 않도록 sandbox 속성 추가
-                    iframe.sandbox = 'allow-scripts allow-same-origin';
-                    iframe.srcdoc = reportHtml;
+            
+            // 모달창 내용 채우기
+            const iframe = document.getElementById('report-modal-iframe');
+            const downloadBtn = document.getElementById('report-pdf-download-btn');
+            if(iframe) {
+                iframe.sandbox = 'allow-scripts allow-same-origin';
+                iframe.srcdoc = reportHtml || '<p>보고서 내용이 없습니다.</p>';
+            }
+            if(downloadBtn) {
+                downloadBtn.href = pdfUrl || '#';
+                if(!pdfUrl) {
+                    downloadBtn.classList.add('bg-slate-400', 'cursor-not-allowed');
+                    downloadBtn.disabled = true;
                 }
-            }, 100);
+            }
+            
+            // 버튼에 모달창 열기 이벤트 연결
+            document.getElementById('view-report-btn').addEventListener('click', () => {
+                toggleModal('report-modal');
+            });
         }
 
         /**
@@ -1177,11 +1192,13 @@
             isPollingActive = false; // 진행 중인 턴 폴링 즉시 중단
 
             // 사용자 액션 패널을 '보고서 생성 중' UI로 즉시 교체
-            document.getElementById('user-action-panel').innerHTML = `
-                <div class="text-center p-8 border rounded-lg bg-slate-50 animate-fade-in">
-                    <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-                    <h3 class="text-xl font-bold mt-4">최종 보고서 생성 중...</h3>
-                    <p class="text-slate-600 mt-2">AI가 전체 토론 내용을 분석하고 있습니다. 완료되면 여기에 보고서가 표시됩니다.</p>
+            const actionPanel = document.getElementById('user-action-panel');
+            actionPanel.innerHTML = `
+                <div class="text-center p-4 border rounded-lg bg-slate-50 animate-fade-in">
+                    <div class="flex items-center justify-center">
+                        <div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500 mr-3"></div>
+                        <p class="text-slate-600 font-semibold">최종 보고서 생성 중... 완료되면 버튼이 활성화됩니다.</p>
+                    </div>
                 </div>
             `;
 

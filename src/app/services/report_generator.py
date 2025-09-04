@@ -6,6 +6,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 import weasyprint
 from google.cloud import storage
+import re
 
 async def generate_report_background(discussion_id: str):
     """
@@ -46,11 +47,21 @@ async def generate_report_background(discussion_id: str):
             ("human", "{context}")
         ])
         chain = prompt | llm
+
         response = await chain.ainvoke(
             {"context": full_context},
             config={"tags": [f"discussion_id:{discussion_id}", "task:generate_report"]}
         )
-        report_html = response.content
+        
+        raw_html = response.content
+
+        # Markdown 코드 블록 제거
+        # 응답이 ```html ... ``` 형식으로 감싸져 오는 경우를 처리
+        match = re.search(r"```(html)?\s*(<!DOCTYPE html>.*)```", raw_html, re.DOTALL)
+        if match:
+            report_html = match.group(2).strip()
+        else:
+            report_html = raw_html.strip()
 
         # 4. 생성된 HTML을 PDF로 변환
         logger.info(f"--- [Report BG Task] HTML generated. Converting to PDF... ---")

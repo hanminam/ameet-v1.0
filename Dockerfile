@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     libharfbuzz0b \
     libpangoft2-1.0-0 \
     libgdk-pixbuf-2.0-0 \
+    fonts-nanum* \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
