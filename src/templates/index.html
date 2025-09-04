@@ -817,27 +817,21 @@
                 if (response.ok) {
                     const discussionData = await response.json();
                     
-                    // 새 메시지가 있으면 화면에 추가 (기존 로직)
                     await updateTranscript(discussionData.transcript, discussionData.participants);
 
-                    // --- [핵심 수정] 상태에 따른 분기 처리 ---
+                    // 상태에 따른 분기 처리
                     if (discussionData.status === 'waiting_for_vote') {
-                        console.log('%c[Polling] Status is "waiting_for_vote". Stopping poll for user action.', 'color: green; font-weight: bold;');
-                        isPollingActive = false; // 사용자 액션 대기, 폴링 중지
+                        isPollingActive = false;
                         renderUxPanels(discussionData); 
                         renderUserActionPanel(discussionData); 
                     } else if (discussionData.status === 'report_generating') {
-                        // 보고서 생성 중, 계속 폴링
-                        console.log(`[Polling] Status is "report_generating". Continuing poll in 3 seconds.`);
                         setTimeout(() => pollDiscussionStatus(discussionId), 3000);
                     } else if (discussionData.status === 'completed') {
-                        // 보고서 생성 완료, 폴링 중지 및 보고서 표시
-                        console.log(`%c[Polling] Report generation is "completed". Stopping poll and displaying report.`, 'color: blue; font-weight: bold;');
                         isPollingActive = false;
-                        // [1-3 단계에서 구현 예정]
-                        // displayReport(discussionData.report_html, discussionData.pdf_url); 
+                        // [1-3 단계 구현]
+                        // displayReport(discussionData.report_html, discussionData.pdf_url);
                         
-                        // 현재 단계에서는 임시 메시지를 표시합니다.
+                        // 현재 단계에서는 임시 UI 표시
                         document.getElementById('user-action-panel').innerHTML = `
                             <div class="text-center p-8 border rounded-lg bg-green-50 border-green-400">
                                 <h3 class="text-xl font-bold text-green-800">✅ 보고서 생성 완료</h3>
@@ -845,7 +839,6 @@
                             </div>
                         `;
                     } else if (discussionData.status === 'failed') {
-                        console.log(`%c[Polling] Status is "failed". Stopping poll.`, 'color: red; font-weight: bold;');
                         isPollingActive = false;
                         document.getElementById('user-action-panel').innerHTML = `
                             <div class="text-center p-8 border rounded-lg bg-red-50 border-red-400">
@@ -854,7 +847,6 @@
                             </div>
                         `;
                     } else { // turn_inprogress 등 다른 상태
-                        console.log(`[Polling] Status is "${discussionData.status}". Continuing poll in 3 seconds.`);
                         setTimeout(() => pollDiscussionStatus(discussionId), 3000);
                     }
                 } else {
@@ -1144,19 +1136,16 @@
          */
         async function handleEndDebate() {
             console.log("토론 종료 및 보고서 생성 프로세스를 시작합니다.");
-            isPollingActive = false; // 진행 중인 턴 폴링은 즉시 중단
+            isPollingActive = false; // 진행 중인 턴 폴링 즉시 중단
 
-            const endDebateBtn = document.getElementById('end-debate-btn');
-            if (endDebateBtn) {
-                // 버튼이 포함된 전체 패널을 로딩 UI로 교체하므로, 버튼 자체를 비활성화할 필요는 없습니다.
-                document.getElementById('user-action-panel').innerHTML = `
-                    <div class="text-center p-8 border rounded-lg bg-slate-50 animate-fade-in">
-                        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
-                        <h3 class="text-xl font-bold mt-4">최종 보고서 생성 중...</h3>
-                        <p class="text-slate-600 mt-2">AI가 전체 토론 내용을 분석하고 있습니다. 완료되면 여기에 보고서가 표시됩니다.</p>
-                    </div>
-                `;
-            }
+            // 사용자 액션 패널을 '보고서 생성 중' UI로 즉시 교체
+            document.getElementById('user-action-panel').innerHTML = `
+                <div class="text-center p-8 border rounded-lg bg-slate-50 animate-fade-in">
+                    <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+                    <h3 class="text-xl font-bold mt-4">최종 보고서 생성 중...</h3>
+                    <p class="text-slate-600 mt-2">AI가 전체 토론 내용을 분석하고 있습니다. 완료되면 여기에 보고서가 표시됩니다.</p>
+                </div>
+            `;
 
             if (!currentDiscussionId) {
                 alert("오류: 토론 ID가 없어 보고서를 생성할 수 없습니다.");
@@ -1172,16 +1161,19 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
-                if (response.status === 202) { // 202 Accepted
+                if (response.status === 202) {
                     console.log("서버가 보고서 생성 요청을 성공적으로 접수했습니다.");
                     // 보고서 완성을 확인하기 위한 새로운 폴링 시작
                     startPolling(currentDiscussionId); 
                 } else {
                     const errorData = await response.json();
                     alert("보고서 생성 시작에 실패했습니다: " + errorData.detail);
-                    // 실패 시 다시 투표/액션 패널을 보여주거나, 에러 메시지를 표시할 수 있습니다.
-                    // 여기서는 간단히 이전 화면으로 돌려보냅니다.
-                    showScreen('screen-topic');
+                    document.getElementById('user-action-panel').innerHTML = `
+                        <div class="text-center p-8 border rounded-lg bg-red-50 border-red-400">
+                            <h3 class="text-xl font-bold text-red-800">❌ 보고서 생성 실패</h3>
+                            <p class="text-slate-600 mt-2">${errorData.detail}</p>
+                        </div>
+                    `;
                 }
             } catch (error) {
                 alert("서버 통신 중 오류가 발생했습니다.");
