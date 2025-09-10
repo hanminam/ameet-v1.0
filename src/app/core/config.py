@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     LANGCHAIN_API_KEY: Optional[str] = None
     LANGCHAIN_PROJECT: Optional[str] = None
 
+    # FRED API 키를 위한 환경 변수 선언 추가
+    FRED_API_KEY: Optional[str] = None
+
     # Cloud Run 환경에서 주입되는 인스턴스 연결 이름
     # 로컬에서는 이 값이 없으므로 None이 됩니다.
     INSTANCE_CONNECTION_NAME: str | None = None
