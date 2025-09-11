@@ -13,7 +13,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 import weasyprint
 from google.cloud import storage
-from app.schemas.report import ReportStructure, ChartRequest, ResolverOutput, ChartJsData, ReportOutline, ValidatedChartPlan
+from app.schemas.report import ReportStructure, ChartRequest, ResolverOutput, ReportOutline, ValidatedChartPlan
 
 # --- 데이터 사전 처리 헬퍼 함수 ---
 def _preprocess_data_for_synthesizer(raw_data: List[Dict], data_type: str) -> List[Dict]:
@@ -112,7 +112,7 @@ async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructu
     return final_report_structure
 
 async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id: str) -> List[Dict]:
-    """ Planner가 생성한 계획에 따라 도구를 직접 실행하여 차트 데이터를 생성합니다."""
+    """[최종 버전] AI 호출 없이 Python 코드로 직접 차트 데이터를 생성하여 안정성을 확보합니다."""
     charts_data = []
     if not chart_requests:
         return charts_data
@@ -125,7 +125,7 @@ async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id:
             logger.info(f"--- [Chart-Step2] Executing tool '{tool_name}' with args: {tool_args} ---")
             raw_data = None
 
-            # 1. 계획에 명시된 도구를 인자와 함께 직접 실행
+            # 1. 계획에 명시된 도구 실행
             if tool_name == 'get_stock_price':
                 raw_data = await get_stock_price_async(**tool_args)
             elif tool_name == 'get_economic_data':
@@ -133,31 +133,43 @@ async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id:
 
             # 2. 데이터 조회 결과 검증
             if not raw_data:
-                logger.warning(f"--- [Chart-Step2 FAILED] No data returned for tool '{tool_name}' with args {tool_args}. Skipping chart. ---")
+                logger.warning(f"--- [Chart-Step2 FAILED] No data returned for tool '{tool_name}'. Skipping chart. ---")
                 continue
 
-            # 3. 데이터 사전 처리 (Pre-processing)
-            data_type = 'stock' if tool_name == 'get_stock_price' else 'economic'
-            logger.info(f"--- [Chart-Step2.5] Pre-processing {len(raw_data)} data points before sending to LLM. ---")
-            preprocessed_data = _preprocess_data_for_synthesizer(raw_data, data_type)
+            # --- ▼▼▼ [핵심 수정] AI(Synthesizer) 호출 대신 Python 코드로 직접 데이터 변환 ▼▼▼ ---
+            logger.info(f"--- [Chart-Step3] Transforming data to Chart.js format using Python code. ---")
             
-            if not preprocessed_data:
-                logger.warning(f"--- [Chart-Step2.5 FAILED] Pre-processing resulted in empty data. Skipping. ---")
-                continue
+            labels = []
+            dataset_data = []
+            label_name = ""
 
-            # 4. Chart.js 데이터 합성
-            logger.info(f"--- [Chart-Step3] Synthesizing Chart.js data ---")
-            synthesizer_prompt = "Chart Request: {request}\n\nRaw Data: {raw_data}"
-            synthesizer_input = {"request": request.model_dump_json(), "raw_data": json.dumps(preprocessed_data, default=str)}
-            chart_js_obj = await _run_llm_agent(
-                "Chart Data Synthesizer", synthesizer_prompt, synthesizer_input, output_schema=ChartJsData
-            )
+            if tool_name == 'get_stock_price':
+                labels = [d['Date'] for d in raw_data]
+                dataset_data = [d.get('Close') for d in raw_data]
+                label_name = tool_args.get('ticker', 'Stock Price')
+            elif tool_name == 'get_economic_data':
+                labels = [d['Date'] for d in raw_data]
+                dataset_data = [d.get('Value') for d in raw_data]
+                label_name = tool_args.get('series_id', 'Economic Data')
+            
+            # Chart.js가 요구하는 최종 JSON 형식으로 조립
+            chart_js_data = {
+                "labels": labels,
+                "datasets": [{
+                    "label": label_name,
+                    "data": dataset_data,
+                    "fill": False,
+                    "borderColor": 'rgb(75, 192, 192)',
+                    "tension": 0.1
+                }]
+            }
+            
+            charts_data.append({
+                "chart_title": request.chart_title,
+                "chart_js_data": chart_js_data
+            })
+            # --- ▲▲▲ 수정 완료 ▲▲▲ ---
 
-            if not chart_js_obj.error:
-                charts_data.append({
-                    "chart_title": request.chart_title,
-                    "chart_js_data": chart_js_obj.model_dump(exclude_none=True)
-                })
         except Exception as e:
             logger.error(f"Chart generation failed for request '{request.chart_title}': {e}", exc_info=True)
             
