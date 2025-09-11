@@ -1,7 +1,7 @@
 # src/app/schemas/report.py
 
 from pydantic import BaseModel, Field
-from typing import List, Dict
+from typing import List, Dict, Literal, Any, Optional
 
 class ChartRequest(BaseModel):
     """보고서에 포함될 차트 생성을 위한 요청 모델"""
@@ -17,3 +17,14 @@ class ReportStructure(BaseModel):
     key_factors: Dict[str, List[str]] = Field(description="긍정적/부정적 핵심 요인")
     conclusion: str = Field(description="토론을 통해 도출된 최종 결론")
     chart_requests: List[ChartRequest] = Field(description="보고서에 포함되어야 할 차트 요청 목록")
+
+class ResolverOutput(BaseModel):
+    """Ticker/ID Resolver 에이전트의 JSON 출력 형식"""
+    type: Literal["stock", "economic"] = Field(description="데이터의 종류")
+    id: str = Field(description="조회에 사용될 티커 또는 시리즈 ID")
+
+class ChartJsData(BaseModel):
+    """Chart.js 라이브러리와 호환되는 차트 데이터 구조 또는 오류 메시지"""
+    labels: Optional[List[str]] = None
+    datasets: Optional[List[Dict[str, Any]]] = None
+    error: Optional[str] = None

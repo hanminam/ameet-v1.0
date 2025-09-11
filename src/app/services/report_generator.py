@@ -13,12 +13,12 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 import weasyprint
 from google.cloud import storage
-from app.schemas.report import ReportStructure, ChartRequest # Pydantic 모델을 별도 파일로 관리 (가정)
+from app.schemas.report import ReportStructure, ChartRequest, ResolverOutput, ChartJsData
 
-# --- 신규 AI 에이전트 호출을 위한 보조 함수 ---
+# --- AI 에이전트 호출을 위한 보조 함수 ---
 
 async def _run_llm_agent(agent_name: str, prompt_text: str, input_data: Dict, output_schema=None) -> Any:
-    """특정 AI 에이전트를 호출하는 범용 함수"""
+    """[수정] 특정 AI 에이전트를 호출하는 범용 함수"""
     agent_setting = await AgentSettings.find_one(
         AgentSettings.name == agent_name, 
         AgentSettings.status == "active"
@@ -26,25 +26,19 @@ async def _run_llm_agent(agent_name: str, prompt_text: str, input_data: Dict, ou
     if not agent_setting:
         raise ValueError(f"'{agent_name}' 에이전트를 DB에서 찾을 수 없습니다.")
 
-    # 모델 및 체인 구성
-    llm = ChatGoogleGenerativeAI(model=agent_setting.config.model, temperature=agent_setting.config.temperature)
+    # llm 인스턴스 생성을 한번만 하도록 단순화
+    llm = ChatGoogleGenerativeAI(
+        model=agent_setting.config.model,
+        temperature=agent_setting.config.temperature
+    )
     
-    # MIME 타입이 필요한 모델(e.g., JSON 출력용)을 위한 설정
-    if "json" in agent_setting.config.prompt.lower():
-         llm = ChatGoogleGenerativeAI(
-            model=agent_setting.config.model,
-            temperature=agent_setting.config.temperature,
-            model_kwargs={"response_mime_type": "application/json"}
-        )
-
     chain = ChatPromptTemplate.from_messages([("system", agent_setting.config.prompt), ("human", "{input}")])
     
+    # output_schema가 제공되면 .with_structured_output()을 사용, 아니면 일반 LLM 호출
     final_chain = chain | llm.with_structured_output(output_schema) if output_schema else chain | llm
 
-    # LLM 호출
     response = await final_chain.ainvoke({"input": prompt_text.format(**input_data)})
     
-    # structured output이 아닐 경우 content를 반환
     return response if output_schema else response.content
 
 # --- 보고서 생성 파이프라인의 각 단계 ---
@@ -63,44 +57,45 @@ async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructu
     return report_plan
 
 async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id: str) -> List[Dict]:
-    """'차트 요청서' 목록을 받아 Chart.js용 데이터 목록을 반환합니다."""
+    """ LLM 호출 시 Pydantic 스키마를 사용하도록 개선된 함수"""
     charts_data = []
     if not chart_requests:
         return charts_data
         
     for request in chart_requests:
         try:
-            # 1. Ticker/ID 해석
+            # 1. Ticker/ID 해석 (ResolverOutput 스키마 사용)
             logger.info(f"--- [Chart-Step1] Ticker/ID resolving for: {request.required_data_description} ---")
             resolver_prompt = "Find the ticker/ID for: {description}"
             resolver_input = {"description": request.required_data_description}
-            # Resolver는 JSON 응답이 필요하므로 output_schema를 사용하지 않고 파싱
-            resolver_result_str = await _run_llm_agent("Financial Data Ticker/ID Resolver", resolver_prompt, resolver_input)
-            resolver_result = json.loads(resolver_result_str)
+            resolver_result = await _run_llm_agent(
+                "Financial Data Ticker/ID Resolver", resolver_prompt, resolver_input, output_schema=ResolverOutput
+            )
 
             # 2. 데이터 조회
-            logger.info(f"--- [Chart-Step2] Fetching data for ID: {resolver_result.get('id')} ---")
+            logger.info(f"--- [Chart-Step2] Fetching data for ID: {resolver_result.id} ---")
             raw_data = None
-            if resolver_result.get('type') == 'stock':
+            if resolver_result.type == 'stock':
                 end_date = datetime.now()
                 start_date = end_date - timedelta(days=180)
-                raw_data = await get_stock_price_async(resolver_result['id'], start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
-            elif resolver_result.get('type') == 'economic':
-                raw_data = await get_economic_data_async(resolver_result['id'])
+                raw_data = await get_stock_price_async(resolver_result.id, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+            elif resolver_result.type == 'economic':
+                raw_data = await get_economic_data_async(resolver_result.id)
             
             if not raw_data: continue
 
-            # 3. Chart.js 데이터 합성
+            # 3. Chart.js 데이터 합성 (ChartJsData 스키마 사용)
             logger.info(f"--- [Chart-Step3] Synthesizing Chart.js data ---")
             synthesizer_prompt = "Chart Request: {request}\n\nRaw Data: {raw_data}"
             synthesizer_input = {"request": request.model_dump_json(), "raw_data": json.dumps(raw_data, default=str)}
-            chart_js_str = await _run_llm_agent("Chart Data Synthesizer", synthesizer_prompt, synthesizer_input)
-            chart_js_json = json.loads(chart_js_str)
+            chart_js_obj = await _run_llm_agent(
+                "Chart Data Synthesizer", synthesizer_prompt, synthesizer_input, output_schema=ChartJsData
+            )
 
-            if "error" not in chart_js_json:
+            if not chart_js_obj.error:
                 charts_data.append({
                     "chart_title": request.chart_title,
-                    "chart_js_data": chart_js_json
+                    "chart_js_data": chart_js_obj.model_dump(exclude_none=True)
                 })
         except Exception as e:
             logger.error(f"Chart generation failed for request {request.chart_title}: {e}", exc_info=True)
