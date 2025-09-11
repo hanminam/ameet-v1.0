@@ -68,15 +68,23 @@ def get_stock_price_sync(ticker: str, start_date: str, end_date: str) -> List[Di
 @traceable
 def get_stock_price_sync(ticker: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
     """yfinance를 사용하여 특정 종목의 주가 데이터를 동기적으로 조회합니다."""
-    print(f"--- [Tool] 주가 데이터 조회 (Sync): {ticker} from {start_date} to {end_date} ---")
+    logger.info(f"--- [Tool] 주가 데이터 조회 (Sync): {ticker} from {start_date} to {end_date} ---")
     try:
         stock = yf.Ticker(ticker)
-        history = stock.history(start=start_date, end=end_date)
+        
+        history = stock.history(start=start_date, end=end_date, repair=True)
+        
         history.reset_index(inplace=True)
         history['Date'] = history['Date'].dt.strftime('%Y-%m-%d')
-        return history.to_dict('records')
+        # 데이터가 비어있지 않은 경우에만 반환
+        if not history.empty:
+            return history.to_dict('records')
+        else:
+            logger.warning(f"--- [Tool Warning] yfinance에서 {ticker}에 대한 데이터를 반환하지 않았습니다.")
+            return []
+            
     except Exception as e:
-        print(f"--- [Tool Error] 주가 데이터 조회 중 오류 발생: {e} ---")
+        logger.error(f"--- [Tool Error] 주가 데이터 조회 중 오류 발생: {e} ---", exc_info=True)
         return []
     
 @traceable
