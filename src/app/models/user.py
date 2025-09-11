@@ -7,8 +7,9 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     role = Column(SQLAlchemyEnum('user', 'admin', name='user_roles'), nullable=False, server_default='user')
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    # created_at = Column(DateTime, server_default=func.now())
+    # updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
