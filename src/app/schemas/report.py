@@ -1,7 +1,8 @@
 # src/app/schemas/report.py
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Dict, Literal, Any, Optional
+import json
 
 class ChartRequest(BaseModel):
     """보고서에 포함될 차트 생성을 위한 요청 모델"""
@@ -17,6 +18,18 @@ class ReportStructure(BaseModel):
     key_factors: Dict[str, List[str]] = Field(description="긍정적/부정적 핵심 요인")
     conclusion: str = Field(description="토론을 통해 도출된 최종 결론")
     chart_requests: List[ChartRequest] = Field(description="보고서에 포함되어야 할 차트 요청 목록")
+
+    @field_validator('key_factors', 'expert_opinions', mode='before')
+    @classmethod
+    def parse_str_json(cls, v: Any) -> Any:
+        """LLM이 dict나 list를 string 형태로 반환했을 경우, 파싱하여 원래 타입으로 변환합니다."""
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                # 파싱에 실패하면 원래 유효성 검사 로직이 처리하도록 그대로 둡니다.
+                pass
+        return v
 
 class ResolverOutput(BaseModel):
     """Ticker/ID Resolver 에이전트의 JSON 출력 형식"""
