@@ -1,14 +1,15 @@
 # src/app/tools/search.py
 
 import asyncio
+from typing import List, Dict, Any
+from urllib.parse import quote
+
 from langchain_community.utilities.tavily_search import TavilySearchAPIWrapper
-from app.core.config import settings
+from app.core.config import settings, logger
 from langchain_core.tools import Tool
 from langsmith import traceable
 import yfinance as yf
 from fredapi import Fred
-from typing import List, Dict, Any, Optional
-from app.core.config import logger
 
 # Tavily API 키가 설정되어 있는지 확인
 if not settings.TAVILY_API_KEY:
@@ -89,17 +90,22 @@ def get_economic_data_sync(series_id: str, start_date: str, end_date: str) -> Li
     """ FRED API를 사용하여 특정 기간의 경제 지표 데이터를 동기적으로 조회합니다."""
     logger.info(f"--- [Tool] 경제 데이터 조회 (Sync): {series_id} from {start_date} to {end_date} ---")
     try:
-        # get_series 호출 시 start와 end 날짜를 지정
-        data = fred_client.get_series(series_id, observation_start=start_date, observation_end=end_date)
+        # ID를 URL에 맞게 인코딩하는 로직 추가 ---
+        # 공백이나 특수문자가 포함된 ID가 생성되더라도 안전하게 처리합니다.
+        sanitized_series_id = quote(series_id)
+
+        # 수정된 sanitized_series_id를 사용하여 API를 호출합니다.
+        data = fred_client.get_series(sanitized_series_id, observation_start=start_date, observation_end=end_date)
+        
         df = data.reset_index()
         df.columns = ['Date', 'Value']
         df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
-        # 결측치(NaN)가 있는 행은 제거
         df.dropna(inplace=True)
         return df.to_dict('records')
     except Exception as e:
-        logger.error(f"--- [Tool Error] 경제 데이터 조회 중 오류 발생: {e} ---", exc_info=True)
-        return []
+        # 만약 'EV MKT SHAR'처럼 존재하지 않는 ID라면 여기서 예외가 발생합니다.
+        logger.error(f"--- [Tool Error] 경제 데이터 조회 중 오류 발생 (ID: {series_id}): {e} ---")
+        return [] # 빈 리스트를 반환하여 파이프라인이 중단되지 않도록 합니다.
 
 @traceable
 async def get_economic_data_async(series_id: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
