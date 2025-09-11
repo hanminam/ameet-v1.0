@@ -1,113 +1,55 @@
 # src/app/db.py
 
 import redis.asyncio as redis
-
 from motor.motor_asyncio import AsyncIOMotorClient
-
-from typing import AsyncGenerator
-
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import OperationalError
 from beanie import init_beanie
-from app.models.discussion import DiscussionLog, AgentSettings
-from google.cloud.sql.connector import Connector
 
 from app.core.config import settings, logger
-from app.models.base import Base
-#from app.models.user import User
+from app.models.discussion import DiscussionLog, AgentSettings
 
 redis_client = None
 mongo_client = None
-engine = None
-AsyncDBSession = None
-
-# --- FastAPI 의존성 주입용 DB 세션 생성 함수 ---
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    API 요청마다 DB 세션을 생성하고, 요청이 끝나면 자동으로 닫아주는 함수
-    """
-    if AsyncDBSession is None:
-        raise IOError("Database session not initialized")
-
-    async with AsyncDBSession() as session:
-        yield session
 
 async def init_db_connections():
-    global redis_client, mongo_client, engine, AsyncDBSession
+    """Initializes connections to Redis and MongoDB."""
+    global redis_client, mongo_client
 
-    logger.info("--- [DB-INIT-STEP-1] `init_db_connections` function started. ---")
+    logger.info("--- [DB-INIT] Initializing database connections (Redis, MongoDB)... ---")
 
-    # --- Redis 초기화 ---
+    # --- Redis Initialization ---
     try:
         redis_client = redis.from_url(f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}", decode_responses=True)
         await redis_client.ping()
-
+        logger.info("--- [DB-INIT] Redis connection successful. ---")
     except Exception as e:
         logger.error(f"--- [DB-INIT-ERROR] Failed during Redis initialization: {e} ---", exc_info=True)
-        return
+        redis_client = None # Ensure client is None on failure
 
-    # --- MongoDB 초기화 및 Beanie 초기화 ---
+    # --- MongoDB and Beanie Initialization ---
     try:
-        logger.info("--- [DB-INIT-STEP-5] Attempting to create MongoDB client... ---")
-        
-        # [수정] MONGO_DB_URL에서 DB 이름 추출
         db_name = settings.MONGO_DB_URL.split("/")[-1].split("?")[0]
         mongo_client = AsyncIOMotorClient(settings.MONGO_DB_URL)
         
-        # [핵심 추가] Beanie 초기화
         await init_beanie(
             database=mongo_client[db_name],
-            document_models=[AgentSettings, DiscussionLog] # DB와 매핑할 모든 Beanie 모델 클래스
+            document_models=[AgentSettings, DiscussionLog]
         )
         
-        # MongoDB 연결 테스트
         await mongo_client.server_info()
-        logger.info(f"--- [DB-INIT-STEP-6] MongoDB client & Beanie ORM initialized successfully for DB '{db_name}'. ---")
-
+        logger.info(f"--- [DB-INIT] MongoDB & Beanie initialized successfully for DB '{db_name}'. ---")
     except Exception as e:
         logger.error(f"--- [DB-INIT-ERROR] Failed during MongoDB/Beanie initialization: {e} ---", exc_info=True)
-        return
-
-    # --- MySQL 초기화 ---
-    try:
-        # --- 1단계: 엔진 생성 ---
-        logger.info("--- [DB-INIT-STEP-SQL-1] Attempting to create SQL engine... ---")
+        mongo_client = None # Ensure client is None on failure
         
-        if settings.INSTANCE_CONNECTION_NAME:
-            logger.info("Cloud Run environment detected. Using Unix Socket.")
-            engine = create_async_engine(
-                f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}@"
-                f"/{settings.DB_NAME}?unix_socket=/cloudsql/{settings.INSTANCE_CONNECTION_NAME}"
-            )
-        else: # 로컬 환경
-            logger.info("Local environment detected. Using Public IP.")
-            db_url = (
-                f"mysql+aiomysql://{settings.DB_USER}:{settings.DB_PASSWORD}"
-                f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
-            )
-            engine = create_async_engine(db_url)
-        
-        logger.info("--- [DB-INIT-STEP-SQL-2] SQL engine created successfully. ---")
+    logger.info("--- [DB-INIT] All non-SQL DB connections finished. ---")
 
-        # --- 2단계: 세션 생성 ---
-        AsyncDBSession = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-        logger.info("--- [DB-INIT-STEP-SQL-4] SQL SessionMaker created. ---")
-
-    except Exception as e:
-        logger.error(f"--- [DB-INIT-ERROR] Failed during SQL initialization: {e} ---", exc_info=True)
-        return
-        
-    logger.info("--- [DB-INIT-STEP-7] All DB connections finished. ---")
 
 async def close_db_connections():
+    """Closes all active database connections."""
     if redis_client:
         await redis_client.close()
+        logger.info("Redis connection closed.")
     
     if mongo_client:
         mongo_client.close()
-
-    if engine:
-        await engine.dispose()
-        
-    logger.info("All DB connections closed.")
+        logger.info("MongoDB connection closed.")

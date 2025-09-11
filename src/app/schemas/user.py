@@ -15,6 +15,7 @@ class TokenData(BaseModel):
 
 class UserBase(BaseModel):
     email: EmailStr
+    name: str
 
 class UserCreate(UserBase):
     password: str
@@ -22,3 +23,8 @@ class UserCreate(UserBase):
 
 class User(UserBase):
     id: int
+    role: str
+    hashed_password: str
+
+class UserInDB(User):
+    pass
