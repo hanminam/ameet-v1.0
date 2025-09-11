@@ -57,14 +57,14 @@ async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructu
     return report_plan
 
 async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id: str) -> List[Dict]:
-    """ LLM 호출 시 Pydantic 스키마를 사용하도록 개선된 함수"""
+    """[수정] 데이터 조회 후 결과 검증 및 정확한 날짜 범위 전달 로직 추가"""
     charts_data = []
     if not chart_requests:
         return charts_data
         
     for request in chart_requests:
         try:
-            # 1. Ticker/ID 해석 (ResolverOutput 스키마 사용)
+            # 1. Ticker/ID 해석
             logger.info(f"--- [Chart-Step1] Ticker/ID resolving for: {request.required_data_description} ---")
             resolver_prompt = "Find the ticker/ID for: {description}"
             resolver_input = {"description": request.required_data_description}
@@ -75,16 +75,22 @@ async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id:
             # 2. 데이터 조회
             logger.info(f"--- [Chart-Step2] Fetching data for ID: {resolver_result.id} ---")
             raw_data = None
+            end_date = datetime.now()
+            
             if resolver_result.type == 'stock':
-                end_date = datetime.now()
+                # 주가 데이터는 보통 최근 6개월을 조회
                 start_date = end_date - timedelta(days=180)
                 raw_data = await get_stock_price_async(resolver_result.id, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
             elif resolver_result.type == 'economic':
-                raw_data = await get_economic_data_async(resolver_result.id)
+                # 경제 지표는 보통 최근 2-3년 추이를 확인
+                start_date = end_date - timedelta(days=365 * 2)
+                raw_data = await get_economic_data_async(resolver_result.id, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
             
-            if not raw_data: continue
+            if not raw_data:
+                logger.warning(f"--- [Chart-Step2 FAILED] No data returned for ID: {resolver_result.id}. Skipping chart generation. ---")
+                continue # 데이터가 없으면 Synthesizer를 호출하지 않고 다음 요청으로 넘어감
 
-            # 3. Chart.js 데이터 합성 (ChartJsData 스키마 사용)
+            # 3. Chart.js 데이터 합성
             logger.info(f"--- [Chart-Step3] Synthesizing Chart.js data ---")
             synthesizer_prompt = "Chart Request: {request}\n\nRaw Data: {raw_data}"
             synthesizer_input = {"request": request.model_dump_json(), "raw_data": json.dumps(raw_data, default=str)}

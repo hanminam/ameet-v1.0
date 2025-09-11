@@ -84,18 +84,20 @@ async def get_stock_price_async(ticker: str, start_date: str, end_date: str) -> 
 
 # --- 경제 데이터 조회 도구 ---
 @traceable
-def get_economic_data_sync(series_id: str) -> List[Dict[str, Any]]:
-    """FRED API를 사용하여 특정 경제 지표 데이터를 동기적으로 조회합니다."""
-    print(f"--- [Tool] 경제 데이터 조회 (Sync): {series_id} ---")
+def get_economic_data_sync(series_id: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+    """[수정] FRED API를 사용하여 특정 기간의 경제 지표 데이터를 동기적으로 조회합니다."""
+    print(f"--- [Tool] 경제 데이터 조회 (Sync): {series_id} from {start_date} to {end_date} ---")
     try:
-        data = fred_client.get_series(series_id)
+        # get_series 호출 시 start와 end 날짜를 지정
+        data = fred_client.get_series(series_id, observation_start=start_date, observation_end=end_date)
         df = data.reset_index()
         df.columns = ['Date', 'Value']
         df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
-        # FRED 데이터는 너무 길 수 있으므로 최근 5년치(60개월) 데이터만 반환
-        return df.tail(60).to_dict('records')
+        # 결측치(NaN)가 있는 행은 제거
+        df.dropna(inplace=True)
+        return df.to_dict('records')
     except Exception as e:
-        print(f"--- [Tool Error] 경제 데이터 조회 중 오류 발생: {e} ---")
+        print(f"--- [Tool Error] 경제 데이터 조회 중 오류 발생: {e} ---", exc_info=True)
         return []
 
 @traceable
