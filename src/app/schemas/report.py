@@ -10,6 +10,18 @@ class ChartRequest(BaseModel):
     tool_name: Literal["get_stock_price", "get_economic_data"] = Field(description="차트 데이터 조회에 사용할 도구의 이름")
     tool_args: Dict[str, str] = Field(description="도구 호출 시 전달할 인자 딕셔너리 (예: {'ticker': 'TSLA', 'start_date': '...'})")
 
+    @field_validator('tool_args', mode='before')
+    @classmethod
+    def parse_tool_args(cls, v: Any) -> Any:
+        """LLM이 tool_args를 문자열 형태의 JSON으로 반환했을 경우, 파싱하여 dict로 변환합니다."""
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                # 파싱에 실패하면 Pydantic의 기본 유효성 검사가 오류를 발생시키도록 함
+                pass
+        return v
+
 class ReportStructure(BaseModel):
     """ Report Component Planner가 생성할 보고서의 유연한 구조 모델"""
     title: str = Field(description="보고서의 메인 제목") # 제목은 필수로 유지
