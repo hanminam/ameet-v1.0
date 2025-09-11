@@ -8,6 +8,7 @@ from langsmith import traceable
 import yfinance as yf
 from fredapi import Fred
 from typing import List, Dict, Any, Optional
+from app.core.config import logger
 
 # Tavily API 키가 설정되어 있는지 확인
 if not settings.TAVILY_API_KEY:
@@ -85,8 +86,8 @@ async def get_stock_price_async(ticker: str, start_date: str, end_date: str) -> 
 # --- 경제 데이터 조회 도구 ---
 @traceable
 def get_economic_data_sync(series_id: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
-    """[수정] FRED API를 사용하여 특정 기간의 경제 지표 데이터를 동기적으로 조회합니다."""
-    print(f"--- [Tool] 경제 데이터 조회 (Sync): {series_id} from {start_date} to {end_date} ---")
+    """ FRED API를 사용하여 특정 기간의 경제 지표 데이터를 동기적으로 조회합니다."""
+    logger.info(f"--- [Tool] 경제 데이터 조회 (Sync): {series_id} from {start_date} to {end_date} ---")
     try:
         # get_series 호출 시 start와 end 날짜를 지정
         data = fred_client.get_series(series_id, observation_start=start_date, observation_end=end_date)
@@ -97,13 +98,13 @@ def get_economic_data_sync(series_id: str, start_date: str, end_date: str) -> Li
         df.dropna(inplace=True)
         return df.to_dict('records')
     except Exception as e:
-        print(f"--- [Tool Error] 경제 데이터 조회 중 오류 발생: {e} ---", exc_info=True)
+        logger.error(f"--- [Tool Error] 경제 데이터 조회 중 오류 발생: {e} ---", exc_info=True)
         return []
 
 @traceable
-async def get_economic_data_async(series_id: str) -> List[Dict[str, Any]]:
-    """FRED API를 사용하여 특정 경제 지표 데이터를 비동기적으로 조회합니다."""
-    return await asyncio.to_thread(get_economic_data_sync, series_id)
+async def get_economic_data_async(series_id: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+    """ FRED API를 사용하여 특정 기간의 경제 지표 데이터를 비동기적으로 조회합니다."""
+    return await asyncio.to_thread(get_economic_data_sync, series_id, start_date, end_date)
     
 # perform_web_search 함수를 LangChain Tool로 포장합니다.
 web_search_tool = Tool(
