@@ -18,7 +18,10 @@ from google.cloud import storage
 
 async def _run_llm_agent(agent_name: str, prompt: str, input_data: Dict, output_schema=None) -> Dict | str:
     """특정 AI 에이전트를 호출하는 범용 함수"""
-    agent_setting = await AgentSettings.find_one(AgentSettings.name == agent_name, AgentSettings.status == "active")
+    agent_setting = await AgentSettings.find_one(
+        AgentSettings.name == agent_name, 
+        AgentSettings.status == "active"
+    )
     if not agent_setting:
         raise ValueError(f"'{agent_name}' 에이전트를 DB에서 찾을 수 없습니다.")
 
@@ -127,11 +130,12 @@ async def _generate_final_html(structured_data: Dict, transcript_str: str, discu
     logger.info(f"--- [Report-Step2] Running Infographic Report Agent for {discussion_id} ---")
     
     report_agent_setting = await AgentSettings.find_one(
-        AgentSettings.name == "Infographic Report Agent", status="active"
+        AgentSettings.name == "Infographic Report Agent", 
+        AgentSettings.status == "active"
     )
     if not report_agent_setting: raise ValueError("Infographic Report Agent not found.")
 
-    # [핵심] 실제 데이터를 포함하여 최종 프롬프트 동적 조립
+    # 실제 데이터를 포함하여 최종 프롬프트 동적 조립
     final_prompt = f"""
         {report_agent_setting.config.prompt}
 
