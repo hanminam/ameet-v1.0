@@ -1,16 +1,16 @@
 [
     {
         "id": 1,
-        "name": "관리자",
+        "name": "Admin User",
         "email": "admin@example.com",
-        "hashed_password": "$scrypt$ln=16,r=8,p=1$M6b0ntP6X8t5rxViLKWUUg$sVU5XTZ9ix0Cz+aBjnfGVc7hd2pt0+EYAQknpgt32E8",
-        "role": "admin"
+        "role": "admin",
+        "hashed_password": "$scrypt$ln=16,r=8,p=1$z5kzZiylVGrtXWtNSYmx1g$5Qg5qQa5acdV4h81UoiucEN/RVwunKyhJRpcuKnLjVk"
     },
     {
         "id": 2,
-        "name": "리바랩스 테스터",
+        "name": "Normal User",
         "email": "user@example.com",
-        "hashed_password": "$scrypt$ln=16,r=8,p=1$v5cSQoiRcg5hzHnPmZMSog$6LAZfyTHiqViIHcOoBaLLjdhi7LtS9IWkpRQ2oVuz5M",
-        "role": "user"
+        "role": "user",
+        "hashed_password": "$scrypt$ln=16,r=8,p=1$IyTE+B+D0JqTco4R4lxLqQ$SPNH7d17DigZ472pYSxtjDRzRMmSqaaij8gYAAAEYBo"
     }
 ]
