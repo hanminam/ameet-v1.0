@@ -820,7 +820,7 @@
          */
         async function pollDiscussionStatus(discussionId) {
             if (!isPollingActive) {
-                console.log("Polling was stopped externally.");
+                console.log("Polling stopped.");
                 return;
             }
 
@@ -831,11 +831,11 @@
                 });
                 if (response.ok) {
                     const discussionData = await response.json();
-                    
                     await updateTranscript(discussionData.transcript, discussionData.participants);
 
                     if (discussionData.status === 'waiting_for_vote') {
-                        isPollingActive = false;
+                        console.log('[Polling] Status is "waiting_for_vote". Stopping poll.');
+                        isPollingActive = false; 
                         renderUxPanels(discussionData); 
                         renderUserActionPanel(discussionData); 
                     } else if (discussionData.status === 'report_generating') {
@@ -844,17 +844,15 @@
                     } else if (discussionData.status === 'completed') {
                         console.log(`%c[Polling] Report generation is "completed". Stopping poll and displaying report.`, 'color: blue; font-weight: bold;');
                         isPollingActive = false;
-                        // 보고서 표시 함수 호출
-                        displayReport(discussionData.report_html, discussionData.pdf_url); 
+                        displayReport(discussionData.report_html, discussionData.pdf_url);
                     } else if (discussionData.status === 'failed') {
                         isPollingActive = false;
                         document.getElementById('user-action-panel').innerHTML = `
-                            <div class="text-center p-8 border rounded-lg bg-red-50 border-red-400">
-                                <h3 class="text-xl font-bold text-red-800">❌ 보고서 생성 실패</h3>
+                            <div class="text-center p-4 border rounded-lg bg-red-50 border-red-400">
+                                <h3 class="text-xl font-bold text-red-800">❌ 처리 실패</h3>
                                 <p class="text-slate-600 mt-2">오류가 발생했습니다. 관리자에게 문의하세요.</p>
-                            </div>
-                        `;
-                    } else {
+                            </div>`;
+                    } else { // 'turn_inprogress' 등
                         console.log(`[Polling] Status is "${discussionData.status}". Continuing poll in 3 seconds.`);
                         setTimeout(() => pollDiscussionStatus(discussionId), 3000);
                     }
@@ -875,33 +873,32 @@
             const actionPanel = document.getElementById('user-action-panel');
             if (!actionPanel) return;
 
-            // 보고서 보기 버튼 생성
             actionPanel.innerHTML = `
                 <div class="text-center p-4 border rounded-lg bg-green-50 border-green-500 animate-fade-in">
                     <button id="view-report-btn" class="btn btn-primary w-full">✅ 최종 분석 보고서 보기</button>
                 </div>
             `;
             
-            // 모달창 내용 채우기
             const iframe = document.getElementById('report-modal-iframe');
             const downloadBtn = document.getElementById('report-pdf-download-btn');
-            if(iframe) {
+            
+            if (iframe) {
                 iframe.sandbox = 'allow-scripts allow-same-origin';
                 iframe.srcdoc = reportHtml || '<p>보고서 내용이 없습니다.</p>';
             }
-            if(downloadBtn) {
+            if (downloadBtn) {
                 downloadBtn.href = pdfUrl || '#';
-                if(!pdfUrl) {
+                downloadBtn.disabled = !pdfUrl;
+                if (!pdfUrl) {
                     downloadBtn.classList.add('bg-slate-400', 'cursor-not-allowed');
-                    downloadBtn.disabled = true;
                 }
             }
             
-            // 버튼에 모달창 열기 이벤트 연결
             document.getElementById('view-report-btn').addEventListener('click', () => {
                 toggleModal('report-modal');
             });
         }
+
 
         /**
          * 모든 UX 패널의 렌더링을 관리하는 함수!
@@ -1182,7 +1179,6 @@
             console.log("토론 종료 및 보고서 생성 프로세스를 시작합니다.");
             isPollingActive = false; // 진행 중인 턴 폴링 즉시 중단
 
-            // 사용자 액션 패널을 '보고서 생성 중' UI로 즉시 교체
             const actionPanel = document.getElementById('user-action-panel');
             actionPanel.innerHTML = `
                 <div class="text-center p-4 border rounded-lg bg-slate-50 animate-fade-in">
@@ -1192,10 +1188,10 @@
                     </div>
                 </div>
             `;
-
+            
             if (!currentDiscussionId) {
                 alert("오류: 토론 ID가 없어 보고서를 생성할 수 없습니다.");
-                showScreen('screen-topic'); // 오류 발생 시 주제 입력 화면으로 복귀
+                showScreen('screen-topic');
                 return;
             }
 
@@ -1210,16 +1206,11 @@
                 if (response.status === 202) {
                     console.log("서버가 보고서 생성 요청을 성공적으로 접수했습니다.");
                     // 보고서 완성을 확인하기 위한 새로운 폴링 시작
-                    startPolling(currentDiscussionId); 
+                    startPolling(currentDiscussionId);
                 } else {
                     const errorData = await response.json();
                     alert("보고서 생성 시작에 실패했습니다: " + errorData.detail);
-                    document.getElementById('user-action-panel').innerHTML = `
-                        <div class="text-center p-8 border rounded-lg bg-red-50 border-red-400">
-                            <h3 class="text-xl font-bold text-red-800">❌ 보고서 생성 실패</h3>
-                            <p class="text-slate-600 mt-2">${errorData.detail}</p>
-                        </div>
-                    `;
+                    actionPanel.innerHTML = `<div class="text-center p-4 border rounded-lg bg-red-50 border-red-400">...</div>`;
                 }
             } catch (error) {
                 alert("서버 통신 중 오류가 발생했습니다.");

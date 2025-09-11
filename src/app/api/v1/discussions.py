@@ -167,7 +167,7 @@ async def get_discussion_detail(
         
     return discussion
 
-# 토론을 완료하고 세션 데이터를 정리하는 엔드포인트 추가
+# 토론 종료 및 보고서 생성 시작 ---
 @router.post(
     "/{discussion_id}/complete",
     status_code=status.HTTP_202_ACCEPTED,
@@ -183,18 +183,22 @@ async def complete_discussion_and_generate_report(
     1. 토론 상태를 'report_generating'으로 변경합니다.
     2. 실제 보고서 생성 및 PDF 저장은 백그라운드 작업으로 위임합니다.
     """
+    # 1. DB에서 해당 토론 기록을 찾습니다.
     discussion_log = await DiscussionLog.find_one(DiscussionLog.discussion_id == discussion_id)
     
+    # 2. 유효성 검사 (토론 존재 여부, 소유자 확인)
     if not discussion_log:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discussion not found.")
     if discussion_log.user_email != current_user.email:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized.")
 
+    # 3. 상태를 'report_generating'으로 변경하고 완료 시간 기록
     discussion_log.status = "report_generating"
     discussion_log.completed_at = datetime.utcnow()
     await discussion_log.save()
 
-    # [핵심 수정] 1-2단계에서 구현한 보고서 생성 함수를 백그라운드 작업으로 등록
+    # 4. 보고서 생성 파이프라인 함수를 백그라운드 작업으로 등록
     background_tasks.add_task(generate_report_background, discussion_id)
     
+    # 5. 클라이언트에게 작업이 접수되었음을 즉시 알림
     return {"message": "Discussion completed. Report generation has started in the background."}
