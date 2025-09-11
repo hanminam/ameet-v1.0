@@ -10,7 +10,6 @@ from app.schemas import user as user_schema
 from app import crud
 
 from app.core import security
-from app.db import get_db
 from app.models.user import User as UserModel # UserModel 별칭으로 명확하게 임포트
 
 router = APIRouter()

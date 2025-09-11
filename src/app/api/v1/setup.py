@@ -7,8 +7,6 @@ from typing import List
 from app.schemas import user as user_schema
 from app import crud
 
-from app.db import get_db
-
 router = APIRouter()
 
 @router.get("/initial-users", response_model=dict)
