@@ -29,7 +29,7 @@ users_to_create = [
 ]
 
 # users.json 파일이 생성될 최종 경로
-output_dir = Path(__file__).parent / "src" / "app"
+output_dir = Path(__file__).parent / "src" / "app" / "data"
 output_file = output_dir / "users.json"
 
 def create_users_file():
