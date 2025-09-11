@@ -169,31 +169,58 @@ async def generate_report_background(discussion_id: str):
         return
 
     try:
-        # 1단계: 데이터 구조화 및 '차트 요청서' 수신
+        # 1-3단계는 이전과 동일
         structured_data = await _get_structured_data_and_requests(discussion_log)
         chart_requests = structured_data.pop("chart_requests", [])
-        
-        # 2단계: 차트 데이터 생성 서브-파이프라인 실행
         charts_data = await _create_charts_data(chart_requests, discussion_id)
         structured_data['charts_data'] = charts_data
 
-        # 3단계: 최종 HTML 본문 생성 (발언 전문 제외)
-        # 발언 전문을 프롬프트에 넘기지 않음
+        # 4단계: 최종 HTML 본문 생성 (발언 전문 제외)
         report_body_html = await _generate_final_html(structured_data, "", discussion_id)
 
-        # 4단계: [핵심 수정] Python 코드로 발언 전문 섹션 직접 추가
-        transcript_html_str = "\n".join([
-            f'<div class="transcript-item"><h4 class="font-bold mt-4 mb-2">{turn["agent_name"]}</h4><p>{turn["message"].replace(chr(10), "<br>")}</p></div>'
-            for turn in discussion_log.transcript
-        ])
+        # 5단계: Python 코드로 발언 전문 섹션 직접 생성 및 필터링
         
+        # 필터링할 시스템 에이전트 목록
+        SYSTEM_AGENTS_TO_EXCLUDE = ["정보 검증부", "SNR 전문가", "구분선", "사회자"]
+        
+        # 필터링된 발언들로 채팅 UI 형태의 HTML 생성
+        transcript_html_items = []
+        for i, turn in enumerate(discussion_log.transcript):
+            agent_name = turn.get("agent_name")
+            if agent_name in SYSTEM_AGENTS_TO_EXCLUDE:
+                continue
+
+            # 짝수/홀수에 따라 좌/우 정렬 클래스 지정
+            alignment_class = "flex-row-reverse" if i % 2 != 0 else ""
+            bg_class = "bg-blue-100" if i % 2 != 0 else "bg-slate-100"
+            
+            # 발언 내용의 줄바꿈을 <br> 태그로 변환
+            message_html = turn.get("message", "").replace('\n', '<br>')
+
+            transcript_html_items.append(f"""
+            <div class="transcript-turn flex items-start gap-3 my-4 {alignment_class}">
+                <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">
+                    {turn.get("icon", "🤖")}
+                </div>
+                <div class="flex-1">
+                    <p class="text-sm font-bold text-slate-800">{agent_name}</p>
+                    <div class="mt-1 p-3 rounded-lg inline-block {bg_class}">
+                        {message_html}
+                    </div>
+                </div>
+            </div>
+            """)
+        
+        transcript_html_str = "\n".join(transcript_html_items)
+
+        # 발언 전문 섹션의 전체 HTML 구조
         full_transcript_section = f"""
-        <div class="report-section">
-            <h2 class="text-2xl font-bold text-slate-800 mb-4 mt-8 border-b-2 pb-2">V. 참여자 발언 전문</h2>
-            <div class="transcript-container bg-slate-50 p-4 rounded-lg text-sm leading-relaxed">
+        <section class="mb-12">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center border-b pb-4">V. 참여자 발언 전문</h2>
+            <div class="transcript-container space-y-4">
                 {transcript_html_str}
             </div>
-        </div>
+        </section>
         """
 
         # 생성된 HTML 본문의 </body> 태그 앞에 발언 전문 섹션을 삽입
@@ -202,10 +229,10 @@ async def generate_report_background(discussion_id: str):
         else:
             final_report_html = report_body_html + full_transcript_section
 
-        # 5단계: PDF 변환
+        # 6단계: PDF 변환
         pdf_bytes = weasyprint.HTML(string=final_report_html).write_pdf()
         
-        # 6단계: GCS 업로드
+        # 7단계: GCS 업로드
         storage_client = storage.Client()
         bucket = storage_client.bucket(settings.GCS_BUCKET_NAME)
         blob_name = f"reports/{discussion_id}.pdf"
@@ -214,7 +241,7 @@ async def generate_report_background(discussion_id: str):
         pdf_url = blob.public_url
         logger.info(f"--- [Report BG Task] PDF uploaded to {pdf_url} ---")
 
-        # 7단계: DB 업데이트
+        # 8단계: DB 업데이트
         discussion_log.report_html = final_report_html
         discussion_log.pdf_url = pdf_url
         discussion_log.status = "completed"
