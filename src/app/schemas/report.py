@@ -11,18 +11,29 @@ class ChartRequest(BaseModel):
     tool_args: Dict[str, str] = Field(description="도구 호출 시 전달할 인자 딕셔너리 (예: {'ticker': 'TSLA', 'start_date': '...'})")
 
 class ReportStructure(BaseModel):
-    """Report Component Planner가 생성할 보고서의 전체 구조 모델"""
-    title: str = Field(description="보고서의 메인 제목")
-    subtitle: str = Field(description="보고서의 부제")
-    expert_opinions: List[Dict[str, str]] = Field(description="전문가별 핵심 의견 요약 리스트")
-    key_factors: Dict[str, List[str]] = Field(description="긍정적/부정적 핵심 요인")
-    conclusion: str = Field(description="토론을 통해 도출된 최종 결론")
-    chart_requests: List[ChartRequest] = Field(description="보고서에 포함되어야 할 실행 가능한 차트 요청 목록")
+    """ Report Component Planner가 생성할 보고서의 유연한 구조 모델"""
+    
+    title: str = Field(description="보고서의 메인 제목") # 제목은 필수로 유지
+    
+    subtitle: Optional[str] = Field(default=None, description="보고서의 부제")
+    
+    expert_opinions: List[Dict[str, str]] = Field(
+        default_factory=list, description="전문가별 핵심 의견 요약 리스트"
+    )
+    
+    key_factors: Optional[Dict[str, List[str]]] = Field(
+        default_factory=dict, description="긍정적/부정적 핵심 요인"
+    )
+    
+    conclusion: Optional[str] = Field(default=None, description="토론을 통해 도출된 최종 결론")
+    
+    chart_requests: List[ChartRequest] = Field(
+        default_factory=list, description="보고서에 포함되어야 할 실행 가능한 차트 요청 목록"
+    )
 
     @field_validator('key_factors', 'expert_opinions', mode='before')
     @classmethod
     def parse_str_json(cls, v: Any) -> Any:
-        """LLM이 dict나 list를 string 형태로 반환했을 경우, 파싱하여 원래 타입으로 변환합니다."""
         if isinstance(v, str):
             try:
                 return json.loads(v)
