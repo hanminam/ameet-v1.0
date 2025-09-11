@@ -38,26 +38,29 @@ def perform_web_search_sync(query: str) -> list:
     except Exception as e:
         print(f"--- [Tool Error] 웹 검색 중 오류 발생: {e} ---")
         return []
-
+    
 @traceable
 async def perform_web_search_async(query: str) -> list:
-    """
-    Tavily API 래퍼를 사용하여 웹 검색을 수행하고,
-    URL과 content가 포함된 사전(dictionary)의 리스트를 반환합니다.
-    """
-    print(f"--- [Tool] 웹 검색 수행 (API Wrapper 사용): {query} ---")
+    """Tavily API 래퍼를 사용하여 웹 검색을 비동기적으로 수행합니다."""
+    print(f"--- [Tool] 웹 검색 수행 (Async): {query} ---")
     try:
-        # --- 래퍼의 results 메소드는 동기(sync) 방식이므로,
-        # 비동기 환경에서 안전하게 실행하기 위해 asyncio.to_thread를 사용합니다.
-        results = await asyncio.to_thread(
-            tavily_api_wrapper.results,
-            query=query,
-            max_results=5 
-        )
-        # 결과 형식: [{'url': '...', 'content': '...'}, ...]
-        return results
+        return await asyncio.to_thread(tavily_api_wrapper.results, query=query, max_results=5)
     except Exception as e:
         print(f"--- [Tool Error] 웹 검색 중 오류 발생: {e} ---")
+        return []
+
+@traceable
+def get_stock_price_sync(ticker: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+    """yfinance를 사용하여 특정 종목의 주가 데이터를 동기적으로 조회합니다."""
+    print(f"--- [Tool] 주가 데이터 조회 (Sync): {ticker} from {start_date} to {end_date} ---")
+    try:
+        stock = yf.Ticker(ticker)
+        history = stock.history(start=start_date, end=end_date)
+        history.reset_index(inplace=True)
+        history['Date'] = history['Date'].dt.strftime('%Y-%m-%d')
+        return history.to_dict('records')
+    except Exception as e:
+        print(f"--- [Tool Error] 주가 데이터 조회 중 오류 발생: {e} ---")
         return []
     
 @traceable
@@ -89,7 +92,8 @@ def get_economic_data_sync(series_id: str) -> List[Dict[str, Any]]:
         df = data.reset_index()
         df.columns = ['Date', 'Value']
         df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
-        return df.to_dict('records')
+        # FRED 데이터는 너무 길 수 있으므로 최근 5년치(60개월) 데이터만 반환
+        return df.tail(60).to_dict('records')
     except Exception as e:
         print(f"--- [Tool Error] 경제 데이터 조회 중 오류 발생: {e} ---")
         return []
@@ -102,9 +106,9 @@ async def get_economic_data_async(series_id: str) -> List[Dict[str, Any]]:
 # perform_web_search 함수를 LangChain Tool로 포장합니다.
 web_search_tool = Tool(
     name="web_search",
-    description="최신 뉴스, 주가, 시장 동향, 특정 주제에 대한 최신 정보 등 실시간 정보가 필요할 때 사용하는 웹 검색 도구입니다. 정확한 검색을 위해 구체적인 키워드를 사용하세요.",
-    func=perform_web_search_sync,      # ◀ 동기 실행용 함수를 새로 만든 함수로 변경
-    coroutine=perform_web_search_async  # ◀ 비동기 실행용 함수
+    description="최신 뉴스, 시장 동향, 특정 주제에 대한 최신 정보 등 실시간 정보가 필요할 때 사용하는 웹 검색 도구입니다.",
+    func=perform_web_search_sync,
+    coroutine=perform_web_search_async
 )
 
 stock_price_tool = Tool(
