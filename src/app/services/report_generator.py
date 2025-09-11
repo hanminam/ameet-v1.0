@@ -95,6 +95,11 @@ async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id:
                 "Financial Data Ticker/ID Resolver", resolver_prompt, resolver_input, output_schema=ResolverOutput
             )
 
+            # --- resolver_result가 None인지 확인 ---
+            if not resolver_result:
+                logger.warning(f"--- [Chart-Step1 FAILED] Ticker/ID Resolver could not find a valid ID for '{request.required_data_description}'. Skipping chart. ---")
+                continue # 현재 차트 생성을 건너뛰고 다음 요청으로 넘어감
+
             # 2. 데이터 조회
             logger.info(f"--- [Chart-Step2] Fetching data for ID: {resolver_result.id} ---")
             raw_data = None
