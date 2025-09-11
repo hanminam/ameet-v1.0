@@ -10,6 +10,7 @@ from langchain_core.tools import Tool
 from langsmith import traceable
 import yfinance as yf
 from fredapi import Fred
+import pandas as pd
 
 # Tavily API 키가 설정되어 있는지 확인
 if not settings.TAVILY_API_KEY:
@@ -71,12 +72,16 @@ def get_stock_price_sync(ticker: str, start_date: str, end_date: str) -> List[Di
     logger.info(f"--- [Tool] 주가 데이터 조회 (Sync): {ticker} from {start_date} to {end_date} ---")
     try:
         stock = yf.Ticker(ticker)
-        
         history = stock.history(start=start_date, end=end_date, repair=True)
         
         history.reset_index(inplace=True)
+        
+        # 'Date' 열이 확실하게 datetime 형식이 되도록 명시적으로 변환합니다.
+        history['Date'] = pd.to_datetime(history['Date']).dt.tz_localize(None)
+        
+        # 이제 .dt 접근자를 안전하게 사용할 수 있습니다.
         history['Date'] = history['Date'].dt.strftime('%Y-%m-%d')
-        # 데이터가 비어있지 않은 경우에만 반환
+        
         if not history.empty:
             return history.to_dict('records')
         else:
