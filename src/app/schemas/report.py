@@ -12,7 +12,6 @@ class ChartRequest(BaseModel):
 
 class ReportStructure(BaseModel):
     """ Report Component Planner가 생성할 보고서의 유연한 구조 모델"""
-    
     title: str = Field(description="보고서의 메인 제목") # 제목은 필수로 유지
     
     subtitle: Optional[str] = Field(default=None, description="보고서의 부제")
