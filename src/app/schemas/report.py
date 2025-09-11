@@ -5,10 +5,10 @@ from typing import List, Dict, Literal, Any, Optional
 import json
 
 class ChartRequest(BaseModel):
-    """보고서에 포함될 차트 생성을 위한 요청 모델"""
-    chart_title: str = Field(description="차트의 제목 (예: '테슬라 최근 6개월 주가 추이')")
-    required_data_description: str = Field(description="차트 생성에 필요한 데이터에 대한 자연어 설명")
-    suggested_chart_type: str = Field(description="추천하는 차트 종류 (예: 'line_chart')")
+    """'Report Component Planner'가 생성하는 개별 차트 실행 계획"""
+    chart_title: str = Field(description="보고서에 표시될 차트의 최종 제목")
+    tool_name: Literal["get_stock_price", "get_economic_data"] = Field(description="차트 데이터 조회에 사용할 도구의 이름")
+    tool_args: Dict[str, str] = Field(description="도구 호출 시 전달할 인자 딕셔너리 (예: {'ticker': 'TSLA', 'start_date': '...'})")
 
 class ReportStructure(BaseModel):
     """Report Component Planner가 생성할 보고서의 전체 구조 모델"""
@@ -17,7 +17,7 @@ class ReportStructure(BaseModel):
     expert_opinions: List[Dict[str, str]] = Field(description="전문가별 핵심 의견 요약 리스트")
     key_factors: Dict[str, List[str]] = Field(description="긍정적/부정적 핵심 요인")
     conclusion: str = Field(description="토론을 통해 도출된 최종 결론")
-    chart_requests: List[ChartRequest] = Field(description="보고서에 포함되어야 할 차트 요청 목록")
+    chart_requests: List[ChartRequest] = Field(description="보고서에 포함되어야 할 실행 가능한 차트 요청 목록")
 
     @field_validator('key_factors', 'expert_opinions', mode='before')
     @classmethod
@@ -27,7 +27,6 @@ class ReportStructure(BaseModel):
             try:
                 return json.loads(v)
             except json.JSONDecodeError:
-                # 파싱에 실패하면 원래 유효성 검사 로직이 처리하도록 그대로 둡니다.
                 pass
         return v
 

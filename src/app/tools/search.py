@@ -135,14 +135,14 @@ web_search_tool = Tool(
 
 stock_price_tool = Tool(
     name="get_stock_price",
-    description="특정 종목의 과거 주가 데이터를 조회할 때 사용합니다. 'ticker', 'start_date', 'end_date'를 인자로 받습니다. (예: 'TSLA', '2023-01-01', '2023-12-31')",
+    description="주식 티커(ticker)와 기간(start_date, end_date)을 사용하여 특정 종목의 과거 주가 데이터를 조회할 때 사용합니다. (예: 'TSLA', '2023-01-01', '2023-12-31')",
     func=get_stock_price_sync,
     coroutine=get_stock_price_async
 )
 
 economic_data_tool = Tool(
     name="get_economic_data",
-    description="미국의 주요 경제 지표(예: 소비자물가지수(CPI), 실업률, GDP)를 조회할 때 사용합니다. FRED 시리즈 ID를 인자로 받습니다. (예: 'CPIAUCSL')",
+    description="미국의 주요 거시 경제 지표(예: 소비자물가지수, 실업률, GDP, 기준금리)를 조회할 때 사용합니다. FRED 데이터베이스의 시리즈 ID를 인자로 받습니다. (예: 'CPIAUCSL', 'UNRATE', 'FEDFUNDS')",
     func=get_economic_data_sync,
     coroutine=get_economic_data_async
 )

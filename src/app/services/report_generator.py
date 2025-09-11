@@ -17,25 +17,20 @@ from app.schemas.report import ReportStructure, ChartRequest, ResolverOutput, Ch
 
 # --- 데이터 사전 처리 헬퍼 함수 ---
 def _preprocess_data_for_synthesizer(raw_data: List[Dict], data_type: str) -> List[Dict]:
-    """
-    Chart Data Synthesizer에 보내기 전에 원본 데이터를 최소한의 형태로 가공합니다.
-    """
+    """Chart Data Synthesizer에 보내기 전에 원본 데이터를 최소한의 형태로 가공합니다."""
     if not raw_data:
         return []
 
     processed_data = []
     if data_type == 'stock':
-        # 주식 데이터는 'Date'와 'Close'만 추출
         for d in raw_data:
             if 'Date' in d and 'Close' in d:
                 processed_data.append({"Date": d['Date'], "Close": d['Close']})
     elif data_type == 'economic':
-        # 경제 데이터는 'Date'와 'Value'만 추출
         for d in raw_data:
             if 'Date' in d and 'Value' in d:
                 processed_data.append({"Date": d['Date'], "Value": d['Value']})
     
-    # 데이터가 너무 많을 경우, 최신 365개로 제한하여 안정성 확보
     return processed_data[-365:]
 
 # --- AI 에이전트 호출을 위한 보조 함수 ---
@@ -80,55 +75,42 @@ async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructu
     return report_plan
 
 async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id: str) -> List[Dict]:
-    """ 데이터 사전 처리 로직이 추가된 차트 생성 함수"""
+    """ Planner가 생성한 계획에 따라 도구를 직접 실행하여 차트 데이터를 생성합니다."""
     charts_data = []
     if not chart_requests:
         return charts_data
         
     for request in chart_requests:
         try:
-            # 1. Ticker/ID 해석
-            logger.info(f"--- [Chart-Step1] Ticker/ID resolving for: {request.required_data_description} ---")
-            resolver_prompt = "Find the ticker/ID for: {description}"
-            resolver_input = {"description": request.required_data_description}
-            resolver_result = await _run_llm_agent(
-                "Financial Data Ticker/ID Resolver", resolver_prompt, resolver_input, output_schema=ResolverOutput
-            )
-
-            # --- resolver_result가 None인지 확인 ---
-            if not resolver_result:
-                logger.warning(f"--- [Chart-Step1 FAILED] Ticker/ID Resolver could not find a valid ID for '{request.required_data_description}'. Skipping chart. ---")
-                continue # 현재 차트 생성을 건너뛰고 다음 요청으로 넘어감
-
-            # 2. 데이터 조회
-            logger.info(f"--- [Chart-Step2] Fetching data for ID: {resolver_result.id} ---")
+            tool_name = request.tool_name
+            tool_args = request.tool_args
+            
+            logger.info(f"--- [Chart-Step2] Executing tool '{tool_name}' with args: {tool_args} ---")
             raw_data = None
-            end_date = datetime.now()
-            
-            if resolver_result.type == 'stock':
-                # 사용자의 요청을 존중하여 1년치 데이터 조회
-                start_date = end_date - timedelta(days=365)
-                raw_data = await get_stock_price_async(resolver_result.id, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
-            elif resolver_result.type == 'economic':
-                start_date = end_date - timedelta(days=365 * 2)
-                raw_data = await get_economic_data_async(resolver_result.id, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
-            
+
+            # 1. 계획에 명시된 도구를 인자와 함께 직접 실행
+            if tool_name == 'get_stock_price':
+                raw_data = await get_stock_price_async(**tool_args)
+            elif tool_name == 'get_economic_data':
+                raw_data = await get_economic_data_async(**tool_args)
+
+            # 2. 데이터 조회 결과 검증
             if not raw_data:
-                logger.warning(f"--- [Chart-Step2 FAILED] No data returned for ID: {resolver_result.id}. Skipping chart generation. ---")
+                logger.warning(f"--- [Chart-Step2 FAILED] No data returned for tool '{tool_name}' with args {tool_args}. Skipping chart. ---")
                 continue
 
-            # --- 데이터 사전 처리 단계 추가 ▼▼▼ ---
+            # 3. 데이터 사전 처리 (Pre-processing)
+            data_type = 'stock' if tool_name == 'get_stock_price' else 'economic'
             logger.info(f"--- [Chart-Step2.5] Pre-processing {len(raw_data)} data points before sending to LLM. ---")
-            preprocessed_data = _preprocess_data_for_synthesizer(raw_data, resolver_result.type)
+            preprocessed_data = _preprocess_data_for_synthesizer(raw_data, data_type)
             
             if not preprocessed_data:
                 logger.warning(f"--- [Chart-Step2.5 FAILED] Pre-processing resulted in empty data. Skipping. ---")
                 continue
 
-            # 3. Chart.js 데이터 합성 (가공된 데이터를 전달)
+            # 4. Chart.js 데이터 합성
             logger.info(f"--- [Chart-Step3] Synthesizing Chart.js data ---")
             synthesizer_prompt = "Chart Request: {request}\n\nRaw Data: {raw_data}"
-            # [수정] 원본 데이터 대신 가공된 preprocessed_data를 전달
             synthesizer_input = {"request": request.model_dump_json(), "raw_data": json.dumps(preprocessed_data, default=str)}
             chart_js_obj = await _run_llm_agent(
                 "Chart Data Synthesizer", synthesizer_prompt, synthesizer_input, output_schema=ChartJsData
@@ -140,7 +122,7 @@ async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id:
                     "chart_js_data": chart_js_obj.model_dump(exclude_none=True)
                 })
         except Exception as e:
-            logger.error(f"Chart generation failed for request {request.chart_title}: {e}", exc_info=True)
+            logger.error(f"Chart generation failed for request '{request.chart_title}': {e}", exc_info=True)
             
     return charts_data
 
