@@ -53,12 +53,23 @@ class ChartJsData(BaseModel):
 
 # OutlineGenerator의 출력을 받을 Pydantic 모델
 class ReportOutline(BaseModel):
-    title: str
+    title: Optional[str] = None # title 마저 Optional로 변경
     subtitle: Optional[str] = None
     expert_opinions: List[Dict[str, str]] = Field(default_factory=list)
     key_factors: Optional[Dict[str, List[str]]] = Field(default_factory=dict)
     conclusion: Optional[str] = None
     chart_ideas: List[str] = Field(default_factory=list)
+
+    # 문자열로 반환된 JSON 필드를 자동으로 파싱하는 검증기 추가
+    @field_validator('key_factors', 'expert_opinions', mode='before')
+    @classmethod
+    def parse_str_json(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                pass
+        return v
 
 # ChartPlanValidator의 출력을 받을 Pydantic 모델
 class ValidatedChartPlan(BaseModel):

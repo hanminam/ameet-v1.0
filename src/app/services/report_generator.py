@@ -62,7 +62,7 @@ async def _run_llm_agent(agent_name: str, prompt_text: str, input_data: Dict, ou
 # --- 보고서 생성 파이프라인의 각 단계 ---
 
 async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructure:
-    """ 2단계 AI 호출로 보고서 구조와 실행 가능한 차트 계획을 수립합니다."""
+    """ AI 실패에 대비한 안전장치를 추가하여 안정성을 극대화합니다."""
     logger.info(f"--- [Report-Step1.1] Running Report Outline Generator for {discussion_log.discussion_id} ---")
     
     transcript_str = "\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript])
@@ -72,15 +72,24 @@ async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructu
     # 1. 창의적인 개요와 차트 '아이디어' 생성
     outline_plan = await _run_llm_agent("Report Outline Generator", prompt1, input_data1, output_schema=ReportOutline)
 
-    if not outline_plan or not outline_plan.chart_ideas:
-        logger.warning("--- [Report-Step1.1 FAILED] Outline Generator did not produce chart ideas. ---")
+    if not outline_plan:
+        logger.error("!!! [Report-Step1.1 FAILED] Report Outline Generator returned None. Creating a minimal fallback report. ---")
+        # AI가 완전히 실패하면, 제목만 있는 최소한의 보고서 구조를 생성
+        return ReportStructure(title=f"{discussion_log.topic} - 분석 보고서")
+
+    # AI가 제목을 생성하지 못한 경우, 토론 주제를 기반으로 기본 제목을 생성
+    if not outline_plan.title:
+        outline_plan.title = f"{discussion_log.topic} - 최종 분석 보고서"
+        logger.warning(f"--- [Report-Step1.1] Outline Generator failed to provide a title. Using default: '{outline_plan.title}' ---")
+    
+    if not outline_plan.chart_ideas:
+        logger.warning("--- [Report-Step1.1] Outline Generator did not produce chart ideas. Proceeding without charts. ---")
         # 차트 아이디어가 없어도 보고서의 다른 부분은 유효하므로 그대로 사용
         return ReportStructure(**outline_plan.model_dump())
 
     logger.info(f"--- [Report-Step1.2] Running Chart Plan Validator for {len(outline_plan.chart_ideas)} ideas ---")
     
     # 2. 아이디어를 바탕으로 '실행 가능한' 차트 계획만 필터링/생성
-    # 오늘 날짜를 프롬프트에 직접 전달하여 동적으로 날짜 계산
     current_date_str = datetime.now().strftime('%Y-%m-%d')
     prompt2 = "Current Date: {current_date}\n\nChart Ideas:\n{chart_ideas}"
     input_data2 = {
