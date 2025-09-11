@@ -50,3 +50,16 @@ class ChartJsData(BaseModel):
     labels: Optional[List[str]] = None
     datasets: Optional[List[Dict[str, Any]]] = None
     error: Optional[str] = None
+
+# OutlineGenerator의 출력을 받을 Pydantic 모델
+class ReportOutline(BaseModel):
+    title: str
+    subtitle: Optional[str] = None
+    expert_opinions: List[Dict[str, str]] = Field(default_factory=list)
+    key_factors: Optional[Dict[str, List[str]]] = Field(default_factory=dict)
+    conclusion: Optional[str] = None
+    chart_ideas: List[str] = Field(default_factory=list)
+
+# ChartPlanValidator의 출력을 받을 Pydantic 모델
+class ValidatedChartPlan(BaseModel):
+    chart_requests: List[ChartRequest] = Field(default_factory=list)

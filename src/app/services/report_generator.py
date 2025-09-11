@@ -13,7 +13,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 import weasyprint
 from google.cloud import storage
-from app.schemas.report import ReportStructure, ChartRequest, ResolverOutput, ChartJsData
+from app.schemas.report import ReportStructure, ChartRequest, ResolverOutput, ChartJsData, ReportOutline, ValidatedChartPlan
 
 # --- 데이터 사전 처리 헬퍼 함수 ---
 def _preprocess_data_for_synthesizer(raw_data: List[Dict], data_type: str) -> List[Dict]:
@@ -62,17 +62,45 @@ async def _run_llm_agent(agent_name: str, prompt_text: str, input_data: Dict, ou
 # --- 보고서 생성 파이프라인의 각 단계 ---
 
 async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructure:
-    """[신규] Report Component Planner를 호출하여 보고서의 전체 구조와 차트 요청서를 기획합니다."""
-    logger.info(f"--- [Report-Step1] Running Report Component Planner for {discussion_log.discussion_id} ---")
+    """ 2단계 AI 호출로 보고서 구조와 실행 가능한 차트 계획을 수립합니다."""
+    logger.info(f"--- [Report-Step1.1] Running Report Outline Generator for {discussion_log.discussion_id} ---")
     
     transcript_str = "\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript])
+    prompt1 = "Topic: {topic}\n\nFull Transcript:\n{transcript}"
+    input_data1 = {"topic": discussion_log.topic, "transcript": transcript_str}
     
-    prompt = "Topic: {topic}\n\nFull Transcript:\n{transcript}"
-    input_data = {"topic": discussion_log.topic, "transcript": transcript_str}
+    # 1. 창의적인 개요와 차트 '아이디어' 생성
+    outline_plan = await _run_llm_agent("Report Outline Generator", prompt1, input_data1, output_schema=ReportOutline)
+
+    if not outline_plan or not outline_plan.chart_ideas:
+        logger.warning("--- [Report-Step1.1 FAILED] Outline Generator did not produce chart ideas. ---")
+        # 차트 아이디어가 없어도 보고서의 다른 부분은 유효하므로 그대로 사용
+        return ReportStructure(**outline_plan.model_dump())
+
+    logger.info(f"--- [Report-Step1.2] Running Chart Plan Validator for {len(outline_plan.chart_ideas)} ideas ---")
     
-    # `ReportStructure` Pydantic 모델을 기준으로 구조화된 출력을 요청
-    report_plan = await _run_llm_agent("Report Component Planner", prompt, input_data, output_schema=ReportStructure)
-    return report_plan
+    # 2. 아이디어를 바탕으로 '실행 가능한' 차트 계획만 필터링/생성
+    # 오늘 날짜를 프롬프트에 직접 전달하여 동적으로 날짜 계산
+    current_date_str = datetime.now().strftime('%Y-%m-%d')
+    prompt2 = "Current Date: {current_date}\n\nChart Ideas:\n{chart_ideas}"
+    input_data2 = {
+        "current_date": current_date_str,
+        "chart_ideas": json.dumps(outline_plan.chart_ideas, ensure_ascii=False)
+    }
+    
+    validated_plan = await _run_llm_agent("Chart Plan Validator", prompt2, input_data2, output_schema=ValidatedChartPlan)
+
+    # 3. 두 결과를 조합하여 최종 ReportStructure 객체 생성
+    final_report_structure = ReportStructure(
+        title=outline_plan.title,
+        subtitle=outline_plan.subtitle,
+        expert_opinions=outline_plan.expert_opinions,
+        key_factors=outline_plan.key_factors,
+        conclusion=outline_plan.conclusion,
+        chart_requests=validated_plan.chart_requests if validated_plan else []
+    )
+    
+    return final_report_structure
 
 async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id: str) -> List[Dict]:
     """ Planner가 생성한 계획에 따라 도구를 직접 실행하여 차트 데이터를 생성합니다."""
