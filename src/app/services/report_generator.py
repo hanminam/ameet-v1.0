@@ -51,41 +51,34 @@ async def _create_charts_data(chart_requests: List[Dict], discussion_id: str) ->
     charts_data = []
     for request in chart_requests:
         try:
+            # 1. Ticker/ID Resolver 호출하여 식별자 획득 (실제 LLM 호출로 변경)
             logger.info(f"--- [Chart-Step1] Ticker/ID resolving for: {request['required_data_description']} ---")
-            # 1. Ticker/ID Resolver 호출하여 식별자 획득
             resolver_prompt = "Find the ticker/ID for the following data description: {description}"
             resolver_input = {"description": request['required_data_description']}
-            # 실제 구현에서는 _run_llm_agent를 사용해야 하나, 여기서는 안정적인 테스트를 위해 모의 결과 사용
-            # resolver_result = await _run_llm_agent("Financial Data Ticker/ID Resolver", resolver_prompt, resolver_input)
-            # 임시 모의 결과:
-            if "테슬라" in request['required_data_description']:
-                 resolver_result = {"type": "stock", "id": "TSLA"}
-            else:
-                 resolver_result = {"type": "economic", "id": "UNRATE"} # 예시: 미국 실업률
+            resolver_result = await _run_llm_agent("Financial Data Ticker/ID Resolver", resolver_prompt, resolver_input)
+            
+            # 응답이 문자열일 경우 JSON으로 파싱
+            if isinstance(resolver_result, str):
+                resolver_result = json.loads(resolver_result)
 
             # 2. 식별자로 적합한 도구를 사용하여 실제 데이터 조회
-            logger.info(f"--- [Chart-Step2] Fetching data for ID: {resolver_result['id']} ---")
+            logger.info(f"--- [Chart-Step2] Fetching data for ID: {resolver_result.get('id')} ---")
             raw_data = None
-            if resolver_result['type'] == 'stock':
+            if resolver_result.get('type') == 'stock':
                 end_date = datetime.now()
                 start_date = end_date - timedelta(days=180)
                 raw_data = await get_stock_price_async(resolver_result['id'], start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
-            elif resolver_result['type'] == 'economic':
+            elif resolver_result.get('type') == 'economic':
                 raw_data = await get_economic_data_async(resolver_result['id'])
             
             if not raw_data: continue
 
-            # 3. Chart Data Synthesizer를 호출하여 Chart.js용 JSON 생성
+            # 3. Chart Data Synthesizer를 호출하여 Chart.js용 JSON 생성 (실제 LLM 호출로 변경)
             logger.info(f"--- [Chart-Step3] Synthesizing Chart.js data ---")
             synthesizer_prompt = "Chart Request: {request}\n\nRaw Data: {raw_data}"
             synthesizer_input = {"request": json.dumps(request), "raw_data": json.dumps(raw_data)}
-            # 실제 구현에서는 _run_llm_agent를 사용
-            # chart_js_json = await _run_llm_agent("Chart Data Synthesizer", synthesizer_prompt, synthesizer_input)
-            # 임시 모의 결과:
-            chart_js_json = {
-                "labels": [item['Date'] for item in raw_data],
-                "datasets": [{"label": request['chart_title'], "data": [item.get('Close', item.get('Value')) for item in raw_data]}]
-            }
+            chart_js_str = await _run_llm_agent("Chart Data Synthesizer", synthesizer_prompt, synthesizer_input)
+            chart_js_json = json.loads(chart_js_str) # LLM 응답을 JSON으로 파싱
 
             if "error" not in chart_js_json:
                 charts_data.append({
@@ -184,14 +177,35 @@ async def generate_report_background(discussion_id: str):
         charts_data = await _create_charts_data(chart_requests, discussion_id)
         structured_data['charts_data'] = charts_data
 
-        # 3단계: 최종 HTML 생성
-        transcript_str = "\n\n".join([f"### {t['agent_name']}\n{t['message']}" for t in discussion_log.transcript])
-        report_html = await _generate_final_html(structured_data, transcript_str, discussion_id)
+        # 3단계: 최종 HTML 본문 생성 (발언 전문 제외)
+        # 발언 전문을 프롬프트에 넘기지 않음
+        report_body_html = await _generate_final_html(structured_data, "", discussion_id)
+
+        # 4단계: [핵심 수정] Python 코드로 발언 전문 섹션 직접 추가
+        transcript_html_str = "\n".join([
+            f'<div class="transcript-item"><h4 class="font-bold mt-4 mb-2">{turn["agent_name"]}</h4><p>{turn["message"].replace(chr(10), "<br>")}</p></div>'
+            for turn in discussion_log.transcript
+        ])
         
-        # 4단계: PDF 변환
-        pdf_bytes = weasyprint.HTML(string=report_html).write_pdf()
+        full_transcript_section = f"""
+        <div class="report-section">
+            <h2 class="text-2xl font-bold text-slate-800 mb-4 mt-8 border-b-2 pb-2">V. 참여자 발언 전문</h2>
+            <div class="transcript-container bg-slate-50 p-4 rounded-lg text-sm leading-relaxed">
+                {transcript_html_str}
+            </div>
+        </div>
+        """
+
+        # 생성된 HTML 본문의 </body> 태그 앞에 발언 전문 섹션을 삽입
+        if "</body>" in report_body_html:
+            final_report_html = report_body_html.replace("</body>", f"{full_transcript_section}</body>")
+        else:
+            final_report_html = report_body_html + full_transcript_section
+
+        # 5단계: PDF 변환
+        pdf_bytes = weasyprint.HTML(string=final_report_html).write_pdf()
         
-        # 5단계: GCS 업로드
+        # 6단계: GCS 업로드
         storage_client = storage.Client()
         bucket = storage_client.bucket(settings.GCS_BUCKET_NAME)
         blob_name = f"reports/{discussion_id}.pdf"
@@ -200,8 +214,8 @@ async def generate_report_background(discussion_id: str):
         pdf_url = blob.public_url
         logger.info(f"--- [Report BG Task] PDF uploaded to {pdf_url} ---")
 
-        # 6단계: DB 업데이트
-        discussion_log.report_html = report_html
+        # 7단계: DB 업데이트
+        discussion_log.report_html = final_report_html
         discussion_log.pdf_url = pdf_url
         discussion_log.status = "completed"
         await discussion_log.save()
