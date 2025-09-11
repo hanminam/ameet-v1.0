@@ -15,6 +15,29 @@ import weasyprint
 from google.cloud import storage
 from app.schemas.report import ReportStructure, ChartRequest, ResolverOutput, ChartJsData
 
+# --- 데이터 사전 처리 헬퍼 함수 ---
+def _preprocess_data_for_synthesizer(raw_data: List[Dict], data_type: str) -> List[Dict]:
+    """
+    Chart Data Synthesizer에 보내기 전에 원본 데이터를 최소한의 형태로 가공합니다.
+    """
+    if not raw_data:
+        return []
+
+    processed_data = []
+    if data_type == 'stock':
+        # 주식 데이터는 'Date'와 'Close'만 추출
+        for d in raw_data:
+            if 'Date' in d and 'Close' in d:
+                processed_data.append({"Date": d['Date'], "Close": d['Close']})
+    elif data_type == 'economic':
+        # 경제 데이터는 'Date'와 'Value'만 추출
+        for d in raw_data:
+            if 'Date' in d and 'Value' in d:
+                processed_data.append({"Date": d['Date'], "Value": d['Value']})
+    
+    # 데이터가 너무 많을 경우, 최신 365개로 제한하여 안정성 확보
+    return processed_data[-365:]
+
 # --- AI 에이전트 호출을 위한 보조 함수 ---
 
 async def _run_llm_agent(agent_name: str, prompt_text: str, input_data: Dict, output_schema=None) -> Any:
@@ -57,7 +80,7 @@ async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructu
     return report_plan
 
 async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id: str) -> List[Dict]:
-    """[수정] 데이터 조회 후 결과 검증 및 정확한 날짜 범위 전달 로직 추가"""
+    """ 데이터 사전 처리 로직이 추가된 차트 생성 함수"""
     charts_data = []
     if not chart_requests:
         return charts_data
@@ -78,22 +101,30 @@ async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id:
             end_date = datetime.now()
             
             if resolver_result.type == 'stock':
-                # 주가 데이터는 보통 최근 6개월을 조회
-                start_date = end_date - timedelta(days=180)
+                # 사용자의 요청을 존중하여 1년치 데이터 조회
+                start_date = end_date - timedelta(days=365)
                 raw_data = await get_stock_price_async(resolver_result.id, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
             elif resolver_result.type == 'economic':
-                # 경제 지표는 보통 최근 2-3년 추이를 확인
                 start_date = end_date - timedelta(days=365 * 2)
                 raw_data = await get_economic_data_async(resolver_result.id, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
             
             if not raw_data:
                 logger.warning(f"--- [Chart-Step2 FAILED] No data returned for ID: {resolver_result.id}. Skipping chart generation. ---")
-                continue # 데이터가 없으면 Synthesizer를 호출하지 않고 다음 요청으로 넘어감
+                continue
 
-            # 3. Chart.js 데이터 합성
+            # --- 데이터 사전 처리 단계 추가 ▼▼▼ ---
+            logger.info(f"--- [Chart-Step2.5] Pre-processing {len(raw_data)} data points before sending to LLM. ---")
+            preprocessed_data = _preprocess_data_for_synthesizer(raw_data, resolver_result.type)
+            
+            if not preprocessed_data:
+                logger.warning(f"--- [Chart-Step2.5 FAILED] Pre-processing resulted in empty data. Skipping. ---")
+                continue
+
+            # 3. Chart.js 데이터 합성 (가공된 데이터를 전달)
             logger.info(f"--- [Chart-Step3] Synthesizing Chart.js data ---")
             synthesizer_prompt = "Chart Request: {request}\n\nRaw Data: {raw_data}"
-            synthesizer_input = {"request": request.model_dump_json(), "raw_data": json.dumps(raw_data, default=str)}
+            # [수정] 원본 데이터 대신 가공된 preprocessed_data를 전달
+            synthesizer_input = {"request": request.model_dump_json(), "raw_data": json.dumps(preprocessed_data, default=str)}
             chart_js_obj = await _run_llm_agent(
                 "Chart Data Synthesizer", synthesizer_prompt, synthesizer_input, output_schema=ChartJsData
             )
@@ -109,7 +140,7 @@ async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id:
     return charts_data
 
 async def _generate_final_html(structured_data: Dict, discussion_id: str) -> str:
-    """[개선] Infographic Report Agent를 호출하여 최종 정적 HTML을 생성합니다."""
+    """ Infographic Report Agent를 호출하여 최종 정적 HTML을 생성합니다."""
     logger.info(f"--- [Report-Step3] Running Infographic Report Agent for {discussion_id} ---")
 
     # 프롬프트에 구조화된 데이터를 JSON 형태로 주입
