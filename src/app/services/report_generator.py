@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 import re
 
@@ -14,6 +14,16 @@ from langchain_core.prompts import ChatPromptTemplate
 import weasyprint
 from google.cloud import storage
 from app.schemas.report import ReportStructure, ChartRequest, ResolverOutput, ReportOutline, ValidatedChartPlan
+from pydantic import BaseModel
+
+class ChartRelevance(BaseModel):
+    is_chart_relevant: bool
+
+class ChartParameters(BaseModel):
+    chart_type: str
+    chart_title: str
+    start_date: str
+    end_date: str
 
 # --- 데이터 사전 처리 헬퍼 함수 ---
 def _preprocess_data_for_synthesizer(raw_data: List[Dict], data_type: str) -> List[Dict]:
@@ -32,6 +42,90 @@ def _preprocess_data_for_synthesizer(raw_data: List[Dict], data_type: str) -> Li
                 processed_data.append({"Date": d['Date'], "Value": d['Value']})
     
     return processed_data[-365:]
+
+async def _create_chart_requests_intelligently(discussion_log: DiscussionLog, outline: ReportOutline) -> List[ChartRequest]:
+    """
+    지능형 차트 생성 파이프라인
+    """
+    logger.info(f"--- [Report-Chart-Pipe] Starting intelligent chart pipeline for {discussion_log.discussion_id} ---")
+    
+    # 1단계: 차트 생성 필요성 판단
+    relevance_check = await _run_llm_agent(
+        "Chart Relevance Classifier",
+        "Topic: {topic}\n\nTranscript:\n{transcript}",
+        {"topic": discussion_log.topic, "transcript": "\n".join(t['message'] for t in discussion_log.transcript)},
+        output_schema=ChartRelevance
+    )
+    if not relevance_check or not relevance_check.is_chart_relevant:
+        logger.info("--- [Report-Chart-Pipe] Chart relevance check is FALSE. Skipping chart generation. ---")
+        return []
+
+    # 2단계: 차트화할 핵심 개체(Entity) 목록 사용 (ReportOutlineGenerator가 생성)
+    entities = outline.chart_worthy_entities
+    if not entities:
+        logger.info("--- [Report-Chart-Pipe] No chart-worthy entities found. Skipping. ---")
+        return []
+    
+    logger.info(f"--- [Report-Chart-Pipe] Found entities: {entities} ---")
+
+    # 3단계 & 4단계: 각 개체에 대해 ID 해석 및 파라미터 생성을 병렬 처리
+    tasks = []
+    for entity in entities:
+        tasks.append(_resolve_and_plan_chart(entity))
+        
+    chart_plans = await asyncio.gather(*tasks)
+    
+    # 최종적으로 유효한 ChartRequest만 필터링하여 반환
+    final_requests = [plan for plan in chart_plans if plan]
+    logger.info(f"--- [Report-Chart-Pipe] Pipeline finished. Generated {len(final_requests)} valid chart requests. ---")
+    return final_requests
+
+
+async def _resolve_and_plan_chart(entity: str) -> Optional[ChartRequest]:
+    """
+    단일 개체에 대한 ID 해석 및 계획 생성을 처리
+    """
+    try:
+        # 3단계: Ticker/ID 해석
+        resolver_prompt = "Find the ticker or series ID for the following entity: {entity}"
+        resolved_output = await _run_llm_agent(
+            "Financial Data Ticker/ID Resolver",
+            resolver_prompt,
+            {"entity": entity},
+            output_schema=ResolverOutput
+        )
+        if not resolved_output: return None
+        
+        logger.info(f"--- [Chart-Pipe-Detail] Resolved '{entity}' -> ID: '{resolved_output.id}' ({resolved_output.type})")
+
+        # 4단계: 차트 파라미터 생성
+        param_prompt = "Entity to chart: '{entity}'\nResolved ID: '{resolved_id}'"
+        params = await _run_llm_agent(
+            "Chart Parameter Generator",
+            param_prompt,
+            {"entity": entity, "resolved_id": resolved_output.id},
+            output_schema=ChartParameters
+        )
+        if not params: return None
+        
+        logger.info(f"--- [Chart-Pipe-Detail] Generated params for '{entity}': {params.chart_type}, {params.start_date} to {params.end_date}")
+
+        # 5단계: 최종 계획 조립
+        tool_map = {"stock": "get_stock_price", "economic": "get_economic_data"}
+        tool_args_map = {"stock": "ticker", "economic": "series_id"}
+
+        return ChartRequest(
+            chart_title=params.chart_title,
+            tool_name=tool_map.get(resolved_output.type),
+            tool_args={
+                tool_args_map.get(resolved_output.type): resolved_output.id,
+                "start_date": params.start_date,
+                "end_date": params.end_date
+            }
+        )
+    except Exception as e:
+        logger.error(f"--- [Chart-Pipe-Error] Failed to process entity '{entity}': {e}", exc_info=True)
+        return None
 
 # --- AI 에이전트 호출을 위한 보조 함수 ---
 
@@ -72,6 +166,9 @@ async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructu
     # 1. 창의적인 개요와 차트 '아이디어' 생성
     outline_plan = await _run_llm_agent("Report Outline Generator", prompt1, input_data1, output_schema=ReportOutline)
 
+    # [로그 추가] 첫 번째 AI의 결과물을 직접 확인
+    logger.info(f"--- [Report-Debug] Outline Generator's Chart Ideas: {outline_plan.chart_ideas if outline_plan else 'None'} ---")
+
     if not outline_plan:
         logger.error("!!! [Report-Step1.1 FAILED] Report Outline Generator returned None. Creating a minimal fallback report. ---")
         # AI가 완전히 실패하면, 제목만 있는 최소한의 보고서 구조를 생성
@@ -98,6 +195,9 @@ async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructu
     }
     
     validated_plan = await _run_llm_agent("Chart Plan Validator", prompt2, input_data2, output_schema=ValidatedChartPlan)
+
+    # [로그 추가] 두 번째 AI가 변환에 성공한 최종 계획을 확인
+    logger.info(f"--- [Report-Debug] Chart Plan Validator's Final Requests: {validated_plan.chart_requests if validated_plan else 'None'} ---")
 
     # 3. 두 결과를 조합하여 최종 ReportStructure 객체 생성
     final_report_structure = ReportStructure(
@@ -208,7 +308,7 @@ async def _upload_to_gcs(pdf_bytes: bytes, discussion_id: str) -> str:
 # --- 메인 보고서 생성 파이프라인 ---
 
 async def generate_report_background(discussion_id: str):
-    """[메인 오케스트레이터] 보고서 생성 전체 파이프라인을 실행합니다."""
+    """[메인 오케스트레이터] 새로운 파이프라인을 적용한 보고서 생성 전체 흐름"""
     logger.info(f"--- [Report BG Task] Started for Discussion ID: {discussion_id} ---")
     discussion_log = await DiscussionLog.find_one(DiscussionLog.discussion_id == discussion_id)
     if not discussion_log:
@@ -216,18 +316,30 @@ async def generate_report_background(discussion_id: str):
         return
 
     try:
-        # 1단계: 보고서 구조 및 차트 요청 기획
-        report_plan = await _plan_report_structure(discussion_log)
-        structured_data = report_plan.model_dump()
+        # 1단계: 보고서 텍스트 개요 및 차트 대상 '개체' 목록 생성
+        transcript_str = "\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript])
+        outline_plan = await _run_llm_agent(
+            "Report Outline Generator",
+            "Topic: {topic}\n\nFull Transcript:\n{transcript}",
+            {"topic": discussion_log.topic, "transcript": transcript_str},
+            output_schema=ReportOutline
+        )
+        if not outline_plan:
+            raise ValueError("Report Outline Generator failed to produce an outline.")
+        
+        structured_data = outline_plan.model_dump(exclude={'chart_worthy_entities'}) # 최종 보고서에는 엔티티 목록 불필요
 
-        # 2단계: 차트 데이터 생성
-        charts_data = await _create_charts_data(report_plan.chart_requests, discussion_id)
+        # 2단계 : 지능형 차트 계획 생성 파이프라인 호출
+        chart_requests = await _create_chart_requests_intelligently(discussion_log, outline_plan)
+
+        # 3단계 : 차트 데이터 생성 (이제 안정적으로 계획을 전달받음)
+        charts_data = await _create_charts_data(chart_requests, discussion_id)
         structured_data['charts_data'] = charts_data
 
-        # 3단계: 최종 HTML 본문 생성
+        # 4단계 : 최종 HTML 본문 생성
         report_body_html = await _generate_final_html(structured_data, discussion_id)
 
-        # 4단계: 참여자 발언 전문 HTML 섹션 생성 (아이콘 문제 해결)
+        # 5단계 : 참여자 발언 전문 HTML 섹션 생성
         participant_map = {p['name']: p for p in discussion_log.participants}
         transcript_html_items = []
         regular_message_count = 0
@@ -253,26 +365,22 @@ async def generate_report_background(discussion_id: str):
             regular_message_count += 1
             
         transcript_html_str = "\n".join(transcript_html_items)
-
         full_transcript_section = f"""
         <section class="mb-12">
             <div class="bg-white p-6 rounded-xl shadow-md">
                 <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center border-b pb-4">V. 참여자 발언 전문</h2>
-                <div class="transcript-container space-y-4">
-                    {transcript_html_str}
-                </div>
+                <div class="transcript-container space-y-4">{transcript_html_str}</div>
             </div>
-        </section>
-        """
+        </section>"""
 
-        # 5단계: HTML 본문과 발언 전문 결합
+        # 6단계 (기존): HTML 본문과 발언 전문 결합
         final_report_html = report_body_html.replace("</body>", f"{full_transcript_section}</body>") if "</body>" in report_body_html else report_body_html + full_transcript_section
         
-        # 6단계: PDF 변환 및 GCS 업로드
+        # 7단계 (기존): PDF 변환 및 GCS 업로드
         pdf_bytes = weasyprint.HTML(string=final_report_html).write_pdf()
         pdf_url = await _upload_to_gcs(pdf_bytes, discussion_id)
 
-        # 7단계: DB 업데이트
+        # 8단계 (기존): DB 업데이트
         discussion_log.report_html = final_report_html
         discussion_log.pdf_url = pdf_url
         discussion_log.status = "completed"
@@ -281,5 +389,6 @@ async def generate_report_background(discussion_id: str):
 
     except Exception as e:
         logger.error(f"!!! [Report BG Task] FAILED for ID: {discussion_id}. Error: {e}", exc_info=True)
-        discussion_log.status = "failed"
-        await discussion_log.save()
+        if discussion_log:
+            discussion_log.status = "failed"
+            await discussion_log.save()
