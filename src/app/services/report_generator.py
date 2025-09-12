@@ -14,7 +14,7 @@ from langchain_core.prompts import ChatPromptTemplate
 import weasyprint
 from google.cloud import storage
 from app.schemas.report import ReportStructure, ChartRequest, ResolverOutput, ReportOutline, ValidatedChartPlan
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 class ChartRelevance(BaseModel):
     is_chart_relevant: bool
@@ -130,7 +130,7 @@ async def _resolve_and_plan_chart(entity: str) -> Optional[ChartRequest]:
 # --- AI 에이전트 호출을 위한 보조 함수 ---
 
 async def _run_llm_agent(agent_name: str, prompt_text: str, input_data: Dict, output_schema=None) -> Any:
-    """[수정] 특정 AI 에이전트를 호출하는 범용 함수"""
+    """ 특정 AI 에이전트를 호출하는 범용 함수"""
     agent_setting = await AgentSettings.find_one(
         AgentSettings.name == agent_name, 
         AgentSettings.status == "active"
@@ -147,11 +147,20 @@ async def _run_llm_agent(agent_name: str, prompt_text: str, input_data: Dict, ou
     chain = ChatPromptTemplate.from_messages([("system", agent_setting.config.prompt), ("human", "{input}")])
     
     # output_schema가 제공되면 .with_structured_output()을 사용, 아니면 일반 LLM 호출
-    final_chain = chain | llm.with_structured_output(output_schema) if output_schema else chain | llm
-
-    response = await final_chain.ainvoke({"input": prompt_text.format(**input_data)})
-    
-    return response if output_schema else response.content
+    try:
+        final_chain = chain | llm.with_structured_output(output_schema) if output_schema else chain | llm
+        response = await final_chain.ainvoke({"input": prompt_text.format(**input_data)})
+        return response if output_schema else response.content
+        
+    except ValidationError as e:
+        # [핵심] 오류 발생 시, 어떤 에이전트에서 어떤 상세 오류가 났는지 명확하게 로깅합니다.
+        logger.error(f"--- [Pydantic ValidationError] Agent '{agent_name}' failed validation. ---")
+        logger.error(f"Detailed Error: {e}")
+        # 오류가 발생했음을 알리기 위해 None을 반환하거나 예외를 다시 발생시킬 수 있습니다.
+        raise e 
+    except Exception as e:
+        logger.error(f"--- [LLM Agent Error] An unexpected error occurred in agent '{agent_name}': {e}", exc_info=True)
+        raise e
 
 # --- 보고서 생성 파이프라인의 각 단계 ---
 
