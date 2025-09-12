@@ -57,11 +57,11 @@ class ResolverOutput(BaseModel):
     type: Literal["stock", "economic"] = Field(description="데이터의 종류")
     id: str = Field(description="조회에 사용될 티커 또는 시리즈 ID")
 
-class ChartJsData(BaseModel):
-    """Chart.js 라이브러리와 호환되는 차트 데이터 구조 또는 오류 메시지"""
-    labels: Optional[List[str]] = None
-    datasets: Optional[List[Dict[str, Any]]] = None
-    error: Optional[str] = None
+#class ChartJsData(BaseModel):
+#    """Chart.js 라이브러리와 호환되는 차트 데이터 구조 또는 오류 메시지"""
+#    labels: Optional[List[str]] = None
+#    datasets: Optional[List[Dict[str, Any]]] = None
+#    error: Optional[str] = None
 
 # OutlineGenerator의 출력을 받을 Pydantic 모델
 class ReportOutline(BaseModel):

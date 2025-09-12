@@ -252,11 +252,18 @@ async def generate_report_background(discussion_id: str):
             </div>""")
             regular_message_count += 1
             
+        transcript_html_str = "\n".join(transcript_html_items)
+
         full_transcript_section = f"""
         <section class="mb-12">
-            <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center border-b pb-4">V. 참여자 발언 전문</h2>
-            <div class="transcript-container space-y-4">{''.join(transcript_html_items)}</div>
-        </section>"""
+            <div class="bg-white p-6 rounded-xl shadow-md">
+                <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center border-b pb-4">V. 참여자 발언 전문</h2>
+                <div class="transcript-container space-y-4">
+                    {transcript_html_str}
+                </div>
+            </div>
+        </section>
+        """
 
         # 5단계: HTML 본문과 발언 전문 결합
         final_report_html = report_body_html.replace("</body>", f"{full_transcript_section}</body>") if "</body>" in report_body_html else report_body_html + full_transcript_section
