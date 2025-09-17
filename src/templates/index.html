@@ -377,21 +377,23 @@
         }
 
         // --- 정렬 관련 CSS 클래스를 반환하는 헬퍼 함수 ---
-        function getAlignmentClasses(regularMessageCount) {
-            const isOdd = regularMessageCount % 2 !== 0;
+        function getAlignmentInfo(count) {
+            const isOdd = count % 2 !== 0;
             if (isOdd) {
-                // 오른쪽 정렬 (홀수 번째 메시지)
+                // 오른쪽 정렬 (홀수 번째 일반 메시지)
                 return {
-                    container: 'flex gap-3 my-4 justify-end items-end',
-                    bubble: 'bg-blue-500 text-white',
-                    textAlign: 'text-right'
+                    containerClasses: 'flex gap-3 my-4 justify-end items-end',
+                    bubbleClasses: 'bg-blue-500 text-white',
+                    textAlignClass: 'text-right',
+                    isIconFirst: false // 아이콘이 텍스트 뒤에 옴
                 };
             } else {
-                // 왼쪽 정렬 (짝수 번째 메시지)
+                // 왼쪽 정렬 (짝수 번째 일반 메시지)
                 return {
-                    container: 'flex gap-3 my-4',
-                    bubble: 'bg-slate-100',
-                    textAlign: 'text-left'
+                    containerClasses: 'flex gap-3 my-4',
+                    bubbleClasses: 'bg-slate-100',
+                    textAlignClass: 'text-left',
+                    isIconFirst: true // 아이콘이 텍스트 앞에 옴
                 };
             }
         }
@@ -1343,50 +1345,38 @@
                 return;
             }
 
-            isRendering = true;
-            
+            isRendering = true;            
             // 범용 인디케이터가 있다면 한 번만 제거합니다.
             showGeneralTypingIndicator(false);
-
+            const chatbox = document.getElementById('chatbox');
             const newMessages = transcript.slice(displayedMessagesCount);
             
             for (const turn of newMessages) {
-                // Staff 및 시스템 에이전트인 경우 새로운 렌더링 함수 호출
+                const shouldScroll = isScrolledToBottom(chatbox);
                 const systemAgents = ['SNR 전문가', '정보 검증부', '사회자', '구분선'];
+
                 if (systemAgents.includes(turn.agent_name)) {
-                    appendSystemMessage(turn); // 통합된 시스템 메시지 렌더러 호출
+                    appendSystemMessage(turn, shouldScroll);
                     displayedMessagesCount++;
                     await new Promise(resolve => setTimeout(resolve, 300));
                 } else {
-                    const chatbox = document.getElementById('chatbox');
-                    // 인디케이터 표시 전 스크롤 상태 확인
-                    const shouldScroll = isScrolledToBottom(chatbox);
-
-                    // 1. 이 메시지를 보낼 에이전트의 "입력 중..." 인디케이터를 표시합니다.
-                    const indicator = showTypingIndicator(turn, participants);
-                    
-                    // 2. 현실감을 위해 1.5초 ~ 2.5초 사이의 랜덤한 시간 동안 기다립니다.
+                    const indicator = showTypingIndicator(turn, participants, shouldScroll);
                     await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
                     
-                    // 3. 인디케이터를 제거합니다.
                     indicator.remove();
-
-                    // 4. 실제 메시지를 타이핑 효과와 함께 추가합니다.
                     const messageContainer = appendMessage(turn, participants);
                     const contentSpan = messageContainer.querySelector('.message-content');
+                    
                     await typeMessage(contentSpan, turn.message);
-
-                    // 타이핑이 모두 끝난 후, 필요할 때만 스크롤
+                    
                     if (shouldScroll) {
                         chatbox.scrollTo({ top: chatbox.scrollHeight, behavior: 'smooth' });
                     }
                     
-                    // 5. 메시지 카운트를 증가시켜 중복 표시를 방지합니다.
                     displayedMessagesCount++;
-                    regularMessageCount++; // 일반 메시지 카운터만 여기서 증가
+                    regularMessageCount++; // 일반 메시지 카운트는 여기서만 증가
                 }
             }
-
             isRendering = false;
         }
 
@@ -1428,32 +1418,29 @@
         /**
          * '입력 중...' 인디케이터를 생성하고 화면에 추가하는 함수
          */
-        function showTypingIndicator(turn, participants) {
+        function showTypingIndicator(turn, participants, shouldScroll) {
             const chatbox = document.getElementById('chatbox');
-            const shouldScroll = isScrolledToBottom(chatbox);
             const participantMap = getParticipantMap(participants);
             const agentName = turn.agent_name;
             const icon = participantMap[agentName]?.icon || '🤖';
             
-            // 헬퍼 함수를 호출하여 정렬 클래스 가져오기
-            const alignment = getAlignmentClasses(regularMessageCount);
+            const alignment = getAlignmentInfo(regularMessageCount); // 헬퍼 함수 호출
 
             const indicator = document.createElement('div');
-            indicator.className = alignment.container;
+            indicator.className = alignment.containerClasses;
 
             const iconHtml = `<div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>`;
             const typingHtml = `
-                <div class="flex flex-col ${alignment.textAlign === 'text-right' ? 'items-end' : ''}">
+                <div class="flex flex-col ${alignment.isIconFirst ? '' : 'items-end'}">
                     <p class="text-sm font-bold text-slate-800">${agentName}</p>
-                    <div class="p-3 rounded-lg mt-1 inline-flex items-center gap-1 ${alignment.bubble}">
+                    <div class="p-3 rounded-lg mt-1 inline-flex items-center gap-1 ${alignment.bubbleClasses}">
                         <span class="typing-dot animate-bounce">.</span>
                         <span class="typing-dot animate-bounce" style="animation-delay: 0.2s">.</span>
                         <span class="typing-dot animate-bounce" style="animation-delay: 0.4s">.</span>
                     </div>
                 </div>`;
 
-            // 정렬 방향에 따라 아이콘과 말풍선 순서 결정
-            indicator.innerHTML = (regularMessageCount % 2 !== 0) ? typingHtml + iconHtml : iconHtml + typingHtml;
+            indicator.innerHTML = alignment.isIconFirst ? iconHtml + typingHtml : typingHtml + iconHtml;
             
             chatbox.appendChild(indicator);
             if (shouldScroll) {
@@ -1471,23 +1458,21 @@
             const agentName = turn.agent_name;
             const icon = participantMap[agentName]?.icon || '🤖';
 
-            // 헬퍼 함수를 호출하여 정렬 클래스 가져오기
-            const alignment = getAlignmentClasses(regularMessageCount);
+            const alignment = getAlignmentInfo(regularMessageCount); // 헬퍼 함수 호출
             
             const messageContainer = document.createElement('div');
-            messageContainer.className = alignment.container;
+            messageContainer.className = alignment.containerClasses;
 
             const iconHtml = `<div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>`;
             const messageHtml = `
-                <div class="flex flex-col ${alignment.textAlign === 'text-right' ? 'items-end' : ''}">
+                <div class="flex flex-col ${alignment.isIconFirst ? '' : 'items-end'}">
                     <p class="text-sm font-bold text-slate-800">${agentName}</p>
-                    <div class="p-3 rounded-lg mt-1 text-base inline-block max-w-xl ${alignment.bubble}">
+                    <div class="p-3 rounded-lg mt-1 text-base inline-block max-w-xl ${alignment.bubbleClasses} ${alignment.textAlignClass}">
                         <span class="message-content"></span>
                     </div>
                 </div>`;
 
-            // 정렬 방향에 따라 아이콘과 말풍선 순서 결정
-            messageContainer.innerHTML = (regularMessageCount % 2 !== 0) ? messageHtml + iconHtml : iconHtml + messageHtml;
+            messageContainer.innerHTML = alignment.isIconFirst ? iconHtml + messageHtml : messageHtml + iconHtml;
 
             chatbox.appendChild(messageContainer);
             return messageContainer;
