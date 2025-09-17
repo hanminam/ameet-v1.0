@@ -386,12 +386,13 @@ async def generate_report_background(discussion_id: str):
         final_report_html = report_body_html.replace("</body>", f"{full_transcript_section}</body>") if "</body>" in report_body_html else report_body_html + full_transcript_section
         
         # 7단계 (기존): PDF 변환 및 GCS 업로드
-        pdf_bytes = weasyprint.HTML(string=final_report_html).write_pdf()
-        pdf_url = await _upload_to_gcs(pdf_bytes, discussion_id)
+        #pdf_bytes = weasyprint.HTML(string=final_report_html).write_pdf()
+        #pdf_url = await _upload_to_gcs(pdf_bytes, discussion_id)
 
         # 8단계 (기존): DB 업데이트
         discussion_log.report_html = final_report_html
-        discussion_log.pdf_url = pdf_url
+        #discussion_log.pdf_url = pdf_url
+        discussion_log.pdf_url = None
         discussion_log.status = "completed"
         await discussion_log.save()
         logger.info(f"--- [Report BG Task] Successfully completed for {discussion_id} ---")
