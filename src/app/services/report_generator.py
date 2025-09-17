@@ -165,13 +165,12 @@ async def _run_llm_agent(agent_name: str, prompt_text: str, input_data: Dict, ou
 # --- 보고서 생성 파이프라인의 각 단계 ---
 
 async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructure:
-    """ 단일 AI 에이전트('Report Component Planner')를 호출하여 보고서의 전체 구조와
-    실행 가능한 차트 요청 목록을 한 번에 생성합니다. """
+    """ 단일 AI 에이전트를 호출하되, ValidationErorr 발생 시 안전하게 대체 보고서를 생성합니다. """
     logger.info(f"--- [Report-Step1] Running Unified Report Component Planner for {discussion_log.discussion_id} ---")
-
+    
     transcript_str = "\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript])
     current_date_str = datetime.now().strftime('%Y-%m-%d')
-
+    
     prompt = (
         "Based on the following discussion topic and transcript, generate a complete and structured report plan. "
         "The plan must include a title, subtitle, expert opinions, key factors, a final conclusion, "
@@ -180,32 +179,41 @@ async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructu
         "Topic: {topic}\n\n"
         "Full Transcript:\n{transcript}"
     )
-
+    
     input_data = {
         "current_date": current_date_str,
         "topic": discussion_log.topic,
         "transcript": transcript_str
     }
+    
+    try:
+        # AI 에이전트를 호출하여 보고서의 전체 구조 생성을 시도합니다.
+        report_plan = await _run_llm_agent(
+            "Report Component Planner",
+            prompt,
+            input_data,
+            output_schema=ReportStructure
+        )
+        # AI가 응답을 생성하지 못한 경우도 오류로 처리합니다.
+        if not report_plan:
+            raise ValueError("LLM returned a null plan.")
 
-    # 'Report Component Planner'를 한 번만 호출하여 모든 구조를 생성
-    report_plan = await _run_llm_agent(
-        "Report Component Planner",
-        prompt,
-        input_data,
-        output_schema=ReportStructure
-    )
-
-    if not report_plan:
-        logger.error("!!! [Report-Step1 FAILED] Report Component Planner returned None. Creating a fallback report.")
-        # ReportStructure의 title이 Optional이 되었으므로, 빈 객체를 만들 수 없습니다.
-        # 따라서 여기서 기본 제목을 가진 객체를 직접 생성하여 반환합니다.
-        return ReportStructure(title=f"{discussion_log.topic} - 분석 보고서", chart_requests=[])
+    except (ValidationError, ValueError) as e:
+        # Pydantic 모델 검증에 실패하거나, AI가 응답을 생성하지 못한 경우
+        logger.error(f"!!! [Report-Step1 FAILED] Could not generate a valid report plan. Error: {e}. Proceeding with a minimal fallback report.")
+        
+        # 차트를 제외하고, 오류가 발생했음을 알리는 최소한의 보고서 객체를 생성하여 반환합니다.
+        return ReportStructure(
+            title=f"{discussion_log.topic} - 분석 보고서",
+            conclusion="AI가 보고서의 세부 구조 및 차트를 생성하는 중 오류가 발생했습니다. 토론 전문을 참고해 주십시오.",
+            chart_requests=[] # 차트 요청은 빈 리스트로 초기화
+        )
 
     # AI가 제목을 생성하지 못한 경우, 토론 주제를 기반으로 기본 제목을 설정 (안전장치)
     if not report_plan.title:
         logger.warning("--- [Report Fallback] AI failed to generate a title. Using default title. ---")
         report_plan.title = f"{discussion_log.topic} - 최종 분석 보고서"
-
+    
     return report_plan
 
 async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id: str) -> List[Dict]:
