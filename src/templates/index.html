@@ -1338,6 +1338,10 @@
                     displayedMessagesCount++;
                     await new Promise(resolve => setTimeout(resolve, 300));
                 } else {
+                    const chatbox = document.getElementById('chatbox');
+                    // 인디케이터 표시 전 스크롤 상태 확인
+                    const shouldScroll = isScrolledToBottom(chatbox);
+
                     // 1. 이 메시지를 보낼 에이전트의 "입력 중..." 인디케이터를 표시합니다.
                     const indicator = showTypingIndicator(turn, participants);
                     
