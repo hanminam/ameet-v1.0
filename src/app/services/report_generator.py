@@ -170,42 +170,45 @@ async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructu
     
     transcript_str = "\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript])
     prompt1 = "Topic: {topic}\n\nFull Transcript:\n{transcript}"
+    
     input_data1 = {"topic": discussion_log.topic, "transcript": transcript_str}
     
     # 1. 창의적인 개요와 차트 '아이디어' 생성
     outline_plan = await _run_llm_agent("Report Outline Generator", prompt1, input_data1, output_schema=ReportOutline)
 
-    # [로그 추가] 첫 번째 AI의 결과물을 직접 확인
-    logger.info(f"--- [Report-Debug] Outline Generator's Chart Ideas: {outline_plan.chart_ideas if outline_plan else 'None'} ---")
+    # 'chart_worthy_entities'를 사용하도록 변경
+    logger.info(f"--- [Report-Debug] Outline Generator's Chart Entities: {outline_plan.chart_worthy_entities if outline_plan else 'None'} ---")
 
     if not outline_plan:
         logger.error("!!! [Report-Step1.1 FAILED] Report Outline Generator returned None. Creating a minimal fallback report. ---")
-        # AI가 완전히 실패하면, 제목만 있는 최소한의 보고서 구조를 생성
         return ReportStructure(title=f"{discussion_log.topic} - 분석 보고서")
 
-    # AI가 제목을 생성하지 못한 경우, 토론 주제를 기반으로 기본 제목을 생성
     if not outline_plan.title:
         outline_plan.title = f"{discussion_log.topic} - 최종 분석 보고서"
         logger.warning(f"--- [Report-Step1.1] Outline Generator failed to provide a title. Using default: '{outline_plan.title}' ---")
     
-    if not outline_plan.chart_ideas:
-        logger.warning("--- [Report-Step1.1] Outline Generator did not produce chart ideas. Proceeding without charts. ---")
-        # 차트 아이디어가 없어도 보고서의 다른 부분은 유효하므로 그대로 사용
-        return ReportStructure(**outline_plan.model_dump())
+    # [수정] 'chart_ideas' 대신 'chart_worthy_entities'를 확인
+    if not outline_plan.chart_worthy_entities:
+        logger.warning("--- [Report-Step1.1] Outline Generator did not produce chart-worthy entities. Proceeding without charts. ---")
+        # Pydantic 모델의 `model_dump`를 사용하여 안전하게 `chart_requests`를 제외한 데이터를 전달합니다.
+        plan_dict = outline_plan.model_dump()
+        plan_dict.pop('chart_worthy_entities', None) # 해당 키 제거
+        return ReportStructure(**plan_dict)
 
-    logger.info(f"--- [Report-Step1.2] Running Chart Plan Validator for {len(outline_plan.chart_ideas)} ideas ---")
+    logger.info(f"--- [Report-Step1.2] Running Chart Plan Validator for {len(outline_plan.chart_worthy_entities)} entities ---")
     
     # 2. 아이디어를 바탕으로 '실행 가능한' 차트 계획만 필터링/생성
     current_date_str = datetime.now().strftime('%Y-%m-%d')
-    prompt2 = "Current Date: {current_date}\n\nChart Ideas:\n{chart_ideas}"
+    # 프롬프트의 키를 'chart_entities'로 명확하게 변경
+    prompt2 = "Current Date: {current_date}\n\nChart-worthy Entities:\n{chart_entities}"
     input_data2 = {
         "current_date": current_date_str,
-        "chart_ideas": json.dumps(outline_plan.chart_ideas, ensure_ascii=False)
+        # [수정] 'chart_ideas' 대신 'chart_worthy_entities'의 값을 전달
+        "chart_entities": json.dumps(outline_plan.chart_worthy_entities, ensure_ascii=False)
     }
     
     validated_plan = await _run_llm_agent("Chart Plan Validator", prompt2, input_data2, output_schema=ValidatedChartPlan)
 
-    # [로그 추가] 두 번째 AI가 변환에 성공한 최종 계획을 확인
     logger.info(f"--- [Report-Debug] Chart Plan Validator's Final Requests: {validated_plan.chart_requests if validated_plan else 'None'} ---")
 
     # 3. 두 결과를 조합하여 최종 ReportStructure 객체 생성
