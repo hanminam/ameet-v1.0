@@ -197,16 +197,19 @@ async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructu
 
     if not report_plan:
         logger.error("!!! [Report-Step1 FAILED] Report Component Planner returned None. Creating a fallback report.")
-        return ReportStructure(title=f"{discussion_log.topic} - 분석 보고서")
+        # ReportStructure의 title이 Optional이 되었으므로, 빈 객체를 만들 수 없습니다.
+        # 따라서 여기서 기본 제목을 가진 객체를 직접 생성하여 반환합니다.
+        return ReportStructure(title=f"{discussion_log.topic} - 분석 보고서", chart_requests=[])
 
-    # AI가 제목을 생성하지 못한 경우, 기본 제목을 사용
+    # AI가 제목을 생성하지 못한 경우, 토론 주제를 기반으로 기본 제목을 설정 (안전장치)
     if not report_plan.title:
+        logger.warning("--- [Report Fallback] AI failed to generate a title. Using default title. ---")
         report_plan.title = f"{discussion_log.topic} - 최종 분석 보고서"
 
     return report_plan
 
 async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id: str) -> List[Dict]:
-    """[최종 버전] AI 호출 없이 Python 코드로 직접 차트 데이터를 생성하여 안정성을 확보합니다."""
+    """ AI 호출 없이 Python 코드로 직접 차트 데이터를 생성하여 안정성을 확보합니다."""
     charts_data = []
     if not chart_requests:
         return charts_data
