@@ -380,7 +380,7 @@
         function getAlignmentInfo(count) {
             const isOdd = count % 2 !== 0;
             if (isOdd) {
-                // 오른쪽 정렬 (홀수 번째 일반 메시지)
+                // 오른쪽 정렬
                 return {
                     containerClasses: 'flex gap-3 my-4 justify-end items-end',
                     bubbleClasses: 'bg-blue-500 text-white',
@@ -388,7 +388,7 @@
                     isIconFirst: false // 아이콘이 텍스트 뒤에 옴
                 };
             } else {
-                // 왼쪽 정렬 (짝수 번째 일반 메시지)
+                // 왼쪽 정렬
                 return {
                     containerClasses: 'flex gap-3 my-4',
                     bubbleClasses: 'bg-slate-100',
@@ -1424,7 +1424,7 @@
             const agentName = turn.agent_name;
             const icon = participantMap[agentName]?.icon || '🤖';
             
-            const alignment = getAlignmentInfo(regularMessageCount); // 헬퍼 함수 호출
+            const alignment = getAlignmentInfo(regularMessageCount);
 
             const indicator = document.createElement('div');
             indicator.className = alignment.containerClasses;
@@ -1440,6 +1440,7 @@
                     </div>
                 </div>`;
 
+            // 중복된 정렬 로직을 제거하고 헬퍼 함수의 isIconFirst 값을 사용
             indicator.innerHTML = alignment.isIconFirst ? iconHtml + typingHtml : typingHtml + iconHtml;
             
             chatbox.appendChild(indicator);
@@ -1458,7 +1459,7 @@
             const agentName = turn.agent_name;
             const icon = participantMap[agentName]?.icon || '🤖';
 
-            const alignment = getAlignmentInfo(regularMessageCount); // 헬퍼 함수 호출
+            const alignment = getAlignmentInfo(regularMessageCount);
             
             const messageContainer = document.createElement('div');
             messageContainer.className = alignment.containerClasses;
