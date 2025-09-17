@@ -165,60 +165,45 @@ async def _run_llm_agent(agent_name: str, prompt_text: str, input_data: Dict, ou
 # --- 보고서 생성 파이프라인의 각 단계 ---
 
 async def _plan_report_structure(discussion_log: DiscussionLog) -> ReportStructure:
-    """ AI 실패에 대비한 안전장치를 추가하여 안정성을 극대화합니다."""
-    logger.info(f"--- [Report-Step1.1] Running Report Outline Generator for {discussion_log.discussion_id} ---")
-    
+    """ 단일 AI 에이전트('Report Component Planner')를 호출하여 보고서의 전체 구조와
+    실행 가능한 차트 요청 목록을 한 번에 생성합니다. """
+    logger.info(f"--- [Report-Step1] Running Unified Report Component Planner for {discussion_log.discussion_id} ---")
+
     transcript_str = "\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript])
-    prompt1 = "Topic: {topic}\n\nFull Transcript:\n{transcript}"
-    input_data1 = {"topic": discussion_log.topic, "transcript": transcript_str}
-    
-    # 1. 창의적인 개요와 차트 '아이디어' 생성
-    outline_plan = await _run_llm_agent("Report Outline Generator", prompt1, input_data1, output_schema=ReportOutline)
+    current_date_str = datetime.now().strftime('%Y-%m-%d')
 
-    # [로그 추가] 첫 번째 AI의 결과물을 직접 확인
-    logger.info(f"--- [Report-Debug] Outline Generator's Chart Ideas: {outline_plan.chart_ideas if outline_plan else 'None'} ---")
+    prompt = (
+        "Based on the following discussion topic and transcript, generate a complete and structured report plan. "
+        "The plan must include a title, subtitle, expert opinions, key factors, a final conclusion, "
+        "and a list of specific, actionable chart requests ready for tool execution.\n\n"
+        "Current Date: {current_date}\n\n"
+        "Topic: {topic}\n\n"
+        "Full Transcript:\n{transcript}"
+    )
 
-    if not outline_plan:
-        logger.error("!!! [Report-Step1.1 FAILED] Report Outline Generator returned None. Creating a minimal fallback report. ---")
-        # AI가 완전히 실패하면, 제목만 있는 최소한의 보고서 구조를 생성
+    input_data = {
+        "current_date": current_date_str,
+        "topic": discussion_log.topic,
+        "transcript": transcript_str
+    }
+
+    # 'Report Component Planner'를 한 번만 호출하여 모든 구조를 생성
+    report_plan = await _run_llm_agent(
+        "Report Component Planner",
+        prompt,
+        input_data,
+        output_schema=ReportStructure
+    )
+
+    if not report_plan:
+        logger.error("!!! [Report-Step1 FAILED] Report Component Planner returned None. Creating a fallback report.")
         return ReportStructure(title=f"{discussion_log.topic} - 분석 보고서")
 
-    # AI가 제목을 생성하지 못한 경우, 토론 주제를 기반으로 기본 제목을 생성
-    if not outline_plan.title:
-        outline_plan.title = f"{discussion_log.topic} - 최종 분석 보고서"
-        logger.warning(f"--- [Report-Step1.1] Outline Generator failed to provide a title. Using default: '{outline_plan.title}' ---")
-    
-    if not outline_plan.chart_ideas:
-        logger.warning("--- [Report-Step1.1] Outline Generator did not produce chart ideas. Proceeding without charts. ---")
-        # 차트 아이디어가 없어도 보고서의 다른 부분은 유효하므로 그대로 사용
-        return ReportStructure(**outline_plan.model_dump())
+    # AI가 제목을 생성하지 못한 경우, 기본 제목을 사용
+    if not report_plan.title:
+        report_plan.title = f"{discussion_log.topic} - 최종 분석 보고서"
 
-    logger.info(f"--- [Report-Step1.2] Running Chart Plan Validator for {len(outline_plan.chart_ideas)} ideas ---")
-    
-    # 2. 아이디어를 바탕으로 '실행 가능한' 차트 계획만 필터링/생성
-    current_date_str = datetime.now().strftime('%Y-%m-%d')
-    prompt2 = "Current Date: {current_date}\n\nChart Ideas:\n{chart_ideas}"
-    input_data2 = {
-        "current_date": current_date_str,
-        "chart_ideas": json.dumps(outline_plan.chart_ideas, ensure_ascii=False)
-    }
-    
-    validated_plan = await _run_llm_agent("Chart Plan Validator", prompt2, input_data2, output_schema=ValidatedChartPlan)
-
-    # [로그 추가] 두 번째 AI가 변환에 성공한 최종 계획을 확인
-    logger.info(f"--- [Report-Debug] Chart Plan Validator's Final Requests: {validated_plan.chart_requests if validated_plan else 'None'} ---")
-
-    # 3. 두 결과를 조합하여 최종 ReportStructure 객체 생성
-    final_report_structure = ReportStructure(
-        title=outline_plan.title,
-        subtitle=outline_plan.subtitle,
-        expert_opinions=outline_plan.expert_opinions,
-        key_factors=outline_plan.key_factors,
-        conclusion=outline_plan.conclusion,
-        chart_requests=validated_plan.chart_requests if validated_plan else []
-    )
-    
-    return final_report_structure
+    return report_plan
 
 async def _create_charts_data(chart_requests: List[ChartRequest], discussion_id: str) -> List[Dict]:
     """[최종 버전] AI 호출 없이 Python 코드로 직접 차트 데이터를 생성하여 안정성을 확보합니다."""
@@ -325,30 +310,23 @@ async def generate_report_background(discussion_id: str):
         return
 
     try:
-        # 1단계: 보고서 텍스트 개요 및 차트 대상 '개체' 목록 생성
-        transcript_str = "\n".join([f"{t['agent_name']}: {t['message']}" for t in discussion_log.transcript])
-        outline_plan = await _run_llm_agent(
-            "Report Outline Generator",
-            "Topic: {topic}\n\nFull Transcript:\n{transcript}",
-            {"topic": discussion_log.topic, "transcript": transcript_str},
-            output_schema=ReportOutline
-        )
-        if not outline_plan:
-            raise ValueError("Report Outline Generator failed to produce an outline.")
-        
-        structured_data = outline_plan.model_dump(exclude={'chart_worthy_entities'}) # 최종 보고서에는 엔티티 목록 불필요
+        # 1단계: [통합] 보고서의 텍스트 구조와 실행 가능한 차트 계획을 한 번에 생성
+        report_plan = await _plan_report_structure(discussion_log)
+        if not report_plan:
+            raise ValueError("Report planner failed to produce a valid structure.")
 
-        # 2단계 : 지능형 차트 계획 생성 파이프라인 호출
-        chart_requests = await _create_chart_requests_intelligently(discussion_log, outline_plan)
+        # 2단계: 생성된 계획에 따라 필요한 차트 데이터를 외부 API에서 조회
+        charts_data = await _create_charts_data(report_plan.chart_requests, discussion_id)
 
-        # 3단계 : 차트 데이터 생성 (이제 안정적으로 계획을 전달받음)
-        charts_data = await _create_charts_data(chart_requests, discussion_id)
+        # 3단계: 최종 보고서 생성을 위한 데이터 조립
+        # (차트 데이터를 포함한 모든 계획을 딕셔너리로 변환)
+        structured_data = report_plan.model_dump()
         structured_data['charts_data'] = charts_data
 
-        # 4단계 : 최종 HTML 본문 생성
+        # 4단계 : 조립된 데이터를 바탕으로 최종 HTML 본문 생성
         report_body_html = await _generate_final_html(structured_data, discussion_id)
 
-        # 5단계 : 참여자 발언 전문 HTML 섹션 생성
+        # 5단계 : 토론 참여자들의 발언 전문을 담을 HTML 섹션 생성
         participant_map = {p['name']: p for p in discussion_log.participants}
         transcript_html_items = []
         regular_message_count = 0
@@ -382,14 +360,14 @@ async def generate_report_background(discussion_id: str):
             </div>
         </section>"""
 
-        # 6단계 (기존): HTML 본문과 발언 전문 결합
+        # 6단계: AI가 생성한 보고서 본문과 발언 전문 섹션을 결합
         final_report_html = report_body_html.replace("</body>", f"{full_transcript_section}</body>") if "</body>" in report_body_html else report_body_html + full_transcript_section
         
-        # 7단계 (기존): PDF 변환 및 GCS 업로드
+        # 7단계: 최종 HTML을 PDF로 변환하고 Google Cloud Storage에 업로드
         pdf_bytes = weasyprint.HTML(string=final_report_html).write_pdf()
         pdf_url = await _upload_to_gcs(pdf_bytes, discussion_id)
 
-        # 8단계 (기존): DB 업데이트
+        # 8단계: 생성된 보고서 정보와 URL을 데이터베이스에 저장하고 상태를 'completed'로 변경
         discussion_log.report_html = final_report_html
         discussion_log.pdf_url = pdf_url
         discussion_log.status = "completed"
