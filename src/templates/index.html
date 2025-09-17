@@ -1570,42 +1570,34 @@
         /**
          * 특정 에이전트의 "입력 중..." 인디케이터를 생성하고 반환하는 함수 (수정된 버전)
          */
-        function showTypingIndicator(turn, participants) {
+        function showTypingIndicator(turn, participants, shouldScroll) {
             const chatbox = document.getElementById('chatbox');
             const participantMap = getParticipantMap(participants);
             const agentName = turn.agent_name;
             const icon = participantMap[agentName]?.icon || '🤖';
-            const isOdd = (displayedMessagesCount) % 2 !== 0;
-
-            const indicator = document.createElement('div');
             
-            if (isOdd) {
-                indicator.className = 'flex gap-3 my-4 justify-end items-end';
-                indicator.innerHTML = `
-                    <div class="flex flex-col items-end">
-                        <p class="text-sm font-bold text-slate-800">${agentName}</p>
-                        <div class="bg-blue-500 text-white p-3 rounded-lg mt-1 inline-flex items-center gap-1">
-                            <span class="typing-dot animate-bounce">.</span>
-                            <span class="typing-dot animate-bounce" style="animation-delay: 0.2s">.</span>
-                            <span class="typing-dot animate-bounce" style="animation-delay: 0.4s">.</span>
-                        </div>
+            const alignment = getAlignmentInfo(regularMessageCount); // <-- ✨ 올바른 변수 사용 확인
+            const indicator = document.createElement('div');
+            indicator.className = alignment.containerClasses;
+
+            const iconHtml = `<div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>`;
+            const typingHtml = `
+                <div class="flex flex-col ${alignment.isIconFirst ? '' : 'items-end'}">
+                    <p class="text-sm font-bold text-slate-800">${agentName}</p>
+                    <div class="p-3 rounded-lg mt-1 inline-flex items-center gap-1 ${alignment.bubbleClasses}">
+                         <span class="typing-dot animate-bounce">.</span>
+                        <span class="typing-dot animate-bounce" style="animation-delay: 0.2s">.</span>
+                        <span class="typing-dot animate-bounce" style="animation-delay: 0.4s">.</span>
                     </div>
-                    <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>`;
-            } else {
-                indicator.className = 'flex gap-3 my-4';
-                indicator.innerHTML = `
-                    <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>
-                    <div>
-                        <p class="text-sm font-bold text-slate-800">${agentName}</p>
-                        <div class="bg-slate-100 p-3 rounded-lg mt-1 inline-flex items-center gap-1">
-                            <span class="typing-dot animate-bounce">.</span>
-                            <span class="typing-dot animate-bounce" style="animation-delay: 0.2s">.</span>
-                            <span class="typing-dot animate-bounce" style="animation-delay: 0.4s">.</span>
-                        </div>
-                    </div>`;
-            }
+                </div>`;
+            // 중복된 정렬 로직을 제거하고 헬퍼 함수의 isIconFirst 값을 사용
+            indicator.innerHTML = alignment.isIconFirst ?
+            iconHtml + typingHtml : typingHtml + iconHtml;
+            
             chatbox.appendChild(indicator);
-            chatbox.scrollTop = chatbox.scrollHeight;
+            if (shouldScroll) {
+                chatbox.scrollTop = chatbox.scrollHeight;
+            }
             return indicator;
         }
 
