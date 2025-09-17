@@ -365,6 +365,16 @@
         let isRendering = false;
         
         // --- Functions ---
+
+        /**
+         * 사용자가 스크롤을 맨 아래로 내렸는지 확인하는 헬퍼 함수
+         * @param {HTMLElement} element - 확인할 DOM 요소
+         * @returns {boolean} - 맨 아래에 있는지 여부
+         */
+        function isScrolledToBottom(element) {
+            const buffer = 50; // 약간의 오차를 허용하는 버퍼
+            return element.scrollHeight - element.scrollTop <= element.clientHeight + buffer;
+        }
         
         /**
          * 화면을 전환하는 함수
@@ -1262,6 +1272,8 @@
          */
         function appendSystemMessage(turn) {
             const chatbox = document.getElementById('chatbox');
+            const shouldScroll = isScrolledToBottom(chatbox); // 추가 전 위치 확인
+
             let contentHtml = '';
             
             if (turn.agent_name === 'SNR 전문가' || turn.agent_name === '정보 검증부') {
@@ -1298,7 +1310,9 @@
             }
 
             chatbox.insertAdjacentHTML('beforeend', contentHtml);
-            chatbox.scrollTop = chatbox.scrollHeight;
+            if (shouldScroll) {
+                chatbox.scrollTop = chatbox.scrollHeight; // 시스템 메시지는 즉시 스크롤
+            }
         }
 
         /**
@@ -1337,6 +1351,11 @@
                     const messageContainer = appendMessage(turn, participants);
                     const contentSpan = messageContainer.querySelector('.message-content');
                     await typeMessage(contentSpan, turn.message);
+
+                    // 타이핑이 모두 끝난 후, 필요할 때만 스크롤
+                    if (shouldScroll) {
+                        chatbox.scrollTo({ top: chatbox.scrollHeight, behavior: 'smooth' });
+                    }
                     
                     // 5. 메시지 카운트를 증가시켜 중복 표시를 방지합니다.
                     displayedMessagesCount++;
@@ -1387,6 +1406,8 @@
          */
         function showTypingIndicator(turn, participants) {
             const chatbox = document.getElementById('chatbox');
+            const shouldScroll = isScrolledToBottom(chatbox); // 추가 전 위치 확인
+
             const participantMap = getParticipantMap(participants);
             const agentName = turn.agent_name;
             const icon = participantMap[agentName]?.icon || '🤖';
@@ -1419,7 +1440,9 @@
                     </div>`;
             }
             chatbox.appendChild(indicator);
-            chatbox.scrollTop = chatbox.scrollHeight;
+            if (shouldScroll) {
+                chatbox.scrollTop = chatbox.scrollHeight;
+            }
             return indicator;
         }
 
@@ -1457,7 +1480,7 @@
                     </div>`;
             }
             chatbox.appendChild(messageContainer);
-            chatbox.scrollTop = chatbox.scrollHeight;
+            //chatbox.scrollTop = chatbox.scrollHeight;
             return messageContainer;
         }
 
@@ -1507,7 +1530,7 @@
                             element.innerHTML += htmlText.charAt(i);
                         }
                         i++;
-                        chatbox.scrollTop = chatbox.scrollHeight;
+                        //chatbox.scrollTop = chatbox.scrollHeight;
                         setTimeout(typing, 20); // 다음 글자 타이핑
                     } else {
                         resolve(); // 타이핑 완료 시 Promise를 resolve
