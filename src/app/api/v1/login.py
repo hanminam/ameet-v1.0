@@ -56,7 +56,7 @@ async def login_for_access_token(
     
     logger.info("[DEBUG] 5. 비밀번호 일치. 토큰을 생성합니다.")
 
-    await user_crud.update_user_last_login(email=user.email)
+    await user_crud.update_user_last_login(user) # user 객체를 직접 전달
     logger.info(f"[DEBUG] 6. 사용자 '{user.email}'의 마지막 로그인 시간 업데이트 완료.")
     
     # 인증 성공 시, 액세스 토큰 생성
