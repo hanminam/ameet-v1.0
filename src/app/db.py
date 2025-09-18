@@ -5,7 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
 
 from app.core.config import settings, logger
-from app.models.discussion import DiscussionLog, AgentSettings
+from app.models.discussion import DiscussionLog, AgentSettings, User
 
 redis_client = None
 mongo_client = None
@@ -32,7 +32,7 @@ async def init_db_connections():
         
         await init_beanie(
             database=mongo_client[db_name],
-            document_models=[AgentSettings, DiscussionLog]
+            document_models=[AgentSettings, DiscussionLog, User]
         )
         
         await mongo_client.server_info()

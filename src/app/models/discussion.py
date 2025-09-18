@@ -97,3 +97,17 @@ class AgentSettings(Document):
             [("status", 1)],
             [("name", 1), ("status", 1)]
         ]
+
+# --- 사용자 정보 저장을 위한 MongoDB 모델 ---
+class User(Document):
+    """사용자 계정 정보를 저장하는 MongoDB 모델"""
+    # id 필드는 Beanie가 자동으로 생성하므로 별도 정의 필요 없음
+    name: str
+    email: Annotated[str, Indexed(unique=True)]
+    hashed_password: str
+    role: Literal["user", "admin"]
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_login_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "users"
