@@ -503,6 +503,9 @@
     </div>
 
     <script>
+        // 전역 변수로 사용자 목록 데이터 저장
+        let currentUsers = [];
+
         // Mock Data for Detail Page
         const detailData = {
             "sess_abc123": {
@@ -634,7 +637,7 @@
                 // 서버에서 이미 최신순으로 정렬해서 보내주므로 바로 사용
                 users.forEach((user, index) => {
                     const row = document.createElement('tr');
-                    // 버튼에 data-userid와 식별 클래스(edit-btn, delete-btn) 추가
+                    // 모든 user.id를 user._id로 참조
                     row.innerHTML = `
                         <td>${index + 1}</td>
                         <td>${user.name}</td>
