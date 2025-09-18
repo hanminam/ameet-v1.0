@@ -463,6 +463,8 @@
 
                 if (response.ok) {
                     const data = await response.json();
+                    const token = data.access_token;
+
                     // JWT 토큰을 localStorage에 저장
                     localStorage.setItem('accessToken', data.access_token);
                     localStorage.setItem('userEmail', email);
@@ -1781,8 +1783,18 @@
             const token = localStorage.getItem('accessToken');
             if (token) {
                 console.log('저장된 토큰으로 로그인 상태 유지');
-                updateUIForLoggedInState();
-                showScreen('screen-topic');
+                
+                // 저장된 토큰을 파싱하여 역할 확인
+                const decodedToken = parseJwt(token);
+                if (decodedToken && decodedToken.role === 'admin') {
+                    // 관리자라면 바로 /admin 페이지로 이동
+                    console.log('관리자 세션 확인. 관리자 페이지로 바로 이동합니다.');
+                    window.location.href = '/admin';
+                } else {
+                    // 일반 사용자라면 기존대로 주제 입력 화면 표시
+                    updateUIForLoggedInState();
+                    showScreen('screen-topic');
+                }
             } else {
                 showScreen('screen-login');
             }
