@@ -39,7 +39,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> user_schema.U
         raise credentials_exception
     return user
 
-async def get_current_admin_user(current_user: UserModel = Depends(get_current_user)) -> UserModel:
+async def get_current_admin_user(current_user: user_schema.User = Depends(get_current_user)) -> user_schema.User:
     """Ensures the current user has the 'admin' role."""
     if current_user.role != "admin":
         raise HTTPException(
@@ -51,7 +51,7 @@ async def get_current_admin_user(current_user: UserModel = Depends(get_current_u
 @router.post("/", response_model=user_schema.User, status_code=status.HTTP_201_CREATED)
 async def create_user_by_admin(
     user: user_schema.UserCreate,
-    admin_user: UserModel = Depends(get_current_admin_user)
+    admin_user: user_schema.User = Depends(get_current_admin_user)
 ):
     """(Admin Only) Creates a new user in the users.json file."""
     db_user = await crud.user.get_user_by_email(email=user.email)
@@ -63,7 +63,7 @@ async def create_user_by_admin(
 async def read_users(
     skip: int = 0,
     limit: int = 100,
-    admin_user: UserModel = Depends(get_current_admin_user)
+    admin_user: user_schema.User = Depends(get_current_admin_user)
 ):
     """(Admin Only) Reads a list of users from the users.json file."""
     users = await crud.user.get_users(skip=skip, limit=limit)
@@ -72,7 +72,7 @@ async def read_users(
 @router.delete("/{user_id}", response_model=user_schema.User)
 async def delete_user_by_admin(
     user_id: int,
-    admin_user: UserModel = Depends(get_current_admin_user)
+    admin_user: user_schema.User = Depends(get_current_admin_user)
 ):
     """(Admin Only) Deletes a user by ID from the users.json file."""
     db_user = await crud.user.delete_user(user_id=user_id)
