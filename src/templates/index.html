@@ -367,6 +367,26 @@
         // --- Functions ---
 
         /**
+         * JWT 토큰을 디코딩하여 payload 객체를 반환하는 함수
+         * @param {string} token - JWT 액세스 토큰
+         * @returns {object | null} - 디코딩된 payload 객체 또는 실패 시 null
+         */
+        function parseJwt(token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+
+                return JSON.parse(jsonPayload);
+            } catch (e) {
+                console.error("JWT 파싱 실패:", e);
+                return null;
+            }
+        }
+
+        /**
          * 사용자가 스크롤을 맨 아래로 내렸는지 확인하는 헬퍼 함수
          * @param {HTMLElement} element - 확인할 DOM 요소
          * @returns {boolean} - 맨 아래에 있는지 여부
@@ -448,9 +468,18 @@
                     localStorage.setItem('userEmail', email);
 
                     // 로그인 성공 후 UI 업데이트 및 화면 전환
-                    console.log('로그인 성공:', data);
-                    updateUIForLoggedInState();
-                    showScreen('screen-topic');
+                    // 토큰 파싱 후 역할에 따라 분기 ---
+                    const decodedToken = parseJwt(token);
+                    if (decodedToken && decodedToken.role === 'admin') {
+                        // 관리자일 경우, '/admin' 페이지로 리디렉션
+                        console.log('관리자 로그인 성공. 관리자 페이지로 이동합니다.');
+                        window.location.href = '/admin'; 
+                    } else {
+                        // 일반 사용자일 경우, 기존 로직대로 주제 입력 화면으로 전환
+                        console.log('일반 사용자 로그인 성공:', data);
+                        updateUIForLoggedInState();
+                        showScreen('screen-topic');
+                    }
 
                 } else {
                     const errorData = await response.json();

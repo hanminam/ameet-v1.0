@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMEET 관리자 페이지 설계안</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f8fafc;
+        }
+        .sidebar-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            color: #4b5563;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        .sidebar-link:hover {
+            background-color: #e5e7eb;
+            color: #111827;
+        }
+        .sidebar-link.active {
+            background-color: #2563eb;
+            color: white;
+        }
+        .page {
+            display: none;
+        }
+        .page.active {
+            display: block;
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            padding: 1.5rem;
+        }
+        .table th, .table td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: middle;
+        }
+        .table tbody tr:hover {
+            background-color: #f9fafb;
+        }
+        /* Toggle Switch CSS */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #2563eb;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #2563eb;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="flex h-screen bg-gray-100">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white shadow-md flex-shrink-0">
+            <div class="p-4 border-b">
+                <h1 class="text-2xl font-bold text-blue-600">AMEET Admin</h1>
+            </div>
+            <nav class="p-4 space-y-2">
+                <a href="#" class="sidebar-link" onclick="showPage('dashboard')">
+                    <span class="mr-3">📊</span> 대시보드
+                </a>
+                <a href="#" class="sidebar-link" onclick="showPage('users')">
+                    <span class="mr-3">👥</span> 계정 관리
+                </a>
+                <a href="#" class="sidebar-link" onclick="showPage('monitoring')">
+                    <span class="mr-3">🔍</span> 토론 모니터링
+                </a>
+                <a href="#" class="sidebar-link active" onclick="showPage('tokens')">
+                    <span class="mr-3">💰</span> 토큰 사용량 분석
+                </a>
+                <a href="#" class="sidebar-link" onclick="showPage('agents')">
+                    <span class="mr-3">🤖</span> 에이전트 설정
+                </a>
+            </nav>
+            <div class="absolute bottom-0 w-64 p-4 border-t bg-white">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center font-bold">A</div>
+                    <div class="ml-3">
+                        <p class="font-semibold">관리자</p>
+                        <a href="#" class="text-sm text-red-500">로그아웃</a>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-6 md:p-8 overflow-y-auto">
+            
+            <!-- Page: Dashboard -->
+            <div id="dashboard" class="page">
+                <h2 class="text-3xl font-bold mb-6">대시보드</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="card text-center">
+                        <p class="text-gray-500 text-sm">총 사용자</p>
+                        <p class="text-4xl font-bold mt-2">128</p>
+                    </div>
+                    <div class="card text-center">
+                        <p class="text-gray-500 text-sm">오늘 진행된 토론</p>
+                        <p class="text-4xl font-bold mt-2">32</p>
+                    </div>
+                    <div class="card text-center">
+                        <p class="text-gray-500 text-sm">총 에이전트 수</p>
+                        <p class="text-4xl font-bold mt-2">35</p>
+                    </div>
+                    <div class="card text-center">
+                        <p class="text-gray-500 text-sm">예상 월간 비용</p>
+                        <p class="text-4xl font-bold mt-2">$256.70</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3 class="font-bold mb-4">주간 토론 진행량</h3>
+                    <div class="h-80"><canvas id="weeklyDiscussionsChart"></canvas></div>
+                </div>
+            </div>
+
+            <!-- Page: User Management -->
+            <div id="users" class="page">
+                 <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold">계정 관리</h2>
+                    <button class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700">＋ 새 계정 추가</button>
+                </div>
+                <div class="card overflow-x-auto">
+                    <table class="w-full table">
+                        <thead>
+                            <tr class="bg-gray-50">
+                                <th>ID</th>
+                                <th>이메일</th>
+                                <th>가입일</th>
+                                <th>마지막 접속</th>
+                                <th>관리</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>128</td>
+                                <td>user1@example.com</td>
+                                <td>2025-08-15</td>
+                                <td>2025-08-18</td>
+                                <td><button class="text-blue-500">수정</button> <button class="text-red-500 ml-2">삭제</button></td>
+                            </tr>
+                            <tr>
+                                <td>127</td>
+                                <td>user2@example.com</td>
+                                <td>2025-08-14</td>
+                                <td>2025-08-17</td>
+                                <td><button class="text-blue-500">수정</button> <button class="text-red-500 ml-2">삭제</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Page: Discussion Monitoring -->
+            <div id="monitoring" class="page">
+                <h2 class="text-3xl font-bold mb-6">토론 이력 모니터링</h2>
+                <div class="card overflow-x-auto">
+                    <table class="w-full table">
+                        <thead>
+                            <tr class="bg-gray-50">
+                                <th>토론 ID</th>
+                                <th>사용자 이메일</th>
+                                <th>주제</th>
+                                <th>시작 시간</th>
+                                <th>상태</th>
+                                <th>상세</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>sess_abc123</td>
+                                <td>user1@example.com</td>
+                                <td>테슬라 주가 전망...</td>
+                                <td>2025-08-18 14:30</td>
+                                <td><span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">완료</span></td>
+                                <td><a href="#" class="text-blue-500">내용/보고서 보기</a></td>
+                            </tr>
+                            <tr>
+                                <td>sess_def456</td>
+                                <td>user2@example.com</td>
+                                <td>대한민국 수도 이전...</td>
+                                <td>2025-08-18 14:15</td>
+                                <td><span class="bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded-full">진행중</span></td>
+                                <td><a href="#" class="text-blue-500">실시간 보기</a></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Page: Token Usage Analysis (List View) -->
+            <div id="tokens" class="page active">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold">토큰 사용량 상세 분석</h2>
+                    <a href="#" target="_blank" class="bg-gray-800 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-900">LangSmith에서 보기 ↗</a>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="card text-center">
+                        <p class="text-gray-500 text-sm">총 사용 비용 (이번 달)</p>
+                        <p class="text-3xl font-bold mt-2">$182.50</p>
+                    </div>
+                    <div class="card text-center">
+                        <p class="text-gray-500 text-sm">총 토론 수</p>
+                        <p class="text-3xl font-bold mt-2">482</p>
+                    </div>
+                    <div class="card text-center">
+                        <p class="text-gray-500 text-sm">토론 당 평균 비용</p>
+                        <p class="text-3xl font-bold mt-2">$0.378</p>
+                    </div>
+                </div>
+
+                <div class="card mb-8">
+                    <h3 class="font-bold mb-4">토론별 비용 분석</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full table">
+                            <thead>
+                                <tr class="bg-gray-50">
+                                    <th>토론 ID</th>
+                                    <th>사용자</th>
+                                    <th>총 토큰</th>
+                                    <th>예상 비용</th>
+                                    <th>모델별 사용량</th>
+                                    <th>상세</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>sess_abc123</td>
+                                    <td>user1@...</td>
+                                    <td>15,820</td>
+                                    <td>$0.45</td>
+                                    <td>
+                                        <div class="text-xs">
+                                            <p><strong>GPT-4o:</strong> 8,120</p>
+                                            <p><strong>Gemini:</strong> 5,200</p>
+                                            <p><strong>Claude:</strong> 2,500</p>
+                                        </div>
+                                    </td>
+                                    <td><a href="#" class="text-blue-500 font-semibold" onclick="showDetailPage('sess_abc123')">분석</a></td>
+                                </tr>
+                                 <tr>
+                                    <td>sess_ghi789</td>
+                                    <td>user3@...</td>
+                                    <td>8,550</td>
+                                    <td>$0.21</td>
+                                    <td>
+                                        <div class="text-xs">
+                                            <p><strong>GPT-4o:</strong> 3,500</p>
+                                            <p><strong>Gemini:</strong> 5,050</p>
+                                        </div>
+                                    </td>
+                                    <td><a href="#" class="text-blue-500 font-semibold" onclick="showDetailPage('sess_ghi789')">분석</a></td>
+                                </tr>
+                                <tr>
+                                    <td>sess_jkl012</td>
+                                    <td>user1@...</td>
+                                    <td>22,100</td>
+                                    <td>$0.88</td>
+                                    <td>
+                                        <div class="text-xs">
+                                            <p><strong>Claude:</strong> 22,100</p>
+                                        </div>
+                                    </td>
+                                    <td><a href="#" class="text-blue-500 font-semibold" onclick="showDetailPage('sess_jkl012')">분석</a></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="card">
+                        <h3 class="font-bold mb-4">모델별 총 비용 분석</h3>
+                        <div class="h-80"><canvas id="costByModelChart"></canvas></div>
+                    </div>
+                    <div class="card">
+                        <h3 class="font-bold mb-4">일별 토론 비용 추이</h3>
+                        <div class="h-80"><canvas id="dailyCostChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- [NEW] Page: Token Usage Detail View -->
+            <div id="token-detail" class="page">
+                <div class="mb-6">
+                    <button class="text-blue-600 font-semibold hover:underline" onclick="showPage('tokens')">← 토큰 분석 목록으로 돌아가기</button>
+                </div>
+                <h2 class="text-3xl font-bold mb-2">토론 상세 분석: <span id="detail-session-id" class="text-blue-600"></span></h2>
+                <p class="text-gray-500 mb-6" id="detail-topic"></p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <div class="card text-center"><p class="text-gray-500 text-sm">총 비용</p><p id="detail-total-cost" class="text-3xl font-bold mt-2"></p></div>
+                    <div class="card text-center"><p class="text-gray-500 text-sm">총 토큰</p><p id="detail-total-tokens" class="text-3xl font-bold mt-2"></p></div>
+                    <div class="card text-center"><p class="text-gray-500 text-sm">사용자</p><p id="detail-user" class="text-xl font-bold mt-2"></p></div>
+                    <div class="card text-center"><p class="text-gray-500 text-sm">토론 시간</p><p id="detail-duration" class="text-3xl font-bold mt-2"></p></div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 card">
+                        <h3 class="font-bold mb-4">에이전트별 비용 상세 내역</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full table">
+                                <thead>
+                                    <tr class="bg-gray-50">
+                                        <th>순서</th>
+                                        <th>에이전트</th>
+                                        <th>모델</th>
+                                        <th>입력 토큰</th>
+                                        <th>출력 토큰</th>
+                                        <th>비용</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="detail-turn-table">
+                                    <!-- JS will populate this -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3 class="font-bold mb-4">에이전트별 비용 기여도</h3>
+                        <div class="h-80"><canvas id="costByAgentChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Page: Agent Settings -->
+            <div id="agents" class="page active">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold">에이전트 설정</h2>
+                    <button class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700" onclick="toggleModal('agent-edit-modal')">＋ 새 에이전트 추가</button>
+                </div>
+                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    <!-- [제안 4 반영] 활성화/비활성화 토글 추가 -->
+                    <div class="card text-center relative">
+                        <div class="absolute top-4 right-4 flex items-center gap-2">
+                            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                <input type="checkbox" name="toggle" id="toggle1" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer" checked/>
+                                <label for="toggle1" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                            </div>
+                            <button onclick="toggleModal('agent-edit-modal')">⚙️</button>
+                        </div>
+                        <p class="text-5xl pt-4">💹</p>
+                        <h3 class="font-bold mt-2">재무 분석가</h3>
+                        <p class="text-xs text-gray-500 mt-1">gemini-1.5-pro</p>
+                    </div>
+                    <div class="card text-center relative opacity-50 bg-gray-50">
+                         <div class="absolute top-4 right-4 flex items-center gap-2">
+                            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                <input type="checkbox" name="toggle" id="toggle2" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                                <label for="toggle2" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                            </div>
+                            <button onclick="toggleModal('agent-edit-modal')">⚙️</button>
+                        </div>
+                        <p class="text-5xl pt-4">🤔</p>
+                        <h3 class="font-bold mt-2">비판적 관점 (비활성)</h3>
+                        <p class="text-xs text-gray-500 mt-1">gpt-4o</p>
+                    </div>
+                     <div class="card text-center relative">
+                        <div class="absolute top-4 right-4 flex items-center gap-2">
+                            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                <input type="checkbox" name="toggle" id="toggle3" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer" checked/>
+                                <label for="toggle3" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                            </div>
+                            <button onclick="toggleModal('agent-edit-modal')">⚙️</button>
+                        </div>
+                        <p class="text-5xl pt-4">🌍</p>
+                        <h3 class="font-bold mt-2">거시경제 전문가</h3>
+                        <p class="text-xs text-gray-500 mt-1">claude-3.5-sonnet</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- [NEW] 에이전트 수정/추가 Modal -->
+    <div id="agent-edit-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden opacity-0 z-50">
+        <div class="card w-full max-w-2xl max-h-[90vh] flex flex-col p-0">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h2 class="text-xl font-bold text-blue-600">에이전트 설정 수정</h2>
+                <button class="text-2xl font-bold" onclick="toggleModal('agent-edit-modal')">&times;</button>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto">
+                <div>
+                    <label class="font-semibold">에이전트 이름</label>
+                    <input type="text" value="재무 분석가" class="w-full mt-1 p-2 border-gray-300 border rounded-lg">
+                </div>
+                <div>
+                    <label class="font-semibold">시스템 프롬프트</label>
+                    <textarea rows="8" class="w-full mt-1 p-2 border-gray-300 border rounded-lg">You are a professional Financial Analyst...</textarea>
+                </div>
+                <div>
+                    <label class="font-semibold">LLM 모델</label>
+                    <select class="w-full mt-1 p-2 border-gray-300 border rounded-lg">
+                        <option>gpt-4o</option>
+                        <option selected>gemini-1.5-pro</option>
+                        <option>claude-3.5-sonnet</option>
+                    </select>
+                </div>
+                <!-- [제안 4 반영] 변경 이력 확인 버튼 -->
+                <button class="text-sm text-blue-600 hover:underline" onclick="toggleModal('history-modal')">프롬프트 변경 이력 보기</button>
+            </div>
+            <div class="p-4 border-t bg-gray-50 flex justify-end items-center gap-4">
+                <button class="text-red-600 font-semibold hover:text-red-800">삭제</button>
+                <button class="bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-lg hover:bg-gray-300" onclick="toggleModal('agent-edit-modal')">취소</button>
+                <button class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- [NEW] 프롬프트 변경 이력 Modal -->
+    <div id="history-modal" class="modal fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 hidden opacity-0 z-50">
+        <div class="card w-full max-w-lg max-h-[70vh] flex flex-col p-0">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h2 class="text-xl font-bold text-blue-600">프롬프트 변경 이력</h2>
+                <button class="text-2xl font-bold" onclick="toggleModal('history-modal')">&times;</button>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto">
+                <div class="border-b pb-2">
+                    <p class="font-semibold">버전 1.2 <span class="text-sm text-gray-500 font-normal">(2025-08-20 by admin)</span></p>
+                    <p class="text-sm text-gray-600 mt-1">"You are a professional Financial Analyst. Your role is to provide insightful financial analysis..."</p>
+                </div>
+                 <div class="border-b pb-2">
+                    <p class="font-semibold">버전 1.1 <span class="text-sm text-gray-500 font-normal">(2025-08-15 by admin)</span></p>
+                    <p class="text-sm text-gray-600 mt-1">"You are a Financial Analyst..."</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Mock Data for Detail Page
+        const detailData = {
+            "sess_abc123": {
+                topic: "테슬라 주가 전망에 대한 심층 분석",
+                total_cost: 0.45,
+                total_tokens: 15820,
+                user: "user1@example.com",
+                duration: "12분 30초",
+                turns: [
+                    { turn: 1, agent: "SNS 트렌드 분석가", model: "Gemini 1.5", input: 500, output: 1200, cost: 0.05 },
+                    { turn: 2, agent: "재무 분석가", model: "GPT-4o", input: 1500, output: 800, cost: 0.10 },
+                    { turn: 3, agent: "비판적 관점", model: "Claude 3.5", input: 1300, output: 1200, cost: 0.08 },
+                    { turn: 4, agent: "거시경제 전문가", model: "Gemini 1.5", input: 1800, output: 1700, cost: 0.12 },
+                    { turn: 5, agent: "재무 분석가", model: "GPT-4o", input: 2120, output: 1500, cost: 0.10 },
+                ]
+            }
+        };
+
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+            
+            document.querySelectorAll('.sidebar-link').forEach(link => link.classList.remove('active'));
+            document.querySelector(`.sidebar-link[onclick="showPage('${pageId}')"]`).classList.add('active');
+        }
+
+        function toggleModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                setTimeout(() => modal.classList.remove('opacity-0'), 10);
+            } else {
+                modal.classList.add('opacity-0');
+                setTimeout(() => modal.classList.add('hidden'), 300);
+            }
+        }
+
+        let costByAgentChartInstance;
+        function showDetailPage(sessionId) {
+            const data = detailData[sessionId] || detailData["sess_abc123"]; // Fallback for demo
+
+            // Populate summary
+            document.getElementById('detail-session-id').textContent = sessionId;
+            document.getElementById('detail-topic').textContent = `주제: ${data.topic}`;
+            document.getElementById('detail-total-cost').textContent = `$${data.total_cost.toFixed(2)}`;
+            document.getElementById('detail-total-tokens').textContent = data.total_tokens.toLocaleString();
+            document.getElementById('detail-user').textContent = data.user;
+            document.getElementById('detail-duration').textContent = data.duration;
+
+            // Populate turn-by-turn table
+            const tableBody = document.getElementById('detail-turn-table');
+            tableBody.innerHTML = '';
+            data.turns.forEach(turn => {
+                const row = `
+                    <tr>
+                        <td>${turn.turn}</td>
+                        <td>${turn.agent}</td>
+                        <td><span class="bg-gray-100 text-gray-800 text-xs font-medium px-2 py-0.5 rounded">${turn.model}</span></td>
+                        <td>${turn.input.toLocaleString()}</td>
+                        <td>${turn.output.toLocaleString()}</td>
+                        <td>$${turn.cost.toFixed(3)}</td>
+                    </tr>
+                `;
+                tableBody.innerHTML += row;
+            });
+
+            // Aggregate data for chart
+            const agentCosts = data.turns.reduce((acc, turn) => {
+                acc[turn.agent] = (acc[turn.agent] || 0) + turn.cost;
+                return acc;
+            }, {});
+
+            const chartLabels = Object.keys(agentCosts);
+            const chartData = Object.values(agentCosts);
+
+            // Create or update agent cost chart
+            const ctxCostAgent = document.getElementById('costByAgentChart').getContext('2d');
+            if (costByAgentChartInstance) {
+                costByAgentChartInstance.destroy();
+            }
+            costByAgentChartInstance = new Chart(ctxCostAgent, {
+                type: 'doughnut',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        label: '비용 기여도 ($)',
+                        data: chartData,
+                        backgroundColor: ['#2563eb', '#34d399', '#f59e0b', '#ef4444', '#8b5cf6']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            showPage('token-detail');
+        }
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            showPage('agents'); // Default page
+
+            // Chart instances
+            let weeklyChart, costModelChart, dailyCostChart;
+
+            // Weekly Discussions Chart
+            const ctxWeekly = document.getElementById('weeklyDiscussionsChart')?.getContext('2d');
+            if(ctxWeekly) {
+                weeklyChart = new Chart(ctxWeekly, {
+                    type: 'line',
+                    data: {
+                        labels: ['월', '화', '수', '목', '금', '토', '일'],
+                        datasets: [{
+                            label: '토론 수',
+                            data: [12, 19, 25, 28, 32, 22, 18],
+                            borderColor: '#2563eb',
+                            backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }
+
+            // Cost by Model Chart
+            const ctxCostModel = document.getElementById('costByModelChart')?.getContext('2d');
+            if(ctxCostModel) {
+                costModelChart = new Chart(ctxCostModel, {
+                    type: 'pie',
+                    data: {
+                        labels: ['GPT-4o', 'Gemini 1.5 Pro', 'Claude 3.5 Sonnet'],
+                        datasets: [{
+                            label: '비용 ($)',
+                            data: [95.40, 55.20, 31.90],
+                            backgroundColor: ['#2563eb', '#34d399', '#f59e0b']
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }
+
+            // Daily Cost Chart
+            const ctxDailyCost = document.getElementById('dailyCostChart')?.getContext('2d');
+            if(ctxDailyCost) {
+                dailyCostChart = new Chart(ctxDailyCost, {
+                    type: 'bar',
+                    data: {
+                        labels: ['8/12', '8/13', '8/14', '8/15', '8/16', '8/17', '8/18'],
+                        datasets: [{
+                            label: '일별 비용 ($)',
+                            data: [15.2, 22.5, 28.1, 30.5, 35.8, 25.4, 25.0],
+                            backgroundColor: '#60a5fa'
+                        }]
+                    },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

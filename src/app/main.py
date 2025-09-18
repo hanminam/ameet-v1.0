@@ -73,7 +73,15 @@ async def read_root():
     루트 URL로 접속 시, 프론트엔드의 메인 화면인 index.html 파일을 반환합니다.
     """
     return FileResponse(BASE_DIR / "templates/index.html")
-# --- 루트 엔드포인트 수정 끝 ---
+
+# --- 관리자 페이지 엔드포인트 ---
+@app.get("/admin", response_class=HTMLResponse)
+async def read_admin_page():
+    """
+    /admin URL 접속 시, 관리자 페이지(admin.html)를 반환합니다.
+    참고: 실제 운영 환경에서는 이 엔드포인트에 관리자 인증 로직을 반드시 추가해야 합니다.
+    """
+    return FileResponse(BASE_DIR / "templates/admin.html")
 
 @app.get("/api/v1/health-check")
 async def health_check():
