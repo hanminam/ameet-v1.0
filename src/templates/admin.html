@@ -585,19 +585,33 @@
          * 날짜 문자열을 'YYYY-MM-DD HH:MM:SS' 형식으로 변환합니다.
          * @param {string | null} dateString - 변환할 날짜 문자열
          * @returns {string} - 포맷된 날짜 또는 'N/A'
+        
+         * 날짜 문자열을 한국 시간(KST)으로 변환합니다.
+         * 서버에서 받은 UTC 시간 객체에 직접 9시간을 더해 KST로 만듭니다.
+         * @param {string | null} dateString - 변환할 날짜 문자열 (예: '2025-09-18T05:54:57.765+00:00')
+         * @returns {string} - 'YYYY-MM-DD HH:MM:SS' 형식의 KST 날짜
          */
         function formatDateTime(dateString) {
             if (!dateString) return 'N/A';
             try {
+                // 1. 서버에서 받은 시간 문자열로 Date 객체를 생성합니다.
+                //    이 객체는 내부적으로 UTC 시간 정보를 가집니다.
                 const date = new Date(dateString);
+
                 if (isNaN(date.getTime())) return 'Invalid Date';
 
-                const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const day = String(date.getDate()).padStart(2, '0');
-                const hours = String(date.getHours()).padStart(2, '0');
-                const minutes = String(date.getMinutes()).padStart(2, '0');
-                const seconds = String(date.getSeconds()).padStart(2, '0');
+                // 2. [핵심] UTC 시간에 9시간을 직접 더하여 한국 시간(KST)으로 만듭니다.
+                date.setHours(date.getHours() + 9);
+
+                // 3. 9시간이 더해진 시간을 원하는 형식으로 조합합니다.
+                //    getUTCFullYear(), getUTCMonth() 등을 사용하여 UTC 기준의 날짜/시간을 추출해야
+                //    브라우저의 자체적인 시간대 변환을 막을 수 있습니다.
+                const year = date.getUTCFullYear();
+                const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+                const day = String(date.getUTCDate()).padStart(2, '0');
+                const hours = String(date.getUTCHours()).padStart(2, '0');
+                const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+                const seconds = String(date.getUTCSeconds()).padStart(2, '0');
 
                 return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
             } catch (e) {
