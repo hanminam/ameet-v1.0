@@ -6,6 +6,7 @@ import asyncio
 # aiofiles 라이브러리를 사용하여 비동기 파일 처리를 합니다.
 # requirements.txt에 aiofiles가 이미 포함되어 있어 별도 설치가 필요 없습니다.
 import aiofiles
+from datetime import datetime
 
 from app.models.user import User
 from app.schemas.user import UserCreate
@@ -53,7 +54,7 @@ async def get_users(skip: int = 0, limit: int = 100) -> List[User]:
     return [User(**user_data) for user_data in paginated_users]
 
 async def create_user(user: UserCreate) -> User:
-    """새로운 사용자를 생성합니다."""
+    """새로운 사용자를 생성하고, 가입일과 마지막 접속일을 기록합니다."""
     users = await _read_users_from_file()
     
     if any(u["email"] == user.email for u in users):
@@ -62,12 +63,16 @@ async def create_user(user: UserCreate) -> User:
     hashed_password = get_password_hash(user.password)
     new_user_id = max([u.get("id", 0) for u in users] or [0]) + 1
     
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     new_user_data = {
         "id": new_user_id,
         "name": user.name,
         "email": user.email,
         "hashed_password": hashed_password,
-        "role": user.role
+        "role": user.role,
+        "created_at": current_time,
+        "last_login_at": current_time
     }
     
     users.append(new_user_data)
@@ -88,3 +93,37 @@ async def delete_user(user_id: int) -> Optional[User]:
         await _write_users_to_file(updated_users)
         
     return user_to_delete
+
+# --- 마지막 로그인 시간 업데이트 함수 ---
+async def update_user_last_login(email: str) -> Optional[User]:
+    """사용자의 마지막 로그인 시간을 현재 시간으로 업데이트합니다."""
+    users = await _read_users_from_file()
+    user_found = False
+    updated_user_data = None
+    for user_data in users:
+        if user_data["email"] == email:
+            user_data["last_login_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            updated_user_data = user_data
+            user_found = True
+            break
+    
+    if user_found:
+        await _write_users_to_file(users)
+        return User(**updated_user_data)
+    return None
+
+# --- 역할 기반 사용자 조회 함수 ---
+async def get_users_by_role(role: str) -> List[User]:
+    """특정 역할을 가진 사용자 목록을 가입일 최신순으로 정렬하여 반환합니다."""
+    users = await _read_users_from_file()
+    
+    role_users = [u for u in users if u.get("role") == role]
+    
+    # 가입일(created_at) 기준으로 내림차순 정렬 (최신 가입자 순)
+    sorted_users = sorted(
+        role_users, 
+        key=lambda u: u.get("created_at", "1970-01-01 00:00:00"), 
+        reverse=True
+    )
+    
+    return [User(**user_data) for user_data in sorted_users]

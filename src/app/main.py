@@ -15,6 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import discussions as discussions_router
 from app.api.v1.admin import agents as admin_agents, discussions as admin_discussions
 
+from app.api.v1.admin import users as admin_users
+
 app = FastAPI(title=settings.APP_TITLE)
 
 # --- main.py 파일의 위치를 기준으로 절대 경로 생성 ---
@@ -51,6 +53,20 @@ app.include_router(
     admin_discussions.router,
     prefix="/api/v1/admin/discussions",
     tags=["Admin: Discussions"]
+)
+
+# --- 관리자용 API 라우터 등록 ---
+app.include_router(
+    admin_agents.router, 
+    prefix="/api/v1/admin/agents", 
+    tags=["Admin: Agents"]
+)
+
+# --- 관리자용 사용자 관리 API 라우터 ---
+app.include_router(
+    admin_users.router,
+    prefix="/api/v1/admin/users",
+    tags=["Admin: Users"]
 )
 
 # --- CORS 미들웨어 추가 ---

@@ -4,13 +4,17 @@
         "name": "Admin User",
         "email": "admin@example.com",
         "role": "admin",
-        "hashed_password": "$scrypt$ln=14,r=8,p=1$XGvtnbNWKoVQyplzTuldCw$5D45Z3KTF8dmbLBqMxEhXCj+pKN4NvYWGq3kXDdfaxQ"
+        "hashed_password": "$scrypt$ln=14,r=8,p=1$XGvtnbNWKoVQyplzTuldCw$5D45Z3KTF8dmbLBqMxEhXCj+pKN4NvYWGq3kXDdfaxQ",
+        "created_at": "2025-09-18 10:00:00",
+        "last_login_at": "2025-09-18 13:40:00"
     },
     {
         "id": 2,
         "name": "Normal User",
         "email": "user@example.com",
         "role": "user",
-        "hashed_password": "$scrypt$ln=14,r=8,p=1$7b13rlWqdY6R8l4Lwdgbow$kK1jVuBef7pBfCfE/Shz4De1Tk0TWrAWbxYuCSgZd04"
+        "hashed_password": "$scrypt$ln=14,r=8,p=1$7b13rlWqdY6R8l4Lwdgbow$kK1jVuBef7pBfCfE/Shz4De1Tk0TWrAWbxYuCSgZd04",
+        "created_at": "2025-09-18 10:00:00",
+        "last_login_at": "2025-09-18 13:40:00"
     }
 ]

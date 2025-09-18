@@ -7,6 +7,8 @@ from app.crud.user import get_user_by_email
 from app.core import security
 import logging
 
+from app.crud import user as user_crud
+
 # 로깅 설정
 logger = logging.getLogger(__name__)
 
@@ -53,6 +55,9 @@ async def login_for_access_token(
         )
     
     logger.info("[DEBUG] 5. 비밀번호 일치. 토큰을 생성합니다.")
+
+    await user_crud.update_user_last_login(email=user.email)
+    logger.info(f"[DEBUG] 6. 사용자 '{user.email}'의 마지막 로그인 시간 업데이트 완료.")
     
     # 인증 성공 시, 액세스 토큰 생성
     access_token = security.create_access_token(
