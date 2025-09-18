@@ -717,18 +717,39 @@
          * 수정 버튼 클릭 시 모달을 열고 기존 정보를 채우는 함수
          */
         function openEditModal(userId) {
+            // --- 디버깅 코드 시작 ---
+            console.clear(); // 이전 로그를 지워 보기 쉽게 만듭니다.
+            console.log("--- 🕵️‍♂️ 수정 기능 디버깅 시작 ---");
+            console.log("1. 버튼에서 클릭된 사용자 ID:", userId);
+            console.log("   (타입:", typeof userId + ")");
+
+            if (!window.currentUsers || window.currentUsers.length === 0) {
+                console.error("❌ 오류: window.currentUsers 데이터가 비어있습니다. loadUsers 함수를 확인하세요.");
+                alert('내부 데이터가 준비되지 않았습니다. 페이지를 새로고침 후 다시 시도해주세요.');
+                return;
+            }
+            
+            console.log("2. 현재 보관 중인 전체 사용자 데이터:", window.currentUsers);
+            console.log("3. 보관된 데이터에 있는 ID 목록:", window.currentUsers.map(u => u.id));
+            // --- 디버깅 코드 끝 ---
+
             const user = window.currentUsers.find(u => u.id === userId);
+
             if (!user) {
+                console.error(`❌ 찾기 실패: ID '${userId}'와 일치하는 사용자를 데이터 안에서 찾을 수 없습니다.`);
                 alert('사용자 정보를 찾을 수 없습니다.');
                 return;
             }
+
+            // 사용자 정보를 찾았을 경우, 정상적으로 모달을 엽니다.
+            console.log("✅ 찾기 성공! 모달을 엽니다. 찾은 사용자 정보:", user);
 
             // 모달의 각 필드에 사용자 정보 채우기
             document.getElementById('edit-user-id').value = user.id;
             document.getElementById('edit-user-name').value = user.name;
             document.getElementById('edit-user-email').value = user.email;
             document.getElementById('edit-user-role').value = user.role;
-            document.getElementById('edit-user-password').value = ''; // 비밀번호 필드는 비움
+            document.getElementById('edit-user-password').value = '';
             document.getElementById('user-edit-error').textContent = '';
 
             toggleModal('user-edit-modal');
