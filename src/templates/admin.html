@@ -717,18 +717,17 @@
          * 수정 버튼 클릭 시 모달을 열고 기존 정보를 채우는 함수
          */
         function openEditModal(userId) {
-            const user = window.currentUsers.find(u => u.id === userId);
+            const user = window.currentUsers.find(u => u._id === userId);
             if (!user) {
                 alert('사용자 정보를 찾을 수 없습니다.');
                 return;
             }
 
-            // 모달의 각 필드에 사용자 정보 채우기
-            document.getElementById('edit-user-id').value = user.id;
+            document.getElementById('edit-user-id').value = user._id;
             document.getElementById('edit-user-name').value = user.name;
             document.getElementById('edit-user-email').value = user.email;
             document.getElementById('edit-user-role').value = user.role;
-            document.getElementById('edit-user-password').value = ''; // 비밀번호 필드는 비움
+            document.getElementById('edit-user-password').value = '';
             document.getElementById('user-edit-error').textContent = '';
 
             toggleModal('user-edit-modal');
