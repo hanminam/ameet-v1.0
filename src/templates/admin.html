@@ -92,7 +92,7 @@
                     <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center font-bold">A</div>
                     <div class="ml-3">
                         <p class="font-semibold">관리자</p>
-                        <a href="#" class="text-sm text-red-500">로그아웃</a>
+                        <a href="#" id="admin-logout-button" class="text-sm text-red-500">로그아웃</a>
                     </div>
                 </div>
             </div>
@@ -601,6 +601,34 @@
                         responsive: true, 
                         maintainAspectRatio: false,
                     }
+                });
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const logoutButton = document.getElementById('admin-logout-button');
+            const accessToken = localStorage.getItem('accessToken');
+
+            // 1. 페이지 로드 시, 토큰이 없으면 로그인 페이지로 즉시 이동
+            if (!accessToken) {
+                console.log('액세스 토큰이 없어 로그인 페이지로 이동합니다.');
+                window.location.href = '/';
+                return;
+            }
+
+            // 2. 로그아웃 버튼에 클릭 이벤트 리스너 추가
+            if (logoutButton) {
+                logoutButton.addEventListener('click', (event) => {
+                    event.preventDefault(); // a 태그의 기본 동작 방지
+
+                    // 3. 로컬 스토리지에서 사용자 정보 삭제
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('userEmail');
+
+                    console.log('관리자 계정이 로그아웃되었습니다.');
+
+                    // 4. 메인 로그인 페이지로 리디렉션
+                    window.location.href = '/';
                 });
             }
         });
