@@ -4,7 +4,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 
 # Pydantic 스키마와 MongoDB 모델(User)을 모두 사용
-from app.schemas.user import UserCreate, User as UserSchema
+from app.schemas.user import UserCreate, User as UserSchema, UserUpdate 
 from app.models.discussion import User
 from app.core.security import get_password_hash
 
@@ -40,8 +40,33 @@ async def get_users(skip: int = 0, limit: int = 100) -> List[User]:
     """모든 사용자 목록을 페이지네이션하여 조회합니다."""
     return await User.find_all().skip(skip).limit(limit).to_list()
 
-async def delete_user(user_id: int) -> Optional[User]:
-    """ID로 사용자를 삭제합니다. (MongoDB의 PydanticObjectId 필요)"""
-    # MongoDB의 ObjectId는 정수가 아니므로, 이 기능은 추가적인 수정이 필요합니다.
-    # 지금은 기능이 호출되지 않으므로 그대로 둡니다.
+# --- 사용자 정보 업데이트 함수 ---
+async def update_user(user_id: str, user_update: UserUpdate) -> Optional[User]:
+    """ID로 사용자를 찾아 정보를 업데이트합니다."""
+    user = await User.get(user_id)
+    if not user:
+        return None
+
+    update_data = user_update.model_dump(exclude_unset=True)
+
+    # 비밀번호가 제공된 경우, 해시하여 업데이트
+    if "password" in update_data and update_data["password"]:
+        hashed_password = get_password_hash(update_data["password"])
+        user.hashed_password = hashed_password
+        del update_data["password"] # 해시된 값으로 대체했으므로 제거
+
+    # 나머지 필드 업데이트
+    for key, value in update_data.items():
+        setattr(user, key, value)
+    
+    await user.save()
+    return user
+
+# --- 사용자 삭제 함수 (ID 타입을 int에서 str으로 변경) ---
+async def delete_user(user_id: str) -> Optional[User]:
+    """ID로 사용자를 찾아 삭제합니다."""
+    user = await User.get(user_id)
+    if user:
+        await user.delete()
+        return user
     return None

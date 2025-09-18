@@ -374,6 +374,7 @@
         </main>
     </div>
 
+    <!-- 사용자 추가 -->
     <div id="user-add-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden opacity-0 z-50">
         <div class="card w-full max-w-lg max-h-[90vh] flex flex-col p-0">
             <div class="p-4 border-b flex justify-between items-center">
@@ -405,6 +406,43 @@
             <div class="p-4 border-t bg-gray-50 flex justify-end items-center gap-4">
                 <button class="bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-lg hover:bg-gray-300" onclick="toggleModal('user-add-modal')">취소</button>
                 <button id="save-user-button" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 사용자 수정 -->
+    <div id="user-edit-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden opacity-0 z-50">
+        <div class="card w-full max-w-lg max-h-[90vh] flex flex-col p-0">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h2 class="text-xl font-bold text-blue-600">계정 정보 수정</h2>
+                <button class="text-2xl font-bold" onclick="toggleModal('user-edit-modal')">&times;</button>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto">
+                <input type="hidden" id="edit-user-id">
+                <div>
+                    <label class="font-semibold">이름</label>
+                    <input type="text" id="edit-user-name" class="w-full mt-1 p-2 border-gray-300 border rounded-lg">
+                </div>
+                <div>
+                    <label class="font-semibold">이메일 (수정 불가)</label>
+                    <input type="email" id="edit-user-email" class="w-full mt-1 p-2 border-gray-300 border rounded-lg bg-gray-100" readonly>
+                </div>
+                <div>
+                    <label class="font-semibold">새 비밀번호</label>
+                    <input type="password" id="edit-user-password" placeholder="변경할 경우에만 입력하세요" class="w-full mt-1 p-2 border-gray-300 border rounded-lg">
+                </div>
+                <div>
+                    <label class="font-semibold">역할</label>
+                    <select id="edit-user-role" class="w-full mt-1 p-2 border-gray-300 border rounded-lg bg-white">
+                        <option value="user">user</option>
+                        <option value="admin">admin</option>
+                    </select>
+                </div>
+                <div id="user-edit-error" class="text-sm text-red-500 h-4"></div>
+            </div>
+            <div class="p-4 border-t bg-gray-50 flex justify-end items-center gap-4">
+                <button class="bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-lg hover:bg-gray-300" onclick="toggleModal('user-edit-modal')">취소</button>
+                <button id="save-edit-user-button" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">수정사항 저장</button>
             </div>
         </div>
     </div>
@@ -596,6 +634,7 @@
                 // 서버에서 이미 최신순으로 정렬해서 보내주므로 바로 사용
                 users.forEach((user, index) => {
                     const row = document.createElement('tr');
+                    // 버튼에 data-userid와 식별 클래스(edit-btn, delete-btn) 추가
                     row.innerHTML = `
                         <td>${index + 1}</td>
                         <td>${user.name}</td>
@@ -603,12 +642,14 @@
                         <td>${formatDateTime(user.created_at)}</td>
                         <td>${formatDateTime(user.last_login_at)}</td>
                         <td>
-                            <button class="text-blue-500 text-sm font-semibold">수정</button> 
-                            <button class="text-red-500 text-sm font-semibold ml-2">삭제</button>
+                            <button class="text-blue-500 text-sm font-semibold edit-btn" data-userid="${user.id}">수정</button> 
+                            <button class="text-red-500 text-sm font-semibold ml-2 delete-btn" data-userid="${user.id}" data-username="${user.name}">삭제</button>
                         </td>
                     `;
                     tbody.appendChild(row);
                 });
+
+                window.currentUsers = users;
 
             } catch (error) {
                 console.error('Error loading users:', error);
@@ -669,6 +710,103 @@
             } finally {
                 saveButton.disabled = false;
                 saveButton.textContent = '저장';
+            }
+        }
+
+        /**
+         * 수정 버튼 클릭 시 모달을 열고 기존 정보를 채우는 함수
+         */
+        function openEditModal(userId) {
+            const user = window.currentUsers.find(u => u.id === userId);
+            if (!user) {
+                alert('사용자 정보를 찾을 수 없습니다.');
+                return;
+            }
+
+            // 모달의 각 필드에 사용자 정보 채우기
+            document.getElementById('edit-user-id').value = user.id;
+            document.getElementById('edit-user-name').value = user.name;
+            document.getElementById('edit-user-email').value = user.email;
+            document.getElementById('edit-user-role').value = user.role;
+            document.getElementById('edit-user-password').value = ''; // 비밀번호 필드는 비움
+            document.getElementById('user-edit-error').textContent = '';
+
+            toggleModal('user-edit-modal');
+        }
+
+        /**
+         * 수정된 사용자 정보를 서버에 PUT 요청하는 함수
+         */
+        async function handleUpdateUser() {
+            const userId = document.getElementById('edit-user-id').value;
+            const name = document.getElementById('edit-user-name').value.trim();
+            const password = document.getElementById('edit-user-password').value;
+            const role = document.getElementById('edit-user-role').value;
+            const errorDiv = document.getElementById('user-edit-error');
+            const saveButton = document.getElementById('save-edit-user-button');
+
+            const updatePayload = { name, role };
+            // 비밀번호 필드가 비어있지 않은 경우에만 payload에 추가
+            if (password) {
+                updatePayload.password = password;
+            }
+
+            saveButton.disabled = true;
+            saveButton.textContent = '저장 중...';
+            errorDiv.textContent = '';
+            const token = localStorage.getItem('accessToken');
+
+            try {
+                const response = await fetch(`/api/v1/admin/users/${userId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(updatePayload)
+                });
+
+                if (response.ok) {
+                    alert('사용자 정보가 성공적으로 수정되었습니다.');
+                    toggleModal('user-edit-modal');
+                    await loadUsers(); // 목록 새로고침
+                } else {
+                    const errorData = await response.json();
+                    errorDiv.textContent = errorData.detail || '수정에 실패했습니다.';
+                }
+            } catch (error) {
+                errorDiv.textContent = '서버 통신 중 오류가 발생했습니다.';
+            } finally {
+                saveButton.disabled = false;
+                saveButton.textContent = '수정사항 저장';
+            }
+        }
+
+        /**
+         * 삭제 버튼 클릭 시 확인 후 서버에 DELETE 요청하는 함수
+         */
+        async function handleDeleteUser(userId, userName) {
+            if (!confirm(`정말로 '${userName}' 사용자를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
+                return;
+            }
+            
+            const token = localStorage.getItem('accessToken');
+
+            try {
+                const response = await fetch(`/api/v1/admin/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    alert(`'${userName}' 사용자가 삭제되었습니다.`);
+                    await loadUsers(); // 목록 새로고침
+                } else {
+                    const errorData = await response.json();
+                    alert(`삭제 실패: ${errorData.detail}`);
+                }
+            } catch (error) {
+                alert('서버 통신 중 오류가 발생했습니다.');
             }
         }
 
@@ -798,6 +936,29 @@
 
             if (saveUserButton) {
                 saveUserButton.addEventListener('click', handleAddNewUser);
+            }
+
+            // --- 사용자 목록의 수정/삭제 버튼 이벤트 처리 (이벤트 위임) ---
+            const userListBody = document.getElementById('user-list-tbody');
+            if (userListBody) {
+                userListBody.addEventListener('click', (event) => {
+                    const target = event.target;
+                    if (target.classList.contains('edit-btn')) {
+                        const userId = target.dataset.userid;
+                        openEditModal(userId);
+                    }
+                    if (target.classList.contains('delete-btn')) {
+                        const userId = target.dataset.userid;
+                        const userName = target.dataset.username;
+                        handleDeleteUser(userId, userName);
+                    }
+                });
+            }
+
+            // --- [추가] 수정 모달의 저장 버튼 이벤트 리스너 ---
+            const saveEditButton = document.getElementById('save-edit-user-button');
+            if (saveEditButton) {
+                saveEditButton.addEventListener('click', handleUpdateUser);
             }
 
             // 1. 페이지 로드 시, 토큰이 없으면 로그인 페이지로 즉시 이동

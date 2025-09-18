@@ -50,3 +50,11 @@ class User(UserBase):
 
 class UserInDB(User):
     pass
+
+# --- 사용자 정보 수정을 위한 스키마 ---
+class UserUpdate(BaseModel):
+    # 모든 필드는 선택 사항으로, 값이 제공된 필드만 업데이트합니다.
+    name: Optional[str] = None
+    # 비밀번호를 변경할 경우에만 값을 받습니다.
+    password: Optional[str] = None
+    role: Optional[Literal['user', 'admin']] = None
