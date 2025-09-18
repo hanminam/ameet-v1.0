@@ -10,13 +10,13 @@ from app.schemas import user as user_schema
 from app import crud
 
 from app.core import security
-from app.models.user import User as UserModel # UserModel 별칭으로 명확하게 임포트
+# from app.models.user import User as UserModel # UserModel 별칭으로 명확하게 임포트
 
 router = APIRouter()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/login/token")
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserModel:
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> user_schema.User: # 반환 타입을 Pydantic 스키마로 변경
     """Decodes the JWT token to get the current user."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

@@ -8,8 +8,8 @@ import asyncio
 import aiofiles
 from datetime import datetime
 
-from app.models.user import User
-from app.schemas.user import UserCreate
+#from app.models.user import User
+from app.schemas.user import User, UserCreate
 from app.core.security import get_password_hash
 
 # 데이터 파일 경로 설정
