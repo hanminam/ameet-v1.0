@@ -1,7 +1,7 @@
 # src/app/crud/user.py
 
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Pydantic 스키마와 MongoDB 모델(User)을 모두 사용
 from app.schemas.user import UserCreate, User as UserSchema
@@ -26,7 +26,7 @@ async def create_user(user: UserCreate) -> User:
 
 async def update_user_last_login(user: User) -> User:
     """사용자의 마지막 로그인 시간을 현재 시간으로 업데이트합니다."""
-    user.last_login_at = datetime.utcnow()
+    user.last_login_at = datetime.now(timezone.utc)
     await user.save()
     return user
 

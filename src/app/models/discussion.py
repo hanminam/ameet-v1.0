@@ -3,7 +3,7 @@
 from beanie import Document, Indexed
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Literal, Optional, Annotated
-from datetime import datetime
+from datetime import datetime, timezone
 
 # --- DiscussionLog 모델 ---
 class DiscussionLog(Document):
@@ -106,8 +106,8 @@ class User(Document):
     email: Annotated[str, Indexed(unique=True)]
     hashed_password: str
     role: Literal["user", "admin"]
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    last_login_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_login_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Settings:
         name = "users"
