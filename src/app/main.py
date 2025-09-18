@@ -17,7 +17,7 @@ from app.api.v1.admin import agents as admin_agents, discussions as admin_discus
 
 from app.api.v1.admin import users as admin_users
 
-from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 app = FastAPI(title=settings.APP_TITLE)
 
@@ -71,6 +71,10 @@ app.include_router(
     tags=["Admin: Users"]
 )
 
+# 이 미들웨어는 Cloud Run과 같은 프록시 환경에서 
+# X-Forwarded-Proto, X-Forwarded-For 등의 헤더를 신뢰하도록 하여
+# 애플리케이션이 실제 요청 프로토콜(https)을 인지하게 해줍니다.
+# CORS 미들웨어보다 앞에 추가하는 것이 좋습니다.
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # --- CORS 미들웨어 추가 ---
