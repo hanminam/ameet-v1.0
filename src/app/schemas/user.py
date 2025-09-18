@@ -43,7 +43,9 @@ class User(UserBase):
         arbitrary_types_allowed = True # ObjectId와 같은 임의 타입을 허용
         json_encoders = {
             # 최종 JSON 응답으로 변환될 때 ObjectId는 문자열로 변환
-            PydanticObjectId: str 
+            PydanticObjectId: str,
+            # datetime 객체를 ISO 형식 문자열로 변환하는 규칙 추가
+            datetime: lambda dt: dt.isoformat()
         }
 
 class UserInDB(User):
