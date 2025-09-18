@@ -17,6 +17,8 @@ from app.api.v1.admin import agents as admin_agents, discussions as admin_discus
 
 from app.api.v1.admin import users as admin_users
 
+from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
+
 app = FastAPI(title=settings.APP_TITLE)
 
 # --- main.py 파일의 위치를 기준으로 절대 경로 생성 ---
@@ -68,6 +70,8 @@ app.include_router(
     prefix="/api/v1/admin/users",
     tags=["Admin: Users"]
 )
+
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # --- CORS 미들웨어 추가 ---
 # 모든 출처(origins)에서의 요청을 허용합니다. (개발 및 테스트용)
