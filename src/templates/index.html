@@ -193,6 +193,12 @@
             <div id="login-form" class="max-w-sm mx-auto space-y-4">
                 <input type="email" id="email-input" placeholder="이메일 주소 (user@example.com)" class="w-full p-3 border-slate-300 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="user@example.com">
                 <input type="password" id="password-input" placeholder="비밀번호 (userpassword)" class="w-full p-3 border-slate-300 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="userpassword">
+
+                <div class="flex items-center justify-start text-sm">
+                    <input type="checkbox" id="remember-me-checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    <label for="remember-me-checkbox" class="ml-2 text-gray-600">아이디/비밀번호 기억</label>
+                </div>
+
                 <button id="login-button" class="btn btn-primary w-full">로그인</button>
                 <p id="login-error" class="text-sm text-red-500 h-4"></p>
             </div>
@@ -435,6 +441,7 @@
         async function handleLogin() {
             const email = emailInput.value;
             const password = passwordInput.value;
+            const rememberMe = document.getElementById('remember-me-checkbox').checked; // 체크박스 상태 확인
 
             // 입력값 검증
             if (!email || !password) {
@@ -468,6 +475,14 @@
                     // JWT 토큰을 localStorage에 저장
                     localStorage.setItem('accessToken', data.access_token);
                     localStorage.setItem('userEmail', email);
+
+                    if (rememberMe) {
+                        localStorage.setItem('rememberedEmail', email);
+                        localStorage.setItem('rememberedPassword', password); // 비밀번호 저장
+                    } else {
+                        localStorage.removeItem('rememberedEmail');
+                        localStorage.removeItem('rememberedPassword'); // 비밀번호 삭제
+                    }
 
                     // 로그인 성공 후 UI 업데이트 및 화면 전환
                     // 토큰 파싱 후 역할에 따라 분기 ---
@@ -1780,6 +1795,18 @@
         // --- Initial Check ---
         // 페이지 로드 시, 저장된 토큰이 있는지 확인하여 로그인 상태 유지
         document.addEventListener('DOMContentLoaded', () => {
+            
+            // 저장된 아이디/비밀번호 불러오기
+            const rememberedEmail = localStorage.getItem('rememberedEmail');
+            const rememberedPassword = localStorage.getItem('rememberedPassword');
+            const rememberMeCheckbox = document.getElementById('remember-me-checkbox');
+
+            if (rememberedEmail && rememberedPassword) {
+                emailInput.value = rememberedEmail;
+                passwordInput.value = rememberedPassword;
+                rememberMeCheckbox.checked = true;
+            }
+
             const token = localStorage.getItem('accessToken');
             if (token) {
                 console.log('저장된 토큰으로 로그인 상태 유지');
