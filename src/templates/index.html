@@ -192,7 +192,7 @@
             <p class="text-slate-600 mt-2 mb-8">로그인 후 AI 집단지성 토론을 시작하세요.</p>
             <div id="login-form" class="max-w-sm mx-auto space-y-4">
                 <input type="email" id="email-input" placeholder="이메일 주소 (user@example.com)" class="w-full p-3 border-slate-300 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="">
-                <input type="password" id="password-input" placeholder="비밀번호 (userpassword)" class="w-full p-3 border-slate-300 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="">
+                <input type="password" id="password-input" placeholder="비밀번호" class="w-full p-3 border-slate-300 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="">
 
                 <div class="flex items-center justify-start text-sm">
                     <input type="checkbox" id="remember-me-checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
@@ -369,6 +369,17 @@
         let displayedMessagesCount = 0;     // 화면에 표시된 메시지 수 (전체)
         let regularMessageCount = 0;        // 일반 에이전트 메시지 카운터 (좌/우 정렬용)
         let isRendering = false;
+        let isAutoScrollActive = true;      // 자동 스크롤 상태 변수 (기본값 ON)
+
+        /**
+         * 자동 스크롤이 활성화된 경우에만 채팅창을 맨 아래로 내립니다.
+         */
+        function scrollToBottomIfEnabled() {
+            if (isAutoScrollActive) {
+                const chatbox = document.getElementById('chatbox');
+                chatbox.scrollTop = chatbox.scrollHeight;
+            }
+        }
 
         // 지원 LLM 모델 목록 ---
         const SUPPORTED_MODELS = {
@@ -1462,9 +1473,7 @@
             }
 
             chatbox.insertAdjacentHTML('beforeend', contentHtml);
-            if (shouldScroll) {
-                chatbox.scrollTop = chatbox.scrollHeight;
-            }
+            scrollToBottomIfEnabled();
         }
 
         /**
@@ -1485,25 +1494,22 @@
             const participantMap = getParticipantMap(participants);
 
             for (const turn of newMessages) {
-                // shouldScroll 변수를 각 함수에 전달할 필요 없이, 각 함수가 직접 chatbox를 참조하도록 합니다.
                 const systemAgents = ['SNR 전문가', '정보 검증부', '사회자', '구분선'];
 
                 if (systemAgents.includes(turn.agent_name)) {
-                    appendSystemMessage(turn); // shouldScroll 인자 제거
-                    displayedMessagesCount++;
-                    await new Promise(resolve => setTimeout(resolve, 300));
+                    appendSystemMessage(turn);
                 } else {
-                    const indicator = showTypingIndicator(turn, participantMap); // shouldScroll 인자 제거
+                    const indicator = showTypingIndicator(turn, participantMap);
                     await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
                     
                     indicator.remove();
                     const messageContainer = appendMessage(turn, participantMap);
-                    
                     const contentSpan = messageContainer.querySelector('.message-content');
-                    // typeMessage 함수가 스마트 스크롤을 처리하도록 shouldScroll 상태를 전달합니다.
-                    await typeMessage(contentSpan, turn.message, shouldScroll); 
-                    
-                    displayedMessagesCount++;
+                    await typeMessage(contentSpan, turn.message); // 타이핑 효과 자체에서는 스크롤을 제어하지 않음
+                    scrollToBottomIfEnabled(); // 타이핑이 끝나면 스크롤 여부 확인
+                }
+                displayedMessagesCount++;
+                if (!systemAgents.includes(turn.agent_name)) {
                     regularMessageCount++;
                 }
             }
@@ -1548,7 +1554,7 @@
         /**
          * '입력 중...' 인디케이터를 생성하고 화면에 추가하는 함수
          */
-        function showTypingIndicator(turn, participantMap, shouldScroll) {
+        function showTypingIndicator(turn, participantMap) {
             const chatbox = document.getElementById('chatbox');
             const agentName = turn.agent_name;
             
@@ -1576,9 +1582,7 @@
             indicator.innerHTML = alignment.isIconFirst ? iconHtml + typingHtml : typingHtml + iconHtml;
             
             chatbox.appendChild(indicator);
-            if (shouldScroll) {
-                chatbox.scrollTop = chatbox.scrollHeight;
-            }
+            scrollToBottomIfEnabled();
             return indicator;
         }
 
@@ -1642,15 +1646,13 @@
         /**
          * 텍스트에 타이핑 효과를 적용하는 함수
          */
-        function typeMessage(element, text, shouldScroll) {
+        function typeMessage(element, text) {
             return new Promise(resolve => {
                 const htmlText = markdownToHtml(text);
                 let i = 0;
                 
                 function typing() {
-                    const chatbox = document.getElementById('chatbox');
                     if (i < htmlText.length) {
-                        // '<'를 만나면 '>'가 나올 때까지 한번에 추가
                         if (htmlText.charAt(i) === '<') {
                             const closingTagIndex = htmlText.indexOf('>', i);
                             if (closingTagIndex !== -1) {
@@ -1661,14 +1663,9 @@
                             element.innerHTML += htmlText.charAt(i);
                         }
                         i++;
-
-                        if (shouldScroll) {
-                            chatbox.scrollTop = chatbox.scrollHeight;
-                        }
-
-                        setTimeout(typing, 20); // 다음 글자 타이핑
+                        setTimeout(typing, 20);
                     } else {
-                        resolve(); // 타이핑 완료 시 Promise를 resolve
+                        resolve();
                     }
                 }
                 typing();
@@ -1918,7 +1915,22 @@
                 rememberMeCheckbox.checked = true;
             }
 
+            // 스마트 스크롤 이벤트 리스너 추가
+            const chatbox = document.getElementById('chatbox');
+            if (chatbox) {
+                chatbox.addEventListener('scroll', () => {
+                    // 사용자가 스크롤을 맨 아래로 내리면 자동 스크롤 활성화
+                    if (isScrolledToBottom(chatbox)) {
+                        isAutoScrollActive = true;
+                    } else {
+                        // 사용자가 스크롤을 위로 올리면 자동 스크롤 비활성화
+                        isAutoScrollActive = false;
+                    }
+                });
+            }
+
             const token = localStorage.getItem('accessToken');
+
             if (token) {
                 console.log('저장된 토큰으로 로그인 상태 유지');
                 
