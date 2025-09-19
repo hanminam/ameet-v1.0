@@ -944,6 +944,9 @@
 
                 if (response.status === 202) { // 202 Accepted
                     console.log('백그라운드 토론 작업이 성공적으로 시작되었습니다.');
+
+                    resetDiscussionUI();
+
                     displayedMessagesCount = 0; // 새 토론 시작 시 카운트 초기화
                     regularMessageCount = 0;    // 일반 메시지 카운트 초기화
                     const chatbox = document.getElementById('chatbox');
@@ -1430,6 +1433,52 @@
                     evidenceDataCache = null;
                     showScreen('screen-topic');
                 }, 2000);
+            }
+        }
+
+        /**
+         * 실시간 토론 화면의 모든 UI 요소를 초기 상태로 리셋하는 함수
+         */
+        function resetDiscussionUI() {
+            console.log("Resetting live discussion screen UI for new debate...");
+
+            // 1. 전역 상태 변수 초기화
+            displayedMessagesCount = 0;
+            regularMessageCount = 0;
+            evidenceDataCache = null;
+            isPollingActive = false;
+            isAutoScrollActive = true;
+
+            // 2. 채팅창 내용 초기화
+            const chatbox = document.getElementById('chatbox');
+            if (chatbox) {
+                chatbox.innerHTML = '<div id="waiting-message" class="text-center text-slate-500">AI 에이전트들의 발언을 기다리고 있습니다...</div>';
+            }
+
+            // 3. 우측 분석 패널 3종 초기화
+            const criticalPanel = document.getElementById('critical-hit-panel');
+            if (criticalPanel) {
+                criticalPanel.innerHTML = `
+                    <h3 class="font-bold text-slate-700 text-lg mb-2">⚡ 결정적 발언</h3>
+                    <p class="text-sm text-slate-700">진행 중...</p>
+                `;
+            }
+
+            const flowPanel = document.getElementById('flow-diagram-container');
+            if (flowPanel) {
+                flowPanel.innerHTML = '<p class="text-sm text-slate-700">진행 중...</p>';
+                flowPanel.style.height = 'auto'; // 높이 자동 조절로 복원
+            }
+
+            const stancePanel = document.getElementById('stance-tracker');
+            if (stancePanel) {
+                stancePanel.innerHTML = '<p class="text-sm text-slate-700">진행 중...</p>';
+            }
+
+            // 4. 하단 사용자 액션 패널(버튼 영역) 초기화
+            const actionPanel = document.getElementById('user-action-panel');
+            if (actionPanel) {
+                actionPanel.innerHTML = '';
             }
         }
 
