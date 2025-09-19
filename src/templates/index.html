@@ -475,7 +475,7 @@
          * @returns {boolean} - 맨 아래에 있는지 여부
          */
         function isScrolledToBottom(element) {
-            const buffer = 50; // 약간의 오차를 허용하는 버퍼
+            const buffer = 1; // 약간의 오차를 허용하는 버퍼
             return element.scrollHeight - element.scrollTop <= element.clientHeight + buffer;
         }
 
