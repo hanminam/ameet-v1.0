@@ -4,6 +4,8 @@ import asyncio
 import json
 from typing import Dict, List, Literal, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from app.tools.search import perform_web_search_async, web_search_tool
 from datetime import datetime
@@ -240,10 +242,14 @@ async def _run_single_agent_turn(
     logger.info(f"--- [Flow] Running turn for agent: {agent_name} (Discussion: {discussion_id}, Turn: {turn_count}) ---")
 
     try:
-        llm = ChatGoogleGenerativeAI(
-            model=agent_config.get("model", "gemini-1.5-flash"),
-            temperature=agent_config.get("temperature", 0.2)
-        )
+        #llm = ChatGoogleGenerativeAI(
+        #    model=agent_config.get("model", "gemini-1.5-flash"),
+        #    temperature=agent_config.get("temperature", 0.2)
+        #)
+        # 헬퍼 함수를 통해 모델 이름에 맞는 클라이언트를 동적으로 가져옴
+        model_name = agent_config.get("model", "gemini-1.5-flash")
+        temperature = agent_config.get("temperature", 0.2)
+        llm = get_llm_client(model_name=model_name, temperature=temperature)
 
         human_instruction = (
             "지금은 '모두 변론' 시간입니다. 위 내용을 바탕으로 당신의 초기 입장을 최소 100자에서 최대 200자 이내로 설명해주세요."
@@ -650,3 +656,17 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     await discussion_log.save()
     
     logger.info(f"--- [BG Task] Turn completed for {discussion_log.discussion_id}. New status: '{discussion_log.status}' ---")
+
+# 모델 이름에 따라 적절한 LLM 클라이언트를 반환하는 헬퍼 함수 추가
+def get_llm_client(model_name: str, temperature: float):
+    """모델 이름을 기반으로 올바른 LangChain LLM 클라이언트 인스턴스를 생성합니다."""
+    if model_name.startswith("gemini"):
+        return ChatGoogleGenerativeAI(model=model_name, temperature=temperature)
+    elif model_name.startswith("gpt"):
+        return ChatOpenAI(model=model_name, temperature=temperature)
+    elif model_name.startswith("claude"):
+        return ChatAnthropic(model=model_name, temperature=temperature)
+    else:
+        # 알 수 없는 모델 이름일 경우, 기본 모델로 대체하여 오류 방지
+        logger.warning(f"Unrecognized model name '{model_name}'. Falling back to Gemini 1.5 Flash.")
+        return ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=temperature)
