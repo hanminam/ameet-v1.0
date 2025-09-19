@@ -9,6 +9,8 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from app.tools.search import perform_web_search_async, web_search_tool
 from datetime import datetime
+from langchain_core.messages import BaseMessage
+from app.schemas.orchestration import AgentDetail
 
 from pydantic import BaseModel, ValidationError
 
@@ -285,7 +287,15 @@ async def _run_single_agent_turn(
             {"input": final_human_prompt},
             config={"tags": [f"discussion_id:{discussion_id}", f"agent_name:{agent_name}", f"turn:{turn_count}"]}
         )
-        return response.get("output", "오류: 응답을 생성하지 못했습니다.")
+        output = response.get("output", "오류: 응답을 생성하지 못했습니다.")
+        
+        # LangChain의 응답이 BaseMessage (AIMessage 등) 객체인 경우,
+        # .content 속성에서 실제 텍스트를 추출합니다.
+        if isinstance(output, BaseMessage):
+            return output.content
+        
+        # 객체가 아닌 경우(주로 문자열), 안전하게 문자열로 변환하여 반환합니다.
+        return str(output)
 
     except Exception as e:
         logger.error(f"--- [Flow Error] Agent '{agent_name}' turn failed: {e} ---", exc_info=True)
