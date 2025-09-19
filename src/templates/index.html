@@ -750,16 +750,15 @@
          */
         function renderJuryScreen(teamData) {
             const iconMap = { 
-                "사회자": "🧑", "거시경제 전문가": "🌍", "산업 분석가": "🏭", 
+                "사회자": "🧑‍⚖️", "거시경제 전문가": "🌍", "산업 분석가": "🏭", 
                 "재무 분석가": "💹", "SNS 트렌드 분석가": "📱", "비판적 관점": "🤔", 
-                "워렌 버핏": "👴", "피터 린치": "👨‍💼", "스티브 잡스": "📱", 
+                "워렌 버핏": "👴", "피터 린치": "👨‍💼", "스티브 잡스": "💡", 
                 "일론 머스크": "🚀", "심리학 전문가": "🧠", "미래학자": "🔭", "IT 전문가": "💻" 
             };
             
             let juryHtml = '';
             teamData.jury.forEach(agent => {
                 const icon = agent.icon || iconMap[agent.name] || '🤖';
-                // 모델 선택 드롭다운 HTML 생성
                 const modelSelectorHtml = createModelSelector(agent); 
                 
                 juryHtml += `
@@ -770,10 +769,8 @@
                     </div>`;
             });
 
-            // 사회자(Judge) 카드 HTML 생성 로직 변경
             const judgeName = teamData.judge.name;
-            // 사회자용 모델 선택 드롭다운 HTML 생성
-            const judgeModelSelectorHtml = createModelSelector(teamData.judge); 
+            const judgeIcon = teamData.judge.icon || iconMap[judgeName] || '🧑';
             
             const fullHtml = `
                 <div class="text-center mb-8">
@@ -782,10 +779,10 @@
                 </div>
                 <div class="mb-8">
                     <div class="bg-amber-50 border-2 border-amber-400 p-4 rounded-xl flex flex-col sm:flex-row items-center gap-4">
-                        <span class="text-5xl">${teamData.judge.icon || iconMap[judgeName] || '🧑‍⚖️'}</span>
+                        <span class="text-5xl">${judgeIcon}</span>
                         <div class="text-center sm:text-left flex-grow">
-                            <h3 class="text-lg font-bold text-amber-800">${judgeName}</h3>
-                            <div class="max-w-xs">${judgeModelSelectorHtml}</div>
+                            <h3 class="text-lg font-bold text-amber-800">사회자</h3>
+                            <p class="text-sm text-slate-600 mt-1">${teamData.judge.model}</p>
                         </div>
                     </div>
                 </div>
@@ -1240,22 +1237,13 @@
         function renderUserActionPanel(discussionData) {
             const actionPanel = document.getElementById('user-action-panel');
             if (!actionPanel) {
-                // [로그 추가]
                 console.error("[로그 오류] 'user-action-panel' 요소를 찾을 수 없습니다.");
                 return;
             }
 
             const voteData = discussionData.current_vote;
             
-            // [로그 추가] 수신된 voteData를 자세히 검사
-            console.log("[로그 추가] renderUserActionPanel 내부 voteData:", voteData);
-            if (voteData) {
-                console.log(`[로그 추가] voteData.topic: ${voteData.topic}`);
-                console.log(`[로그 추가] voteData.options: ${JSON.stringify(voteData.options)}`);
-                console.log(`[로그 추가] Array.isArray(voteData.options): ${Array.isArray(voteData.options)}`);
-            }
-
-            // [수정] 렌더링 조건 검사 강화 및 로그 추가
+            // 렌더링 조건 검사 강화 및 로그 추가
             if (voteData && voteData.topic && Array.isArray(voteData.options) && voteData.options.length > 0) {
                 console.log('%c[로그 성공] 투표 데이터가 유효하여 투표 UI를 렌더링합니다.', 'color: green');
                 let optionsHtml = '';
@@ -1272,8 +1260,9 @@
                         </div>
                     </div>
                     <div class="flex justify-center gap-4 mt-6">
-                        <button id="next-round-btn" class="btn btn-primary">투표하고 다음 라운드 진행</button>
-                        <button id="end-debate-btn" class="btn btn-secondary">이대로 토론 종료</button>
+                        <button id="next-round-btn" class="btn btn-primary">다음 라운드 진행</button>
+                        <button id="end-debate-report-btn" class="btn btn-secondary">보고서 생성하고 종료</button>
+                        <button id="end-debate-no-report-btn" class="btn bg-slate-600 text-white hover:bg-slate-700">보고서 없이 종료</button>
                     </div>
                 `;
             } else {
@@ -1287,7 +1276,8 @@
 
             // 이벤트 리스너 연결
             document.getElementById('next-round-btn').addEventListener('click', handleNextRound);
-            document.getElementById('end-debate-btn').addEventListener('click', handleEndDebate);
+            document.getElementById('end-debate-report-btn').addEventListener('click', handleEndDebate); // 보고서 생성
+            document.getElementById('end-debate-no-report-btn').addEventListener('click', handleEndDebateWithoutReport); // 보고서 없이 종료
             
             const voteOptionsContainer = document.getElementById('vote-options-container');
             if (voteOptionsContainer) {
@@ -1312,7 +1302,13 @@
 
             const selectedOption = document.querySelector('.vote-option.bg-blue-600');
             const userVote = selectedOption ? selectedOption.dataset.vote : null;
-            console.log(`다음 라운드 시작. 사용자 투표: ${userVote}`);
+            
+            // 사용자가 투표를 선택하지 않았을 경우 확인창 표시
+            if (userVote === null) {
+                if (!confirm("투표 항목을 선택하지 않았습니다. 그대로 다음 라운드를 진행할까요?")) {
+                    return; // 사용자가 '취소'를 누르면 함수 실행 중단
+                }
+            }
 
             const token = localStorage.getItem('accessToken');
             try {
@@ -1388,6 +1384,52 @@
             } catch (error) {
                 alert("서버 통신 중 오류가 발생했습니다.");
                 console.error("보고서 생성 API 호출 중 네트워크 오류:", error);
+            }
+        }
+
+        /**
+         * '보고서 없이 종료' 버튼의 로직을 처리하는 함수
+         */
+        async function handleEndDebateWithoutReport() {
+            if (!confirm("정말로 토론을 종료하시겠습니까? 토론 내용은 저장되지만, 보고서는 생성되지 않습니다.")) {
+                return;
+            }
+
+            console.log("토론을 보고서 없이 종료합니다.");
+            isPollingActive = false; // 진행 중인 폴링 중단
+
+            const actionPanel = document.getElementById('user-action-panel');
+            actionPanel.innerHTML = `<p class="text-center text-slate-600">토론이 종료되었습니다. 주제 입력 화면으로 돌아갑니다...</p>`;
+
+            if (!currentDiscussionId) {
+                setTimeout(() => showScreen('screen-topic'), 2000);
+                return;
+            }
+
+            const token = localStorage.getItem('accessToken');
+            try {
+                // 새로 추가된 /archive 엔드포인트 호출
+                const response = await fetch(`/api/v1/discussions/${currentDiscussionId}/archive`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    console.log("서버에 토론이 'completed'로 기록되었습니다.");
+                } else {
+                    const errorData = await response.json();
+                    alert("토론 상태를 서버에 저장하는 데 실패했습니다: " + errorData.detail);
+                }
+            } catch (error) {
+                alert("서버 통신 중 오류가 발생했습니다.");
+                console.error("토론 아카이브 API 호출 중 네트워크 오류:", error);
+            } finally {
+                // API 성공/실패와 관계없이 2초 후 주제 입력 화면으로 이동
+                setTimeout(() => {
+                    currentDiscussionId = null;
+                    evidenceDataCache = null;
+                    showScreen('screen-topic');
+                }, 2000);
             }
         }
 

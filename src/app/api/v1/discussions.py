@@ -173,6 +173,38 @@ async def get_discussion_detail(
         
     return discussion
 
+# 토론 종료 (보고서 생성 없음)
+@router.post(
+    "/{discussion_id}/archive",
+    status_code=status.HTTP_200_OK,
+    summary="토론을 종료하고 상태만 변경 (보고서 생성 없음)"
+)
+async def archive_discussion(
+    discussion_id: str,
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    사용자가 '보고서 없이 종료'를 선택했을 때 호출됩니다.
+    1. 토론 상태를 'completed'로 변경하고 종료 시간을 기록합니다.
+    2. 보고서 생성 파이프라인은 실행하지 않습니다.
+    """
+    # 1. DB에서 해당 토론 기록을 찾습니다.
+    discussion_log = await DiscussionLog.find_one(DiscussionLog.discussion_id == discussion_id)
+    
+    # 2. 유효성 검사 (토론 존재 여부, 소유자 확인)
+    if not discussion_log:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discussion not found.")
+    if discussion_log.user_email != current_user.email:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized.")
+
+    # 3. 상태를 'completed'로 변경하고 완료 시간 기록
+    discussion_log.status = "completed"
+    discussion_log.completed_at = datetime.utcnow()
+    await discussion_log.save()
+    
+    # 4. 클라이언트에게 작업이 완료되었음을 알림
+    return {"message": "Discussion has been successfully archived without generating a report."}
+
 # 토론 종료 및 보고서 생성 시작 ---
 @router.post(
     "/{discussion_id}/complete",
