@@ -476,7 +476,7 @@
                 return {
                     containerClasses: 'flex gap-3 my-4 justify-end items-end',
                     bubbleClasses: 'bg-blue-500 text-white',
-                    textAlignClass: 'text-right',
+                    ttextAlignClass: 'text-left',
                     isIconFirst: false // 아이콘이 텍스트 뒤에 옴
                 };
             } else {
@@ -1463,7 +1463,7 @@
 
             chatbox.insertAdjacentHTML('beforeend', contentHtml);
             if (shouldScroll) {
-                //chatbox.scrollTop = chatbox.scrollHeight; // 시스템 메시지는 즉시 스크롤
+                chatbox.scrollTop = chatbox.scrollHeight;
             }
         }
 
@@ -1478,32 +1478,30 @@
             isRendering = true;
             showGeneralTypingIndicator(false);
             const chatbox = document.getElementById('chatbox');
-            const newMessages = transcript.slice(displayedMessagesCount);
-
-            const participantMap = getParticipantMap(participants);
             
+            const shouldScroll = isScrolledToBottom(chatbox);
+            
+            const newMessages = transcript.slice(displayedMessagesCount);
+            const participantMap = getParticipantMap(participants);
+
             for (const turn of newMessages) {
-                const shouldScroll = isScrolledToBottom(chatbox);
+                // shouldScroll 변수를 각 함수에 전달할 필요 없이, 각 함수가 직접 chatbox를 참조하도록 합니다.
                 const systemAgents = ['SNR 전문가', '정보 검증부', '사회자', '구분선'];
 
                 if (systemAgents.includes(turn.agent_name)) {
-                    // 시스템 메시지는 participantMap이 필요 없습니다.
-                    appendSystemMessage(turn, shouldScroll);
+                    appendSystemMessage(turn); // shouldScroll 인자 제거
                     displayedMessagesCount++;
                     await new Promise(resolve => setTimeout(resolve, 300));
                 } else {
-                    const indicator = showTypingIndicator(turn, participantMap, shouldScroll);
+                    const indicator = showTypingIndicator(turn, participantMap); // shouldScroll 인자 제거
                     await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
                     
                     indicator.remove();
                     const messageContainer = appendMessage(turn, participantMap);
                     
                     const contentSpan = messageContainer.querySelector('.message-content');
-                    await typeMessage(contentSpan, turn.message);
-                    
-                    if (shouldScroll) {
-                        chatbox.scrollTo({ top: chatbox.scrollHeight, behavior: 'smooth' });
-                    }
+                    // typeMessage 함수가 스마트 스크롤을 처리하도록 shouldScroll 상태를 전달합니다.
+                    await typeMessage(contentSpan, turn.message, shouldScroll); 
                     
                     displayedMessagesCount++;
                     regularMessageCount++;
@@ -1644,7 +1642,7 @@
         /**
          * 텍스트에 타이핑 효과를 적용하는 함수
          */
-        function typeMessage(element, text) {
+        function typeMessage(element, text, shouldScroll)
             return new Promise(resolve => {
                 const htmlText = markdownToHtml(text);
                 let i = 0;
@@ -1663,7 +1661,11 @@
                             element.innerHTML += htmlText.charAt(i);
                         }
                         i++;
-                        //chatbox.scrollTop = chatbox.scrollHeight;
+
+                        if (shouldScroll) {
+                            chatbox.scrollTop = chatbox.scrollHeight;
+                        }
+                        
                         setTimeout(typing, 20); // 다음 글자 타이핑
                     } else {
                         resolve(); // 타이핑 완료 시 Promise를 resolve
