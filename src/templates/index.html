@@ -1642,7 +1642,7 @@
         /**
          * 텍스트에 타이핑 효과를 적용하는 함수
          */
-        function typeMessage(element, text, shouldScroll)
+        function typeMessage(element, text, shouldScroll) {
             return new Promise(resolve => {
                 const htmlText = markdownToHtml(text);
                 let i = 0;
@@ -1665,7 +1665,7 @@
                         if (shouldScroll) {
                             chatbox.scrollTop = chatbox.scrollHeight;
                         }
-                        
+
                         setTimeout(typing, 20); // 다음 글자 타이핑
                     } else {
                         resolve(); // 타이핑 완료 시 Promise를 resolve
