@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from app.tools.search import perform_web_search_async, web_search_tool
@@ -447,12 +447,26 @@ async def _generate_vote_options(transcript_str: str, discussion_id: str, turn_n
         logger.error(f"!!! [Vote Generation] 투표 생성 중 알 수 없는 오류 발생: {e}", exc_info=True)
         return None
     
-async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] = None):
+async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] = None, model_overrides: Optional[Dict[str, str]] = None):
     """
     백그라운드에서 단일 토론 턴을 실행하고, 결과를 DB에 기록합니다.
     사용자의 투표 기록은 Redis를 통해 세션으로 관리합니다.
     """
     logger.info(f"--- [BG Task] Executing turn for Discussion ID: {discussion_log.discussion_id} ---")
+
+     # --- 사용자 선택 모델 적용 로직 ---
+    if model_overrides:
+        logger.info(f"--- [BG Task] Applying model overrides: {model_overrides} ---")
+        # discussion_log에 저장된 참여자 목록을 순회
+        for participant in discussion_log.participants:
+            agent_name = participant.get('name')
+            # 사용자가 선택한 모델이 있는지 확인
+            if agent_name in model_overrides:
+                new_model = model_overrides[agent_name]
+                original_model = participant.get('model')
+                # 해당 에이전트의 모델을 사용자가 선택한 모델로 교체
+                participant['model'] = new_model
+                logger.info(f"--- [BG Task] Model for '{agent_name}' overridden: from '{original_model}' to '{new_model}' ---")
 
     # --- 사회자 안내 메시지 추가 ---
     # 사용자 투표가 있고, 첫 턴(모두 변론)이 아닐 때 사회자 안내 메시지를 먼저 추가합니다.

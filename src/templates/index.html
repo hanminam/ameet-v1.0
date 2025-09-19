@@ -894,6 +894,17 @@
             startDebateBtn.disabled = true;
             startDebateBtn.textContent = '토론을 준비 중입니다...';
 
+            // 각 에이전트별로 선택된 모델 값을 읽어옵니다. ---
+            const modelOverrides = {};
+            document.querySelectorAll('.agent-model-selector').forEach(selector => {
+                const agentName = selector.dataset.agentName;
+                const selectedModel = selector.value;
+                if (agentName && selectedModel) {
+                    modelOverrides[agentName] = selectedModel;
+                }
+            });
+            console.log("사용자가 선택한 모델 구성:", modelOverrides);
+
             try {
                 const response = await fetch(`/api/v1/discussions/${currentDiscussionId}/turns`, {
                     method: 'POST',
@@ -901,7 +912,11 @@
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ user_vote: null }) // 첫 시작이므로 투표 값은 null
+                    // body에 사용자가 선택한 모델 정보를 포함하여 전송합니다.
+                    body: JSON.stringify({ 
+                        user_vote: null, // 첫 턴이므로 user_vote는 null 입니다.
+                        model_overrides: modelOverrides 
+                    })
                 });
 
                 if (response.status === 202) { // 202 Accepted

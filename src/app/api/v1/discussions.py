@@ -4,7 +4,7 @@ from asyncio.log import logger
 from datetime import datetime
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Form, UploadFile, File
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from app.services.orchestrator import get_active_agents_from_db, analyze_topic, gather_evidence, select_debate_team
 from app.services.discussion_flow import execute_turn 
@@ -20,6 +20,7 @@ from app.services.report_generator import generate_report_background
 
 class TurnRequest(BaseModel):
     user_vote: Optional[str] = None
+    model_overrides: Optional[Dict[str, str]] = None
 
 router = APIRouter(redirect_slashes=False)
 
@@ -90,7 +91,7 @@ async def create_discussion(
 )
 async def execute_discussion_turn(
     discussion_id: str,
-    turn_request: TurnRequest, # [수정] Pydantic 모델로 user_vote 받기
+    turn_request: TurnRequest, # Pydantic 모델로 user_vote 받기
     background_tasks: BackgroundTasks,
     current_user: UserModel = Depends(get_current_user)
 ):
@@ -122,7 +123,12 @@ async def execute_discussion_turn(
     # 5. 실제 토론을 진행할 함수를 백그라운드 작업으로 추가합니다.
     # 이 작업은 아래 return 문이 실행된 후에 비동기적으로 처리됩니다.
     # 백그라운드 작업에 user_vote 전달
-    background_tasks.add_task(execute_turn, discussion_log, turn_request.user_vote)
+    background_tasks.add_task(
+        execute_turn, 
+        discussion_log, 
+        turn_request.user_vote,
+        turn_request.model_overrides
+    )
 
     # 6. 클라이언트에게 작업이 백그라운드에서 시작되었음을 즉시 알립니다.
     return {"message": "Discussion turn execution started in the background."}
