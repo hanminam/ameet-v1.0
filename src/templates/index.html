@@ -1460,36 +1460,38 @@
                 return;
             }
 
-            isRendering = true;            
-            // 범용 인디케이터가 있다면 한 번만 제거합니다.
+            isRendering = true;
             showGeneralTypingIndicator(false);
             const chatbox = document.getElementById('chatbox');
             const newMessages = transcript.slice(displayedMessagesCount);
+
+            const participantMap = getParticipantMap(participants);
             
             for (const turn of newMessages) {
                 const shouldScroll = isScrolledToBottom(chatbox);
                 const systemAgents = ['SNR 전문가', '정보 검증부', '사회자', '구분선'];
 
                 if (systemAgents.includes(turn.agent_name)) {
+                    // 시스템 메시지는 participantMap이 필요 없습니다.
                     appendSystemMessage(turn, shouldScroll);
                     displayedMessagesCount++;
                     await new Promise(resolve => setTimeout(resolve, 300));
                 } else {
-                    const indicator = showTypingIndicator(turn, participants, shouldScroll);
+                    const indicator = showTypingIndicator(turn, participantMap, shouldScroll);
                     await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
                     
                     indicator.remove();
-                    const messageContainer = appendMessage(turn, participants);
-                    const contentSpan = messageContainer.querySelector('.message-content');
+                    const messageContainer = appendMessage(turn, participantMap);
                     
+                    const contentSpan = messageContainer.querySelector('.message-content');
                     await typeMessage(contentSpan, turn.message);
                     
                     if (shouldScroll) {
-                        //chatbox.scrollTo({ top: chatbox.scrollHeight, behavior: 'smooth' });
+                        chatbox.scrollTo({ top: chatbox.scrollHeight, behavior: 'smooth' });
                     }
                     
                     displayedMessagesCount++;
-                    regularMessageCount++; // 일반 메시지 카운트는 여기서만 증가
+                    regularMessageCount++;
                 }
             }
             isRendering = false;
