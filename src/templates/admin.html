@@ -154,7 +154,15 @@
 
             <!-- Page: Discussion Monitoring -->
             <div id="monitoring" class="page">
-                <h2 class="text-3xl font-bold mb-6">토론 이력 모니터링</h2>
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold">토론 이력 모니터링</h2>
+                </div>
+                <div class="card mb-6">
+                    <div class="flex items-center gap-4">
+                        <input type="text" id="monitoring-email-filter" placeholder="사용자 이메일로 검색" class="w-full p-2 border-gray-300 border rounded-lg">
+                        <button id="monitoring-search-btn" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">검색</button>
+                    </div>
+                </div>
                 <div class="card overflow-x-auto">
                     <table class="w-full table">
                         <thead>
@@ -167,24 +175,8 @@
                                 <th>상세</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <tr>
-                                <td>sess_abc123</td>
-                                <td>user1@example.com</td>
-                                <td>테슬라 주가 전망...</td>
-                                <td>2025-08-18 14:30</td>
-                                <td><span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">완료</span></td>
-                                <td><a href="#" class="text-blue-500">내용/보고서 보기</a></td>
-                            </tr>
-                            <tr>
-                                <td>sess_def456</td>
-                                <td>user2@example.com</td>
-                                <td>대한민국 수도 이전...</td>
-                                <td>2025-08-18 14:15</td>
-                                <td><span class="bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded-full">진행중</span></td>
-                                <td><a href="#" class="text-blue-500">실시간 보기</a></td>
-                            </tr>
-                        </tbody>
+                        <tbody id="monitoring-list-tbody">
+                            </tbody>
                     </table>
                 </div>
             </div>
@@ -534,6 +526,11 @@
             // '계정 관리' 페이지가 보일 때 사용자 목록을 불러오도록 함
             if (pageId === 'users') {
                 loadUsers();
+            }
+
+            // 'monitoring' 페이지가 보일 때 토론 목록을 불러오도록 추가
+            if (pageId === 'monitoring') {
+                loadDiscussions();
             }
         }
 
@@ -913,6 +910,22 @@
                     }
                 });
             }
+
+            // 토론 모니터링 검색 버튼 이벤트 리스너 추가
+            const searchBtn = document.getElementById('monitoring-search-btn');
+            if (searchBtn) {
+                searchBtn.addEventListener('click', loadDiscussions);
+            }
+
+            // 이메일 필터에서 Enter 키를 눌렀을 때 검색 실행
+            const emailFilterInput = document.getElementById('monitoring-email-filter');
+            if (emailFilterInput) {
+                emailFilterInput.addEventListener('keypress', (event) => {
+                    if (event.key === 'Enter') {
+                        loadDiscussions();
+                    }
+                });
+            }
         });
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -986,6 +999,81 @@
                 });
             }
         });
+
+        /**
+         * 토론 상태에 따라 적절한 스타일의 뱃지 HTML을 반환합니다.
+         * @param {string} status - 토론 상태 문자열
+         * @returns {string} - 뱃지 HTML
+         */
+        function renderStatusBadge(status) {
+            const statusMap = {
+                'completed': { text: '완료', class: 'bg-green-100 text-green-800' },
+                'report_generating': { text: '보고서 생성중', class: 'bg-blue-100 text-blue-800' },
+                'waiting_for_vote': { text: '진행중', class: 'bg-yellow-100 text-yellow-800' },
+                'turn_inprogress': { text: '진행중', class: 'bg-yellow-100 text-yellow-800' },
+                'failed': { text: '실패', class: 'bg-red-100 text-red-800' },
+                'orchestrating': { text: '팀 구성중', class: 'bg-indigo-100 text-indigo-800' },
+                'ready': { text: '시작 대기중', class: 'bg-gray-100 text-gray-800' }
+            };
+            const statusInfo = statusMap[status] || { text: status, class: 'bg-gray-100 text-gray-800' };
+            return `<span class="${statusInfo.class} text-xs font-medium px-2.5 py-0.5 rounded-full">${statusInfo.text}</span>`;
+        }
+
+        /**
+         * API에서 토론 이력 목록을 가져와 테이블을 렌더링하는 함수
+         */
+        async function loadDiscussions() {
+            const token = localStorage.getItem('accessToken');
+            if (!token) return;
+
+            const tbody = document.getElementById('monitoring-list-tbody');
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">토론 목록을 불러오는 중...</td></tr>';
+
+            const emailFilter = document.getElementById('monitoring-email-filter').value.trim();
+            let apiUrl = '/api/v1/admin/discussions';
+            if (emailFilter) {
+                apiUrl += `?user_email=${encodeURIComponent(emailFilter)}`;
+            }
+
+            try {
+                const response = await fetch(apiUrl, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`[${response.status}] 토론 목록을 가져오는데 실패했습니다.`);
+                }
+
+                const discussions = await response.json();
+                tbody.innerHTML = ''; // 기존 내용 삭제
+
+                if (discussions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">표시할 토론이 없습니다.</td></tr>';
+                    return;
+                }
+
+                discussions.forEach(discussion => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="font-mono text-sm">${discussion.discussion_id}</td>
+                        <td>${discussion.user_email}</td>
+                        <td class="max-w-xs truncate">${discussion.topic}</td>
+                        <td>${formatDateTime(discussion.created_at)}</td>
+                        <td>${renderStatusBadge(discussion.status)}</td>
+                        <td><a href="#" class="text-blue-500 font-semibold" onclick="showDiscussionDetail('${discussion.discussion_id}')">상세 보기</a></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error loading discussions:', error);
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center text-red-500 py-4">${error.message}</td></tr>`;
+            }
+        }
+
+        // 상세 보기 기능은 아직 구현되지 않았으므로 alert으로 대체합니다.
+        function showDiscussionDetail(discussionId) {
+            alert(`'${discussionId}' 토론의 상세 내역을 표시하는 기능은 아직 구현되지 않았습니다.`);
+        }
     </script>
 </body>
 </html>
