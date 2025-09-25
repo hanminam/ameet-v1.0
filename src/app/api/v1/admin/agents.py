@@ -62,7 +62,7 @@ async def list_agents(
     else:
         pipeline.append({"$sort": {"name": 1}})
     
-    agent_docs = await AgentSettings.aggregate(*pipeline).to_list()
+    agent_docs = [doc async for doc in AgentSettings.aggregate(pipeline)]
     
     return agent_docs
 
