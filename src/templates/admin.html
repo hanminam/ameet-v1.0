@@ -1113,6 +1113,9 @@
          * @param {string} discussionId - 상세 조회할 토론의 ID
          */
         async function showDiscussionDetail(discussionId) {
+
+            console.log(discussionId)
+
             showPage('discussion-detail');
             const detailContent = document.getElementById('discussion-detail-content');
             detailContent.innerHTML = '<div class="text-center p-8"><p>상세 정보를 불러오는 중...</p></div>';
