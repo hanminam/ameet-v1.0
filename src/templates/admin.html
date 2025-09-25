@@ -924,6 +924,8 @@
             
             showPage('agents'); // Default page
 
+            document.getElementById('agent-save-button').addEventListener('click', handleSaveAgent);
+
             // 탭 클릭 이벤트 리스너 추가
             document.getElementById('expert-agents-tab').addEventListener('click', (e) => {
                 e.preventDefault();
@@ -1009,6 +1011,7 @@
                     }
                 });
             }
+            
         });
 
         document.addEventListener('DOMContentLoaded', () => {
