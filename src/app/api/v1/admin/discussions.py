@@ -152,31 +152,30 @@ async def list_all_discussions(
     """
     모든 사용자의 토론 이력을 조회하고, 이메일, 사용자 이름, 상태로 필터링할 수 있습니다.
     """
-    query_conditions = {}
+    search_queries = []
     if status:
-        query_conditions["status"] = status
+        search_queries.append(DiscussionLog.status == status)
 
     if search_term:
         if search_by == "email":
-            # 이메일로 검색 (부분 일치, 대소문자 무시)
-            query_conditions["user_email"] = re.compile(search_term, re.IGNORECASE)
+            # 이메일로 검색
+            search_queries.append(RegEx(DiscussionLog.user_email, f".*{re.escape(search_term)}.*", "i"))
         elif search_by == "name":
-            # 1. 이름으로 사용자 목록을 먼저 찾습니다. (부분 일치, 대소문자 무시)
+            # 이름으로 사용자 검색
             users_found = await User.find(
                 RegEx(User.name, f".*{re.escape(search_term)}.*", "i")
             ).to_list()
             
-            # 2. 찾은 사용자들의 이메일 리스트를 생성합니다.
             user_emails = [user.email for user in users_found]
             
             if user_emails:
-                # 3. 해당 이메일들을 가진 토론 로그를 조회합니다.
-                query_conditions["user_email"] = In(user_emails)
+                # 찾은 이메일 목록으로 토론 검색
+                search_queries.append(In(DiscussionLog.user_email, user_emails))
             else:
-                # 이름과 일치하는 사용자가 없으면 빈 목록을 반환합니다.
                 return []
 
-    discussions = await DiscussionLog.find(query_conditions).sort(-DiscussionLog.created_at).to_list()
+    # 모든 검색 조건을 함께 적용하여 쿼리 실행
+    discussions = await DiscussionLog.find(*search_queries).sort(-DiscussionLog.created_at).to_list()
     return discussions
 
 @router.get(
