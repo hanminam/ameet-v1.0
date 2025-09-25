@@ -163,7 +163,7 @@ async def list_all_discussions(
         elif search_by == "name":
             # 1. 이름으로 사용자 목록을 먼저 찾습니다. (부분 일치, 대소문자 무시)
             users_found = await User.find(
-                User.name.regex(f".*{re.escape(search_term)}.*", "i")
+                RegEx(User.name, f".*{re.escape(search_term)}.*", "i")
             ).to_list()
             
             # 2. 찾은 사용자들의 이메일 리스트를 생성합니다.
