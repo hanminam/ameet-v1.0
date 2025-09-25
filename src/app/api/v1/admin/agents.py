@@ -1,7 +1,7 @@
 # src/app/api/v1/admin/agents.py
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict
 from pydantic import BaseModel
 
 from app.models.discussion import AgentSettings, AgentConfig
@@ -121,79 +121,54 @@ async def create_agent(
 @router.put(
     "/{agent_name}",
     response_model=AgentSettings,
-    summary="기존 에이전트 수정 (새 초안 생성)"
+    summary="기존 에이전트 수정" # [수정] "(새 초안 생성)" 문구 삭제
 )
-async def update_agent_as_draft(
+async def update_agent( # [수정] 함수 이름 변경
     agent_name: str,
     config: AgentConfig,
     admin_user: UserModel = Depends(get_current_admin_user)
 ):
-    latest_version_doc = await AgentSettings.find(
-        AgentSettings.name == agent_name
-    ).sort(-AgentSettings.version).first_or_none()
+    current_active_doc = await AgentSettings.find_one(
+        AgentSettings.name == agent_name,
+        AgentSettings.status == "active"
+    )
 
-    if not latest_version_doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+    if not current_active_doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Active agent to update not found")
+    
+    # 기존 버전을 archived로 변경
+    current_active_doc.status = "archived"
+    await current_active_doc.save()
 
-    new_draft = AgentSettings(
+    # 수정된 내용으로 새 버전을 active 상태로 생성
+    new_active_version = AgentSettings(
         name=agent_name,
-        version=latest_version_doc.version + 1,
-        status="draft",
+        agent_type=current_active_doc.agent_type,
+        version=current_active_doc.version + 1,
+        status="active", # [수정] 수정된 버전도 즉시 'active'
         config=config,
         last_modified_by=admin_user.email
     )
     
-    await new_draft.insert()
-    return new_draft
+    await new_active_version.insert()
 
-@router.post(
-    "/{agent_name}/publish",
-    response_model=AgentSettings,
-    summary="초안을 활성 버전으로 게시"
-)
-async def publish_agent(
-    agent_name: str,
-    admin_user: UserModel = Depends(get_current_admin_user)
-):
-    draft_to_publish = await AgentSettings.find_one(
-        AgentSettings.name == agent_name,
-        AgentSettings.status == "draft"
-    )
-    if not draft_to_publish:
-        raise HTTPException(status_code=404, detail="No draft version found to publish.")
-
-    current_active = await AgentSettings.find_one(
-        AgentSettings.name == agent_name,
-        AgentSettings.status == "active"
-    )
-    
-    if current_active:
-        current_active.status = "archived"
-        await current_active.save()
-
-    draft_to_publish.status = "active"
-    draft_to_publish.last_modified_by = admin_user.email
-    await draft_to_publish.save()
-    
-    return draft_to_publish
+    return new_active_version
 
 @router.delete(
     "/{agent_name}",
-    response_model=AgentSettings,
-    summary="에이전트 비활성화"
+    response_model=Dict[str, str], # 응답 모델을 간단한 딕셔너리로 변경
+    summary="에이전트 영구 삭제"
 )
-async def deactivate_agent(
+async def delete_agent( # 함수 이름 변경
     agent_name: str,
     admin_user: UserModel = Depends(get_current_admin_user)
 ):
-    agent_to_archive = await AgentSettings.find_one(
-        AgentSettings.name == agent_name,
-        AgentSettings.status == "active"
-    )
-    if not agent_to_archive:
-        raise HTTPException(status_code=404, detail="Active agent not found.")
+    # 3. 해당 이름을 가진 모든 버전의 문서를 DB에서 영구 삭제
+    delete_result = await AgentSettings.find(
+        AgentSettings.name == agent_name
+    ).delete()
+
+    if delete_result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Agent not found to delete.")
     
-    agent_to_archive.status = "archived"
-    agent_to_archive.last_modified_by = admin_user.email
-    await agent_to_archive.save()
-    return agent_to_archive
+    return {"message": f"Agent '{agent_name}' was permanently deleted."}

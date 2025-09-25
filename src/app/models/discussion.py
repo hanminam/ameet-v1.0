@@ -72,9 +72,9 @@ class AgentSettings(Document):
     
     # --- 상태 및 버전 관리를 위한 핵심 필드 ---
     version: int = Field(default=1, description="설정 변경 이력을 위한 버전 번호")
-    status: Literal["active", "archived", "draft"] = Field(
+    status: Literal["active", "archived"] = Field(
         default="active", 
-        description="active: 실 서비스용, archived: 비활성/삭제됨, draft: 수정 중인 초안"
+        description="active: 실 서비스용, archived: 비활성/삭제됨"
     )
     
     # --- 실제 설정 값 (내장 모델) ---
