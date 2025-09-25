@@ -11,6 +11,8 @@ from app.models.discussion import AgentSettings, AgentConfig
 from app.api.v1.users import get_current_admin_user
 from app.models.user import User as UserModel
 
+from app.core.config import logger
+
 router = APIRouter()
 
 # --- API 요청/응답을 위한 Pydantic 스키마 정의 ---
@@ -36,6 +38,12 @@ async def list_agents(
     DB에 저장된 모든 에이전트의 최신 버전 목록을 조회합니다.
     name_like 파라미터를 통해 expert 에이전트의 이름 검색을 지원합니다.
     """
+    # [로그 추가] API 엔드포인트가 호출되는 시점의 AgentSettings 클래스 상태를 확인합니다.
+    logger.info("--- [API-AGENTS] /agents GET 엔드포인트 진입 ---")
+    method_exists = hasattr(AgentSettings, 'get_motor_collection')
+    logger.info(f"--- [API-AGENTS-CHECK] API 호출 시점, AgentSettings에 get_motor_collection 메서드가 존재하는가? -> {method_exists} ---")
+    logger.info(f"--- [API-AGENTS-CHECK] API 호출 시점의 AgentSettings 클래스 ID: {id(AgentSettings)} ---")
+
     pipeline = []
     
     match_query = {}
@@ -49,7 +57,7 @@ async def list_agents(
         pipeline.append({"$match": match_query})
 
     pipeline.extend([
-        {"$sort": {"name": 1, "version": -1}},
+        {"$sort": {"name": "1", "version": -1}},
         {"$group": {
             "_id": "$name",
             "latest_doc": {"$first": "$$ROOT"}
@@ -62,24 +70,10 @@ async def list_agents(
     else:
         pipeline.append({"$sort": {"name": 1}})
     
-    # Beanie 모델 클래스를 우회하고, DB 클라이언트에 직접 접근하여 쿼리 실행
-    try:
-        # settings에서 DB 이름을 가져옵니다.
-        db_name = settings.MONGO_DB_URL.split("/")[-1].split("?")[0]
-        # mongo_client에서 DB를 선택하고, 'agents' 컬렉션을 직접 선택합니다.
-        collection = mongo_client[db_name][AgentSettings.Settings.name]
-
-        # motor 컬렉션 객체의 aggregate를 직접 호출하여 cursor를 받습니다.
-        cursor = collection.aggregate(pipeline)
-
-        # cursor의 to_list 비동기 메서드를 await하여 최종 결과를 가져옵니다.
-        agent_docs = await cursor.to_list(length=None)
-    except Exception as e:
-        # 데이터베이스 작업 중 오류 발생 시 처리
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database query failed: {e}"
-        )
+    # 여기서 오류가 발생하므로, 이 코드 이전의 로그들이 중요합니다.
+    collection = AgentSettings.get_motor_collection()
+    cursor = collection.aggregate(pipeline)
+    agent_docs = await cursor.to_list(length=None)
     
     return agent_docs
 
