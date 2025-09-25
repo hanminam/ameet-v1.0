@@ -11,8 +11,8 @@ from app.schemas.admin import DiscussionUsageResponse, TurnUsageDetail, AgentCos
 from app.models.discussion import DiscussionLog
 from app.schemas.discussion import DiscussionLogItem, DiscussionLogDetail
 from app.models.discussion import User 
-from beanie.operators import In
 import re
+from beanie.operators import In, RegEx
 
 router = APIRouter()
 
