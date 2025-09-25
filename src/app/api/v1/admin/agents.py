@@ -27,37 +27,33 @@ async def list_agents(
 ):
     """
     DB에 저장된 모든 에이전트의 최신 버전 목록을 조회합니다.
-    'agent_type' 쿼리 파라미터를 통해 'special' 또는 'expert' 에이전트만 필터링할 수 있습니다.
-    'expert' 타입 조회 시 토론 참여 횟수(discussion_participation_count)가 많은 순으로 정렬됩니다.
+    [수정] DB 집계(aggregate) 대신 Python으로 직접 데이터를 처리하여 안정성을 확보합니다.
     """
-    # [수정] 파이프라인을 동적으로 구성하여 안정성을 높입니다.
-    pipeline = []
-    
-    # 1. agent_type 필터가 있을 경우에만 $match 단계를 추가합니다.
+    # 1. 필터 조건에 맞는 모든 'active' 상태의 에이전트 문서를 DB에서 가져옵니다.
+    find_query = {"status": "active"}
     if agent_type:
-        pipeline.append({"$match": {"agent_type": agent_type}})
+        find_query["agent_type"] = agent_type
+    
+    all_active_agents = await AgentSettings.find(find_query).to_list()
 
-    # 2. 나머지 공통 단계를 추가합니다.
-    pipeline.extend([
-        {"$sort": {"name": 1, "version": -1}},
-        {"$group": {
-            "_id": "$name",
-            "latest_doc": {"$first": "$$ROOT"}
-        }},
-        {"$replaceRoot": {"newRoot": "$latest_doc"}}
-    ])
+    # 2. Python 딕셔너리를 사용하여 각 에이전트의 이름별로 최신 버전을 찾습니다.
+    latest_agents_map = {}
+    for agent in all_active_agents:
+        if (agent.name not in latest_agents_map) or (agent.version > latest_agents_map[agent.name].version):
+            latest_agents_map[agent.name] = agent
+            
+    # 3. 딕셔너리의 값들을 리스트로 변환합니다.
+    latest_agents_list = list(latest_agents_map.values())
 
-    # 3. 최종 정렬 단계를 추가합니다.
+    # 4. 최종 리스트를 조건에 맞게 Python에서 정렬합니다.
     if agent_type == "expert":
-        pipeline.append({"$sort": {"discussion_participation_count": -1, "name": 1}})
+        # Expert 에이전트는 참여 횟수가 많은 순서 -> 이름순으로 정렬
+        latest_agents_list.sort(key=lambda x: (-x.discussion_participation_count, x.name))
     else:
-        pipeline.append({"$sort": {"name": 1}})
-    
-    # [수정] 가장 표준적인 Beanie aggregate 호출 방식으로 되돌립니다.
-    # 깨끗하게 구성된 pipeline을 인자로 전달합니다.
-    agent_docs = await AgentSettings.aggregate(pipeline).to_list()
-    
-    return agent_docs
+        # Special 에이전트는 이름순으로 정렬
+        latest_agents_list.sort(key=lambda x: x.name)
+
+    return latest_agents_list
 
 @router.post(
     "/",
