@@ -5,7 +5,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
 
 from app.core.config import settings, logger
-from app.models.discussion import DiscussionLog, AgentSettings, User
+# from app.models.discussion import DiscussionLog, AgentSettings, User <-- 여기서 임포트 제거
 
 redis_client = None
 mongo_client = None
@@ -27,11 +27,14 @@ async def init_db_connections():
 
     # --- MongoDB and Beanie Initialization ---
     try:
+        # [핵심 수정] DB 초기화 함수 안에서 모델을 임포트합니다.
+        from app.models.discussion import AgentSettings, DiscussionLog, User
+
         db_name = settings.MONGO_DB_URL.split("/")[-1].split("?")[0]
         mongo_client = AsyncIOMotorClient(settings.MONGO_DB_URL)
         
         document_models_to_init = [AgentSettings, DiscussionLog, User]
-        
+      
         await init_beanie(
             database=mongo_client[db_name],
             document_models=document_models_to_init
