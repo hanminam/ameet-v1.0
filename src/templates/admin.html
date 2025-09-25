@@ -1113,11 +1113,14 @@
          * @param {string} discussionId - 상세 조회할 토론의 ID
          */
         async function showDiscussionDetail(discussionId) {
-
-            console.log(discussionId)
-
+            console.log(`[1] showDiscussionDetail 함수 시작 (ID: ${discussionId})`);
             showPage('discussion-detail');
+            
             const detailContent = document.getElementById('discussion-detail-content');
+            if (!detailContent) {
+                console.error("[오류] 'discussion-detail-content' ID를 가진 요소를 찾을 수 없습니다.");
+                return;
+            }
             detailContent.innerHTML = '<div class="text-center p-8"><p>상세 정보를 불러오는 중...</p></div>';
 
             const token = localStorage.getItem('accessToken');
@@ -1127,6 +1130,7 @@
             }
 
             try {
+                console.log('[2] API 서버에 상세 데이터 요청 시작...');
                 const response = await fetch(`/api/v1/admin/discussions/${discussionId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -1136,6 +1140,7 @@
                 }
 
                 const data = await response.json();
+                console.log('[3] API로부터 데이터 수신 성공:', data);
                 
                 // 상세 정보 렌더링
                 renderDiscussionDetail(data);
@@ -1151,29 +1156,18 @@
          * @param {object} data - API로부터 받은 토론 상세 정보
          */
         function renderDiscussionDetail(data) {
+            console.log('[4] renderDiscussionDetail 함수 시작. 받은 데이터:', data);
             const detailContent = document.getElementById('discussion-detail-content');
 
             // 1. 기본 정보 섹션 렌더링
             const summaryHtml = `
                 <div class="card mb-6">
-                    <h2 class="text-2xl font-bold mb-4">${data.topic}</h2>
+                    <h2 class="text-2xl font-bold mb-4">${data.topic || '주제 없음'}</h2>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                            <p class="text-gray-500">사용자명</p>
-                            <p class="font-semibold">${data.user_name}</p>
-                        </div>
-                        <div>
-                            <p class="text-gray-500">이메일</p>
-                            <p class="font-semibold">${data.user_email}</p>
-                        </div>
-                        <div>
-                            <p class="text-gray-500">시작 시간</p>
-                            <p class="font-semibold">${formatDateTime(data.created_at)}</p>
-                        </div>
-                        <div>
-                            <p class="text-gray-500">상태</p>
-                            <div>${renderStatusBadge(data.status)}</div>
-                        </div>
+                        <div><p class="text-gray-500">사용자명</p><p class="font-semibold">${data.user_name || 'N/A'}</p></div>
+                        <div><p class="text-gray-500">이메일</p><p class="font-semibold">${data.user_email || 'N/A'}</p></div>
+                        <div><p class="text-gray-500">시작 시간</p><p class="font-semibold">${formatDateTime(data.created_at)}</p></div>
+                        <div><p class="text-gray-500">상태</p><div>${renderStatusBadge(data.status)}</div></div>
                     </div>
                 </div>
             `;
@@ -1184,13 +1178,12 @@
                 return map;
             }, {});
 
-            const transcriptHtml = data.transcript.map(turn => {
+            const transcriptHtml = (data.transcript || []).map(turn => {
                 const agentName = turn.agent_name;
-                // 시스템 메시지는 건너뛰기
                 if (["SNR 전문가", "정보 검증부", "구분선"].includes(agentName)) return '';
 
                 const icon = participantMap[agentName]?.icon || '🤖';
-                const message = turn.message.replace(/\n/g, '<br>');
+                const message = (turn.message || '').replace(/\n/g, '<br>');
 
                 return `
                     <div class="flex items-start gap-3 my-4">
@@ -1204,14 +1197,18 @@
             }).join('');
 
             // 최종 HTML 조립
-            detailContent.innerHTML = `
+            const finalHtml = `
                 ${summaryHtml}
                 <div class="card">
                     <h3 class="text-xl font-bold mb-4">대화 전문</h3>
-                    <div class="h-[60vh] overflow-y-auto pr-4">${transcriptHtml}</div>
+                    <div class="h-[60vh] overflow-y-auto pr-4">${transcriptHtml || '<p>대화 기록이 없습니다.</p>'}</div>
                 </div>
             `;
+            
+            console.log('[5] 최종 HTML 생성 완료. 화면에 렌더링합니다.');
+            detailContent.innerHTML = finalHtml;
         }
+
     </script>
 </body>
 </html>
