@@ -1023,8 +1023,13 @@
          * API에서 토론 이력 목록을 가져와 테이블을 렌더링하는 함수
          */
         async function loadDiscussions() {
+            // 1. 로컬 스토리지에서 액세스 토큰을 가져옵니다.
             const token = localStorage.getItem('accessToken');
-            if (!token) return;
+            if (!token) {
+                // 토큰이 없으면 로그인 페이지로 이동시킬 수 있습니다.
+                window.location.href = '/';
+                return;
+            }
 
             const tbody = document.getElementById('monitoring-list-tbody');
             tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">토론 목록을 불러오는 중...</td></tr>';
@@ -1036,16 +1041,18 @@
             }
 
             try {
+                // 2. fetch 요청에 headers를 포함하여 인증 정보를 함께 보냅니다.
                 const response = await fetch(apiUrl, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
                 if (!response.ok) {
+                    // 401 오류 발생 시, 여기서 에러가 발생합니다.
                     throw new Error(`[${response.status}] 토론 목록을 가져오는데 실패했습니다.`);
                 }
 
                 const discussions = await response.json();
-                tbody.innerHTML = ''; // 기존 내용 삭제
+                tbody.innerHTML = ''; 
 
                 if (discussions.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">표시할 토론이 없습니다.</td></tr>';
