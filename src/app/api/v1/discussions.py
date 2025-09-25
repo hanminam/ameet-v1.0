@@ -13,7 +13,7 @@ from app.schemas.discussion import DiscussionLogItem, DiscussionLogDetail
 from app.api.v1.users import get_current_user
 from app.db import redis_client
 from app.models.user import User as UserModel
-from app.models.discussion import DiscussionLog
+from app.models.discussion import DiscussionLog, User
 
 from pydantic import BaseModel
 from app.services.report_generator import generate_report_background
@@ -148,7 +148,17 @@ async def get_my_discussions(
         DiscussionLog.user_email == current_user.email
     ).sort(-DiscussionLog.created_at).to_list()
     
-    return discussions
+    # 사용자 이름을 채워주기 위한 로직 추가
+    user = await User.find_one(User.email == current_user.email)
+    user_name = user.name if user else "N/A"
+
+    response_data = []
+    for d in discussions:
+        item = d.model_dump()
+        item["user_name"] = user_name
+        response_data.append(DiscussionLogItem(**item))
+
+    return response_data
 
 @router.get(
     "/{discussion_id}",
@@ -170,8 +180,19 @@ async def get_discussion_detail(
         
     if discussion.user_email != current_user.email:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this discussion.")
-        
-    return discussion
+    
+    # 1. 토론 로그의 이메일로 사용자 정보를 찾습니다.
+    user = await User.find_one(User.email == discussion.user_email)
+    user_name = user.name if user else "사용자 정보 없음"
+
+    # 2. Pydantic 스키마에 맞게 응답 데이터를 구성하여 반환합니다.
+    #    discussion.model_dump()를 사용해 기존 discussion 데이터를 모두 포함시키고,
+    #    user_name 필드를 추가합니다.
+    response_data = discussion.model_dump()
+    
+    response_data["user_name"] = user_name
+    
+    return DiscussionLogDetail(**response_data)
 
 # 토론 종료 (보고서 생성 없음)
 @router.post(
