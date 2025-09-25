@@ -4,14 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional, Literal
 from pydantic import BaseModel
 
-from app.db import mongo_client
-from app.core.config import settings
-
 from app.models.discussion import AgentSettings, AgentConfig
 from app.api.v1.users import get_current_admin_user
 from app.models.user import User as UserModel
-
-from app.core.config import logger
 
 router = APIRouter()
 
@@ -38,12 +33,6 @@ async def list_agents(
     DB에 저장된 모든 에이전트의 최신 버전 목록을 조회합니다.
     name_like 파라미터를 통해 expert 에이전트의 이름 검색을 지원합니다.
     """
-    # [로그 추가] API 엔드포인트가 호출되는 시점의 AgentSettings 클래스 상태를 확인합니다.
-    logger.info("--- [API-AGENTS] /agents GET 엔드포인트 진입 ---")
-    method_exists = hasattr(AgentSettings, 'get_motor_collection')
-    logger.info(f"--- [API-AGENTS-CHECK] API 호출 시점, AgentSettings에 get_motor_collection 메서드가 존재하는가? -> {method_exists} ---")
-    logger.info(f"--- [API-AGENTS-CHECK] API 호출 시점의 AgentSettings 클래스 ID: {id(AgentSettings)} ---")
-
     pipeline = []
     
     match_query = {}
@@ -57,7 +46,7 @@ async def list_agents(
         pipeline.append({"$match": match_query})
 
     pipeline.extend([
-        {"$sort": {"name": "1", "version": -1}},
+        {"$sort": {"name": 1, "version": -1}},
         {"$group": {
             "_id": "$name",
             "latest_doc": {"$first": "$$ROOT"}
@@ -70,10 +59,9 @@ async def list_agents(
     else:
         pipeline.append({"$sort": {"name": 1}})
     
-    # 여기서 오류가 발생하므로, 이 코드 이전의 로그들이 중요합니다.
-    collection = AgentSettings.get_motor_collection()
-    cursor = collection.aggregate(pipeline)
-    agent_docs = await cursor.to_list(length=None)
+    # [원상 복구] Beanie의 표준적인 aggregation 사용법으로 되돌립니다.
+    # 단일 워커 환경에서는 이 코드가 정상적으로 동작합니다.
+    agent_docs = await AgentSettings.aggregate(pipeline).to_list()
     
     return agent_docs
 
@@ -88,9 +76,6 @@ async def create_agent(
     payload: AgentCreateRequest,
     admin_user: UserModel = Depends(get_current_admin_user)
 ):
-    """
-    새로운 에이전트를 'draft' 상태의 버전 1로 생성합니다.
-    """
     existing_agent = await AgentSettings.find_one(AgentSettings.name == payload.name)
     if existing_agent:
         raise HTTPException(
@@ -100,7 +85,7 @@ async def create_agent(
     
     new_agent = AgentSettings(
         name=payload.name,
-        agent_type="expert", # 항상 'expert' 타입으로 생성되도록 강제
+        agent_type="expert",
         version=1,
         status="active",
         config=payload.config,
