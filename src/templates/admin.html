@@ -1536,7 +1536,7 @@
 
                 if (response.ok) {
                     const actionText = mode === 'add' ? '추가' : '수정';
-                    alert(`에이전트가 성공적으로 ${actionText}되었습니다. 새 버전이 초안으로 생성되었습니다.`);
+                    alert(`에이전트가 성공적으로 ${actionText}되었습니다.`);
                     toggleModal('agent-form-modal');
                     await loadAgents();
                 } else {
@@ -1573,7 +1573,7 @@
                 });
 
                 if (response.ok) {
-                    alert(`'${agentName}' 에이전트가 비활성화되었습니다.`);
+                    alert(`'${agentName}' 에이전트가 삭제되었습니다.`);
                     toggleModal('agent-form-modal');
                     await loadAgents();
                 } else {
