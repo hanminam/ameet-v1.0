@@ -53,6 +53,7 @@ async def list_agents(
             "_id": "$name",
             "latest_doc": {"$first": "$$ROOT"}
         }},
+      
         {"$replaceRoot": {"newRoot": "$latest_doc"}}
     ])
 
@@ -62,7 +63,15 @@ async def list_agents(
     else:
         pipeline.append({"$sort": {"name": 1}})
     
-    agent_docs = [doc async for doc in AgentSettings.aggregate(pipeline)]
+    # [최종 수정] Beanie의 불안정한 aggregate()를 우회하고 motor 드라이버를 직접 사용합니다.
+    # 1. AgentSettings 모델에서 motor 컬렉션 객체를 가져옵니다.
+    collection = AgentSettings.get_motor_collection()
+
+    # 2. motor 컬렉션 객체의 aggregate를 직접 호출하여 cursor를 받습니다. (await 없음)
+    cursor = collection.aggregate(pipeline)
+
+    # 3. cursor의 to_list 비동기 메서드를 await하여 최종 결과를 가져옵니다.
+    agent_docs = await cursor.to_list(length=None)
     
     return agent_docs
 
