@@ -29,38 +29,42 @@ async def list_agents(
 ):
     """
     DB에 저장된 모든 에이전트의 최신 버전 목록을 조회합니다.
-    안정적인 Python 기반 로직으로 되돌아가고, 이름 검색 기능을 추가합니다.
+    name_like 파라미터를 통해 expert 에이전트의 이름 검색을 지원합니다.
     """
-    # 1. DB에서는 타입과 상태만으로 모든 문서를 안전하게 가져옵니다.
-    find_query = {"status": "active"}
-    if agent_type:
-        find_query["agent_type"] = agent_type
+    pipeline = []
     
-    all_active_agents = await AgentSettings.find(find_query).to_list()
-
-    # 2. Python 딕셔너리를 사용하여 각 에이전트의 이름별로 최신 버전을 찾습니다.
-    latest_agents_map = {}
-    for agent in all_active_agents:
-        if (agent.name not in latest_agents_map) or (agent.version > latest_agents_map[agent.name].version):
-            latest_agents_map[agent.name] = agent
-            
-    latest_agents_list = list(latest_agents_map.values())
-
-    # 3. name_like 검색어가 있으면, Python 코드로 직접 필터링합니다.
+    # 1. 기본 필터에서 status 조건을 제거하여 모든 상태의 에이전트를 조회 대상으로 합니다.
+    match_query = {}
+    if agent_type:
+        match_query["agent_type"] = agent_type
+    
+    # 2. expert 에이전트에 대해서만 이름 검색($regex) 조건을 추가합니다.
     if agent_type == "expert" and name_like:
-        search_term = name_like.lower()
-        latest_agents_list = [
-            agent for agent in latest_agents_list
-            if search_term in agent.name.lower()
-        ]
+        match_query["name"] = {"$regex": name_like, "$options": "i"}
 
-    # 4. 최종 리스트를 조건에 맞게 Python에서 정렬합니다.
+    # 3. match_query에 조건이 하나라도 있을 경우에만 $match 단계를 추가합니다.
+    if match_query:
+        pipeline.append({"$match": match_query})
+
+    # 4. 공통 파이프라인 단계를 추가하여 각 에이전트의 최신 버전을 찾습니다.
+    pipeline.extend([
+        {"$sort": {"name": 1, "version": -1}},
+        {"$group": {
+            "_id": "$name",
+            "latest_doc": {"$first": "$$ROOT"}
+        }},
+        {"$replaceRoot": {"newRoot": "$latest_doc"}}
+    ])
+
+    # 5. 최종 결과를 정렬합니다.
     if agent_type == "expert":
-        latest_agents_list.sort(key=lambda x: (-x.discussion_participation_count, x.name))
+        pipeline.append({"$sort": {"discussion_participation_count": -1, "name": 1}})
     else:
-        latest_agents_list.sort(key=lambda x: x.name)
-
-    return latest_agents_list
+        pipeline.append({"$sort": {"name": 1}})
+    
+    agent_docs = await AgentSettings.aggregate(pipeline).to_list()
+    
+    return agent_docs
 
 
 @router.post(
@@ -85,9 +89,9 @@ async def create_agent(
     
     new_agent = AgentSettings(
         name=payload.name,
-        agent_type="expert", # [수정] 항상 'expert' 타입으로 생성되도록 강제
+        agent_type="expert", # 항상 'expert' 타입으로 생성되도록 강제
         version=1,
-        status="draft",
+        status="active",
         config=payload.config,
         last_modified_by=admin_user.email
     )
