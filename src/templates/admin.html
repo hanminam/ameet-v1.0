@@ -537,16 +537,27 @@
         function showPage(pageId) {
             document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
             document.getElementById(pageId).classList.add('active');
-            
-            document.querySelectorAll('.sidebar-link').forEach(link => link.classList.remove('active'));
-            document.querySelector(`.sidebar-link[onclick="showPage('${pageId}')"]`).classList.add('active');
 
-            // '계정 관리' 페이지가 보일 때 사용자 목록을 불러오도록 함
+            document.querySelectorAll('.sidebar-link').forEach(link => link.classList.remove('active'));
+
+            // 1. 활성화할 링크의 ID를 결정합니다.
+            let linkToActivateId = pageId;
+            if (pageId === 'discussion-detail') {
+                // 상세 보기 페이지일 경우, '토론 모니터링' 링크를 활성화하도록 변경합니다.
+                linkToActivateId = 'monitoring';
+            }
+
+            // 2. 활성화할 링크를 찾습니다.
+            const activeLink = document.querySelector(`.sidebar-link[onclick="showPage('${linkToActivateId}')"]`);
+            
+            // 3. 링크가 존재할 경우에만 active 클래스를 추가하여 오류를 방지합니다.
+            if (activeLink) {
+                activeLink.classList.add('active');
+            }
+
             if (pageId === 'users') {
                 loadUsers();
             }
-
-            // 'monitoring' 페이지가 보일 때 토론 목록을 불러오도록 추가
             if (pageId === 'monitoring') {
                 loadDiscussions();
             }
