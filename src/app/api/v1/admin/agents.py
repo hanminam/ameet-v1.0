@@ -1,6 +1,11 @@
+# src/app/api/v1/admin/agents.py
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional, Literal
 from pydantic import BaseModel
+
+from app.db import mongo_client
+from app.core.config import settings
 
 from app.models.discussion import AgentSettings, AgentConfig
 from app.api.v1.users import get_current_admin_user
@@ -10,10 +15,10 @@ router = APIRouter()
 
 # --- API 요청/응답을 위한 Pydantic 스키마 정의 ---
 class AgentCreateRequest(BaseModel):
-    name: str
-    # 프론트엔드에서 agent_type을 보내지 않아도 되도록 Optional로 변경하고 기본값을 expert로 설정
-    agent_type: Literal["special", "expert"] = "expert" 
-    config: AgentConfig
+ 
+   name: str
+   agent_type: Literal["special", "expert"] = "expert" 
+   config: AgentConfig
 
 # --- API 엔드포인트 구현 ---
 
@@ -33,45 +38,48 @@ async def list_agents(
     """
     pipeline = []
     
-    # 1. 기본 필터에서 status 조건을 제거하여 모든 상태의 에이전트를 조회 대상으로 합니다.
     match_query = {}
     if agent_type:
         match_query["agent_type"] = agent_type
     
-    # 2. expert 에이전트에 대해서만 이름 검색($regex) 조건을 추가합니다.
     if agent_type == "expert" and name_like:
         match_query["name"] = {"$regex": name_like, "$options": "i"}
 
-    # 3. match_query에 조건이 하나라도 있을 경우에만 $match 단계를 추가합니다.
     if match_query:
         pipeline.append({"$match": match_query})
 
-    # 4. 공통 파이프라인 단계를 추가하여 각 에이전트의 최신 버전을 찾습니다.
     pipeline.extend([
         {"$sort": {"name": 1, "version": -1}},
         {"$group": {
             "_id": "$name",
             "latest_doc": {"$first": "$$ROOT"}
         }},
-      
         {"$replaceRoot": {"newRoot": "$latest_doc"}}
     ])
 
-    # 5. 최종 결과를 정렬합니다.
     if agent_type == "expert":
         pipeline.append({"$sort": {"discussion_participation_count": -1, "name": 1}})
     else:
         pipeline.append({"$sort": {"name": 1}})
     
-    # [최종 수정] Beanie의 불안정한 aggregate()를 우회하고 motor 드라이버를 직접 사용합니다.
-    # 1. AgentSettings 모델에서 motor 컬렉션 객체를 가져옵니다.
-    collection = AgentSettings.get_motor_collection()
+    # Beanie 모델 클래스를 우회하고, DB 클라이언트에 직접 접근하여 쿼리 실행
+    try:
+        # settings에서 DB 이름을 가져옵니다.
+        db_name = settings.MONGO_DB_URL.split("/")[-1].split("?")[0]
+        # mongo_client에서 DB를 선택하고, 'agents' 컬렉션을 직접 선택합니다.
+        collection = mongo_client[db_name][AgentSettings.Settings.name]
 
-    # 2. motor 컬렉션 객체의 aggregate를 직접 호출하여 cursor를 받습니다. (await 없음)
-    cursor = collection.aggregate(pipeline)
+        # motor 컬렉션 객체의 aggregate를 직접 호출하여 cursor를 받습니다.
+        cursor = collection.aggregate(pipeline)
 
-    # 3. cursor의 to_list 비동기 메서드를 await하여 최종 결과를 가져옵니다.
-    agent_docs = await cursor.to_list(length=None)
+        # cursor의 to_list 비동기 메서드를 await하여 최종 결과를 가져옵니다.
+        agent_docs = await cursor.to_list(length=None)
+    except Exception as e:
+        # 데이터베이스 작업 중 오류 발생 시 처리
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database query failed: {e}"
+        )
     
     return agent_docs
 
@@ -107,7 +115,6 @@ async def create_agent(
     await new_agent.insert()
     return new_agent
 
-# (이하 다른 엔드포인트들은 변경되지 않았습니다)
 @router.put(
     "/{agent_name}",
     response_model=AgentSettings,
@@ -156,6 +163,7 @@ async def publish_agent(
         AgentSettings.name == agent_name,
         AgentSettings.status == "active"
     )
+    
     if current_active:
         current_active.status = "archived"
         await current_active.save()
