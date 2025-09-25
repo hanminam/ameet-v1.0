@@ -60,6 +60,29 @@
         .toggle-checkbox:checked + .toggle-label {
             background-color: #2563eb;
         }
+        /* 탭 관련 스타일 추가 */
+        .tab-link {
+            cursor: pointer;
+            border-bottom-width: 2px;
+            padding: 1rem 0.25rem;
+            font-weight: 500;
+            color: #6b7280; /* gray-500 */
+            border-color: transparent;
+        }
+        .tab-link:hover {
+            border-color: #d1d5db; /* gray-300 */
+            color: #4b5563; /* gray-600 */
+        }
+        .tab-link.active {
+            border-color: #2563eb; /* blue-600 */
+            color: #2563eb;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
     </style>
 </head>
 <body class="text-gray-800">
@@ -160,8 +183,8 @@
                 <div class="card mb-6">
                     <div class="flex items-center gap-2">
                         <select id="monitoring-search-by" class="p-2 border-gray-300 border rounded-lg bg-white">
-                            <option value="email" selected>사용자 이메일</option>
-                            <option value="name">사용자 이름</option>
+                            <option value="name" selected>사용자 이름</option>
+                            <option value="email">사용자 이메일</option>
                         </select>
                         <input type="text" id="monitoring-search-term" placeholder="검색어 입력..." class="w-1/2 p-2 border-gray-300 border rounded-lg">
                         <button id="monitoring-search-btn" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">검색</button>
@@ -323,48 +346,30 @@
             </div>
 
             <!-- Page: Agent Settings -->
-            <div id="agents" class="page active">
+            <div id="agents" class="page">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-3xl font-bold">에이전트 설정</h2>
                     <button class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700" onclick="toggleModal('agent-edit-modal')">＋ 새 에이전트 추가</button>
                 </div>
-                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                    <!-- [제안 4 반영] 활성화/비활성화 토글 추가 -->
-                    <div class="card text-center relative">
-                        <div class="absolute top-4 right-4 flex items-center gap-2">
-                            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                                <input type="checkbox" name="toggle" id="toggle1" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer" checked/>
-                                <label for="toggle1" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
-                            </div>
-                            <button onclick="toggleModal('agent-edit-modal')">⚙️</button>
-                        </div>
-                        <p class="text-5xl pt-4">💹</p>
-                        <h3 class="font-bold mt-2">재무 분석가</h3>
-                        <p class="text-xs text-gray-500 mt-1">gemini-1.5-pro</p>
+
+                <div class="border-b border-gray-200 mb-6">
+                    <nav class="flex -mb-px space-x-8" aria-label="Tabs">
+                        <a id="expert-agents-tab" class="tab-link active">
+                            Expert Agents
+                        </a>
+                        <a id="special-agents-tab" class="tab-link">
+                            Special Agents
+                        </a>
+                    </nav>
+                </div>
+
+                <div id="expert-agents-content" class="tab-content active">
+                    <div id="expert-agents-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                     </div>
-                    <div class="card text-center relative opacity-50 bg-gray-50">
-                         <div class="absolute top-4 right-4 flex items-center gap-2">
-                            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                                <input type="checkbox" name="toggle" id="toggle2" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
-                                <label for="toggle2" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
-                            </div>
-                            <button onclick="toggleModal('agent-edit-modal')">⚙️</button>
-                        </div>
-                        <p class="text-5xl pt-4">🤔</p>
-                        <h3 class="font-bold mt-2">비판적 관점 (비활성)</h3>
-                        <p class="text-xs text-gray-500 mt-1">gpt-4o</p>
-                    </div>
-                     <div class="card text-center relative">
-                        <div class="absolute top-4 right-4 flex items-center gap-2">
-                            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                                <input type="checkbox" name="toggle" id="toggle3" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer" checked/>
-                                <label for="toggle3" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
-                            </div>
-                            <button onclick="toggleModal('agent-edit-modal')">⚙️</button>
-                        </div>
-                        <p class="text-5xl pt-4">🌍</p>
-                        <h3 class="font-bold mt-2">거시경제 전문가</h3>
-                        <p class="text-xs text-gray-500 mt-1">claude-3.5-sonnet</p>
+                </div>
+
+                <div id="special-agents-content" class="tab-content">
+                    <div id="special-agents-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                     </div>
                 </div>
             </div>
@@ -567,6 +572,9 @@
             }
             if (pageId === 'monitoring') {
                 loadDiscussions();
+            }
+            if (pageId === 'agents') {
+                loadAgents();
             }
         }
 
@@ -886,6 +894,16 @@
         document.addEventListener('DOMContentLoaded', () => {
             
             showPage('agents'); // Default page
+
+            // 탭 클릭 이벤트 리스너 추가
+            document.getElementById('expert-agents-tab').addEventListener('click', (e) => {
+                e.preventDefault();
+                switchAgentTab('expert-agents');
+            });
+            document.getElementById('special-agents-tab').addEventListener('click', (e) => {
+                e.preventDefault();
+                switchAgentTab('special-agents');
+            });
 
             // Chart instances
             let weeklyChart, costModelChart, dailyCostChart;
@@ -1210,6 +1228,87 @@
             
             console.log('[5] 최종 HTML 생성 완료. 화면에 렌더링합니다.');
             detailContent.innerHTML = finalHtml;
+        }
+
+        // --- Agent Settings Functions ---
+        
+        /**
+         * 에이전트 탭을 클릭했을 때 UI를 업데이트하는 함수
+         */
+        function switchAgentTab(targetTabId) {
+            document.querySelectorAll('.tab-link').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            document.getElementById(`${targetTabId}-tab`).classList.add('active');
+            document.getElementById(`${targetTabId}-content`).classList.add('active');
+        }
+
+        /**
+         * API에서 에이전트 목록을 가져와 탭별로 렌더링하는 메인 함수
+         */
+        async function loadAgents() {
+            const token = localStorage.getItem('accessToken');
+            if (!token) return;
+
+            // 로딩 상태 표시
+            document.getElementById('expert-agents-grid').innerHTML = '<p class="text-slate-500 col-span-full">Expert 에이전트 목록을 불러오는 중...</p>';
+            document.getElementById('special-agents-grid').innerHTML = '<p class="text-slate-500 col-span-full">Special 에이전트 목록을 불러오는 중...</p>';
+
+            try {
+                // 두 API를 병렬로 호출
+                const [expertRes, specialRes] = await Promise.all([
+                    fetch('/api/v1/admin/agents?agent_type=expert', { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch('/api/v1/admin/agents?agent_type=special', { headers: { 'Authorization': `Bearer ${token}` } })
+                ]);
+
+                if (!expertRes.ok || !specialRes.ok) {
+                    throw new Error('에이전트 목록을 가져오는데 실패했습니다.');
+                }
+
+                const expertAgents = await expertRes.json();
+                const specialAgents = await specialRes.json();
+                
+                renderAgentCards(expertAgents, 'expert-agents-grid', 'expert');
+                renderAgentCards(specialAgents, 'special-agents-grid', 'special');
+
+            } catch (error) {
+                console.error('Error loading agents:', error);
+                document.getElementById('expert-agents-grid').innerHTML = `<p class="text-red-500 col-span-full">${error.message}</p>`;
+                document.getElementById('special-agents-grid').innerHTML = `<p class="text-red-500 col-span-full">${error.message}</p>`;
+            }
+        }
+
+        /**
+         * 에이전트 데이터를 받아 카드 UI를 생성하고 컨테이너에 삽입하는 함수
+         */
+        function renderAgentCards(agents, containerId, agentType) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = ''; // 기존 내용 삭제
+
+            if (!agents || agents.length === 0) {
+                container.innerHTML = '<p class="text-slate-500 col-span-full">표시할 에이전트가 없습니다.</p>';
+                return;
+            }
+
+            agents.forEach(agent => {
+                // Expert 에이전트의 경우 토론 참여 횟수를 표시, Special은 타입 표시
+                const subtext = agentType === 'expert'
+                    ? `<p class="text-xs text-gray-500 mt-1">참여 횟수: <strong>${agent.discussion_participation_count || 0}</strong></p>`
+                    : `<p class="text-xs text-gray-500 mt-1 capitalize">${agent.agent_type}</p>`;
+                
+                // 활성화/비활성화 토글은 제거하고 설정 버튼만 남김
+                const cardHtml = `
+                    <div class="card text-center relative transition-all hover:shadow-lg hover:-translate-y-1">
+                        <div class="absolute top-4 right-4">
+                            <button onclick="openAgentEditModal('${agent._id}')" class="text-xl text-gray-400 hover:text-gray-600">⚙️</button>
+                        </div>
+                        <p class="text-5xl pt-4">${agent.config.icon || '🤖'}</p>
+                        <h3 class="font-bold mt-2">${agent.name}</h3>
+                        <p class="text-xs text-gray-400 mt-1">${agent.config.model}</p>
+                        ${subtext}
+                    </div>`;
+                container.innerHTML += cardHtml;
+            });
         }
 
     </script>

@@ -28,10 +28,17 @@ async def list_agents(
     """
     DB에 저장된 모든 에이전트의 최신 버전 목록을 조회합니다.
     'agent_type' 쿼리 파라미터를 통해 'special' 또는 'expert' 에이전트만 필터링할 수 있습니다.
+    'expert' 타입 조회 시 토론 참여 횟수(discussion_participation_count)가 많은 순으로 정렬됩니다.
     """
     match_stage = {}
     if agent_type:
         match_stage = {"agent_type": agent_type}
+
+    # [수정] Expert 에이전트일 경우 정렬 기준을 변경합니다.
+    if agent_type == "expert":
+        sort_stage = {"$sort": {"discussion_participation_count": -1, "name": 1}}
+    else:
+        sort_stage = {"$sort": {"name": 1}}
 
     pipeline = [
         {"$match": match_stage} if match_stage else {"$match": {}},
@@ -41,9 +48,10 @@ async def list_agents(
             "latest_doc": {"$first": "$$ROOT"}
         }},
         {"$replaceRoot": {"newRoot": "$latest_doc"}},
-        {"$sort": {"name": 1}}
+        sort_stage
     ]
     agent_docs = await AgentSettings.aggregate(pipeline).to_list()
+    
     return agent_docs
 
 @router.post(
