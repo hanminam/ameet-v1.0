@@ -50,8 +50,19 @@ async def list_agents(
         sort_stage
     ]
     
-    # [수정] pipeline 리스트를 명시적인 'aggregation_pipeline' 키워드 인자로 전달합니다.
-    agent_docs = await AgentSettings.aggregate(aggregation_pipeline=pipeline).to_list()
+    # [수정] Beanie의 aggregate 헬퍼 대신 motor 드라이버를 직접 사용하여 쿼리 실행
+    # 1. motor 컬렉션 객체를 가져옵니다.
+    collection = AgentSettings.get_motor_collection()
+    
+    # 2. 집계 파이프라인으로 커서(cursor)를 생성합니다. (이때 await 사용 안 함)
+    cursor = collection.aggregate(pipeline)
+    
+    # 3. 커서로부터 모든 결과를 비동기적으로 가져옵니다.
+    agent_docs_raw = await cursor.to_list(length=None)
+
+    # 4. Raw dictionary 리스트를 Beanie 모델 인스턴스 리스트로 변환합니다.
+    agent_docs = [AgentSettings(**doc) for doc in agent_docs_raw]
+    
     return agent_docs
 
 @router.post(
