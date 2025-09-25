@@ -34,7 +34,6 @@ async def list_agents(
     if agent_type:
         match_stage = {"agent_type": agent_type}
 
-    # [수정] Expert 에이전트일 경우 정렬 기준을 변경합니다.
     if agent_type == "expert":
         sort_stage = {"$sort": {"discussion_participation_count": -1, "name": 1}}
     else:
@@ -50,8 +49,9 @@ async def list_agents(
         {"$replaceRoot": {"newRoot": "$latest_doc"}},
         sort_stage
     ]
-    agent_docs = await AgentSettings.aggregate(pipeline).to_list()
     
+    # [수정] pipeline 리스트를 '*' 연산자로 언패킹하여 개별 인자로 전달합니다.
+    agent_docs = await AgentSettings.aggregate(*pipeline).to_list()
     return agent_docs
 
 @router.post(
@@ -61,7 +61,7 @@ async def list_agents(
     summary="신규 에이전트 생성 (초안으로)"
 )
 async def create_agent(
-    payload: AgentCreateRequest, # [수정] Pydantic 모델로 요청 받기
+    payload: AgentCreateRequest,
     admin_user: UserModel = Depends(get_current_admin_user)
 ):
     """
@@ -113,6 +113,7 @@ async def update_agent_as_draft(
         config=config,
         last_modified_by=admin_user.email
     )
+    
     await new_draft.insert()
     return new_draft
 
@@ -136,7 +137,6 @@ async def publish_agent(
     if not draft_to_publish:
         raise HTTPException(status_code=404, detail="No draft version found to publish.")
 
-    # 기존 active 버전을 찾아서 archived로 변경
     current_active = await AgentSettings.find_one(
         AgentSettings.name == agent_name,
         AgentSettings.status == "active"
@@ -145,7 +145,6 @@ async def publish_agent(
         current_active.status = "archived"
         await current_active.save()
 
-    # draft 버전을 active로 변경하고 저장
     draft_to_publish.status = "active"
     draft_to_publish.last_modified_by = admin_user.email
     await draft_to_publish.save()
