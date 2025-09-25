@@ -8,7 +8,7 @@ from app.models.discussion import AgentSettings, AgentConfig
 from app.api.v1.users import get_current_admin_user
 from app.models.user import User as UserModel
 
-from app.core.config import settings
+from app.core.config import settings, logger
 from app import db 
 
 router = APIRouter()
@@ -32,59 +32,50 @@ async def list_agents(
     name_like: Optional[str] = Query(None, description="에이전트 이름에 포함될 검색어"),
     admin_user: UserModel = Depends(get_current_admin_user)
 ):
-    """
-    DB에 저장된 모든 에이전트의 최신 버전 목록을 조회합니다.
-    name_like 파라미터를 통해 expert 에이전트의 이름 검색을 지원합니다.
-    """
     pipeline = []
-    
     match_query = {}
     if agent_type:
         match_query["agent_type"] = agent_type
-    
     if agent_type == "expert" and name_like:
         match_query["name"] = {"$regex": name_like, "$options": "i"}
-
     if match_query:
         pipeline.append({"$match": match_query})
-
     pipeline.extend([
         {"$sort": {"name": 1, "version": -1}},
-        {"$group": {
-            "_id": "$name",
-            "latest_doc": {"$first": "$$ROOT"}
-        }},
+        {"$group": {"_id": "$name", "latest_doc": {"$first": "$$ROOT"}}},
         {"$replaceRoot": {"newRoot": "$latest_doc"}}
     ])
-
     if agent_type == "expert":
         pipeline.append({"$sort": {"discussion_participation_count": -1, "name": 1}})
     else:
         pipeline.append({"$sort": {"name": 1}})
-    
-    # [최종 수정] Beanie 모델의 메서드 대신, 초기화가 보장된 db.mongo_client를 직접 사용합니다.
+
     try:
         if not db.mongo_client:
             raise HTTPException(status_code=503, detail="Database is not available.")
-
-        # 1. 데이터베이스 이름을 가져옵니다.
-        db_name = settings.MONGO_DB_URL.split("/")[-1].split("?")[0]
         
-        # 2. mongo_client에서 직접 데이터베이스와 컬렉션을 선택합니다.
+        db_name = settings.MONGO_DB_URL.split("/")[-1].split("?")[0]
         collection = db.mongo_client[db_name]["agents"]
         
-        # 3. 컬렉션 객체에 직접 aggregation을 실행합니다.
+        # [로그] 1. DB 쿼리 실행 직전, 전송할 파이프라인 내용을 로그로 출력합니다.
+        logger.info(f"--- [AGENT LIST] Executing aggregation for agent_type='{agent_type}'. Pipeline: {pipeline}")
+
         cursor = collection.aggregate(pipeline)
-        
-        # 4. motor cursor의 to_list를 사용하여 결과를 가져옵니다.
         agent_docs_raw = await cursor.to_list(length=None)
-        
-        # 5. Raw dictionary를 Pydantic 모델로 파싱하여 응답 형식을 맞춥니다.
+
+        # [로그] 2. 쿼리 성공 시, 가져온 문서의 개수를 로그로 출력합니다.
+        logger.info(f"--- [AGENT LIST] Successfully retrieved {len(agent_docs_raw)} raw documents from DB.")
+
         agent_docs = [AgentSettings.model_validate(doc) for doc in agent_docs_raw]
         return agent_docs
         
     except Exception as e:
-        # DB 쿼리 중 발생할 수 있는 예외를 처리합니다.
+        # [핵심 로그] 3. 오류 발생 시, 어떤 오류인지 상세 내용과 전체 Traceback을 로그로 출력합니다.
+        logger.error(
+            f"--- [AGENT LIST ERROR] Database aggregation failed for agent_type='{agent_type}'.",
+            exc_info=True  # 이 옵션이 전체 Traceback을 출력하게 합니다.
+        )
+        # 기존과 동일하게 클라이언트에게는 500 에러를 보냅니다.
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve agents from database: {str(e)}"
