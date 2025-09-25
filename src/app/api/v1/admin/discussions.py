@@ -10,6 +10,9 @@ from app.models.user import User as UserModel
 from app.schemas.admin import DiscussionUsageResponse, TurnUsageDetail, AgentCostSummary
 from app.models.discussion import DiscussionLog
 from app.schemas.discussion import DiscussionLogItem, DiscussionLogDetail
+from app.models.discussion import User 
+from beanie.operators import In
+import re
 
 router = APIRouter()
 
@@ -141,19 +144,38 @@ async def get_discussion_usage_details(
     summary="모든 토론 이력 목록 조회 (관리자용)"
 )
 async def list_all_discussions(
-    user_email: Optional[str] = Query(None, description="특정 사용자의 이메일로 필터링"),
-    status: Optional[str] = Query(None, description="토론 상태(processing, completed, failed)로 필터링"),
+    status: Optional[str] = Query(None, description="토론 상태로 필터링"),
+    search_by: str = Query("email", description="검색 기준 ('email' 또는 'name')"),
+    search_term: Optional[str] = Query(None, description="검색어"),
     admin_user: UserModel = Depends(get_current_admin_user)
 ):
     """
-    모든 사용자의 토론 이력을 조회하고, 이메일 또는 상태로 필터링할 수 있습니다.
+    모든 사용자의 토론 이력을 조회하고, 이메일, 사용자 이름, 상태로 필터링할 수 있습니다.
     """
     query_conditions = {}
-    if user_email:
-        query_conditions["user_email"] = user_email
     if status:
         query_conditions["status"] = status
-        
+
+    if search_term:
+        if search_by == "email":
+            # 이메일로 검색 (부분 일치, 대소문자 무시)
+            query_conditions["user_email"] = re.compile(search_term, re.IGNORECASE)
+        elif search_by == "name":
+            # 1. 이름으로 사용자 목록을 먼저 찾습니다. (부분 일치, 대소문자 무시)
+            users_found = await User.find(
+                User.name.regex(f".*{re.escape(search_term)}.*", "i")
+            ).to_list()
+            
+            # 2. 찾은 사용자들의 이메일 리스트를 생성합니다.
+            user_emails = [user.email for user in users_found]
+            
+            if user_emails:
+                # 3. 해당 이메일들을 가진 토론 로그를 조회합니다.
+                query_conditions["user_email"] = In(user_emails)
+            else:
+                # 이름과 일치하는 사용자가 없으면 빈 목록을 반환합니다.
+                return []
+
     discussions = await DiscussionLog.find(query_conditions).sort(-DiscussionLog.created_at).to_list()
     return discussions
 
