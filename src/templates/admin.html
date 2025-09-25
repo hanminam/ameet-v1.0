@@ -462,37 +462,39 @@
         </div>
     </div>
 
-    <!-- [NEW] 에이전트 수정/추가 Modal -->
-    <div id="agent-edit-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden opacity-0 z-50">
+    <div id="agent-form-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden opacity-0 z-50">
         <div class="card w-full max-w-2xl max-h-[90vh] flex flex-col p-0">
             <div class="p-4 border-b flex justify-between items-center">
-                <h2 class="text-xl font-bold text-blue-600">에이전트 설정 수정</h2>
-                <button class="text-2xl font-bold" onclick="toggleModal('agent-edit-modal')">&times;</button>
+                <h2 id="agent-modal-title" class="text-xl font-bold text-blue-600">에이전트 설정</h2>
+                <button class="text-2xl font-bold" onclick="toggleModal('agent-form-modal')">&times;</button>
             </div>
             <div class="p-6 space-y-4 overflow-y-auto">
+                <input type="hidden" id="agent-form-mode" value="add">
                 <div>
                     <label class="font-semibold">에이전트 이름</label>
-                    <input type="text" value="재무 분석가" class="w-full mt-1 p-2 border-gray-300 border rounded-lg">
+                    <input type="text" id="agent-form-name" placeholder="예: 반도체 산업 분석가" class="w-full mt-1 p-2 border-gray-300 border rounded-lg">
+                </div>
+                <div>
+                    <label class="font-semibold">아이콘 (Emoji)</label>
+                    <input type="text" id="agent-form-icon" placeholder="예: 🏭" class="w-full mt-1 p-2 border-gray-300 border rounded-lg">
                 </div>
                 <div>
                     <label class="font-semibold">시스템 프롬프트</label>
-                    <textarea rows="8" class="w-full mt-1 p-2 border-gray-300 border rounded-lg">You are a professional Financial Analyst...</textarea>
+                    <textarea id="agent-form-prompt" rows="8" class="w-full mt-1 p-2 border-gray-300 border rounded-lg" placeholder="에이전트의 역할과 지시사항을 입력하세요..."></textarea>
                 </div>
                 <div>
                     <label class="font-semibold">LLM 모델</label>
-                    <select class="w-full mt-1 p-2 border-gray-300 border rounded-lg">
-                        <option>gpt-4o</option>
-                        <option selected>gemini-1.5-pro</option>
-                        <option>claude-3.5-sonnet</option>
+                    <select id="agent-form-model" class="w-full mt-1 p-2 border-gray-300 border rounded-lg bg-white">
                     </select>
                 </div>
-                <!-- [제안 4 반영] 변경 이력 확인 버튼 -->
-                <button class="text-sm text-blue-600 hover:underline" onclick="toggleModal('history-modal')">프롬프트 변경 이력 보기</button>
+                <div id="agent-form-error" class="text-sm text-red-500 h-4"></div>
             </div>
-            <div class="p-4 border-t bg-gray-50 flex justify-end items-center gap-4">
-                <button class="text-red-600 font-semibold hover:text-red-800">삭제</button>
-                <button class="bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-lg hover:bg-gray-300" onclick="toggleModal('agent-edit-modal')">취소</button>
-                <button class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">저장</button>
+            <div class="p-4 border-t bg-gray-50 flex justify-between items-center">
+                <button id="agent-delete-button" class="text-red-600 font-semibold hover:text-red-800 hidden">삭제</button>
+                <div class="flex gap-4">
+                    <button class="bg-gray-200 text-gray-800 font-bold py-2 px-6 rounded-lg hover:bg-gray-300" onclick="toggleModal('agent-form-modal')">취소</button>
+                    <button id="agent-save-button" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">저장</button>
+                </div>
             </div>
         </div>
     </div>
@@ -518,6 +520,33 @@
     </div>
 
     <script>
+        
+        const SUPPORTED_MODELS = {
+            "Google (Gemini)": [
+                { id: "gemini-2.5-pro", name: "Gemini 2.5 pro" },
+                { id: "gemini-2.5-flash", name: "Gemini 2.5 flash" },
+                { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 flash lite" },
+                { id: "gemini-2.0-flash", name: "Gemini 2.0 flash" },
+                { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" },
+                { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" }
+            ],
+            "OpenAI (GPT)": [
+                { id: "gpt-4o", name: "GPT-4o" },
+                { id: "gpt-4o-mini", name: "GPT-4o mini" },
+                { id: "gpt-4-turbo", name: "GPT-4 Turbo" },
+                { id: "gpt-4", name: "GPT-4" },
+                { id: "gpt-3.5-turbo", name: "GPT-3.5 Turbo" }
+            ],
+            "Anthropic (Claude)": [
+                { id: "claude-opus-4-1-20250805", name: "Claude 4.1 opus" },
+                { id: "claude-opus-4-20250514", name: "Claude 4 Sonnet" },
+                { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku" },
+                { id: "claude-3-7-sonnet-20250219", name: "Claude 3.7 Sonnet" },
+                { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet" },
+                { id: "claude-3-haiku-20240307", name: "Claude 3 Haiku" }
+            ]
+        };
+
         // 전역 변수로 사용자 목록 데이터 저장
         let currentUsers = [];
 
@@ -1309,6 +1338,104 @@
                     </div>`;
                 container.innerHTML += cardHtml;
             });
+        }
+
+        /**
+         * 새 Expert 에이전트 추가 모달을 여는 함수
+         */
+        function openAgentAddModal() {
+            document.getElementById('agent-form-mode').value = 'add';
+            document.getElementById('agent-modal-title').textContent = '새 Expert 에이전트 추가';
+            
+            // 입력 필드 초기화
+            document.getElementById('agent-form-name').value = '';
+            document.getElementById('agent-form-name').readOnly = false; // 이름 필드 활성화
+            document.getElementById('agent-form-icon').value = '🤖';
+            document.getElementById('agent-form-prompt').value = '';
+            document.getElementById('agent-form-error').textContent = '';
+
+            // 삭제 버튼 숨기기
+            document.getElementById('agent-delete-button').classList.add('hidden');
+
+            // LLM 모델 드롭다운 채우기
+            const modelSelect = document.getElementById('agent-form-model');
+            modelSelect.innerHTML = '';
+            for (const provider in SUPPORTED_MODELS) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = provider;
+                SUPPORTED_MODELS[provider].forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    // 기본 선택값 설정
+                    if (model.id === 'gemini-1.5-pro') {
+                        option.selected = true;
+                    }
+                    optgroup.appendChild(option);
+                });
+                modelSelect.appendChild(optgroup);
+            }
+            
+            toggleModal('agent-form-modal');
+        }
+
+        /**
+         * '저장' 버튼 클릭 시 새 에이전트 정보를 서버에 POST 요청하는 함수
+         */
+        async function handleSaveAgent() {
+            const name = document.getElementById('agent-form-name').value.trim();
+            const icon = document.getElementById('agent-form-icon').value.trim();
+            const prompt = document.getElementById('agent-form-prompt').value.trim();
+            const model = document.getElementById('agent-form-model').value;
+            const errorDiv = document.getElementById('agent-form-error');
+            const saveButton = document.getElementById('agent-save-button');
+            
+            if (!name || !prompt) {
+                errorDiv.textContent = '에이전트 이름과 프롬프트는 필수 항목입니다.';
+                return;
+            }
+            errorDiv.textContent = '';
+            saveButton.disabled = true;
+            saveButton.textContent = '저장 중...';
+
+            const payload = {
+                name: name,
+                agent_type: "expert", // 항상 expert로 고정
+                config: {
+                    prompt: prompt,
+                    model: model,
+                    icon: icon || '🤖', // 아이콘이 비어있으면 기본값 사용
+                    temperature: 0.3, // 기본값
+                    tools: [] // 기본값
+                }
+            };
+            
+            const token = localStorage.getItem('accessToken');
+            try {
+                const response = await fetch('/api/v1/admin/agents/', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.status === 201) { // 201 Created
+                    alert('새로운 에이전트 초안이 성공적으로 추가되었습니다. 게시 후 사용 가능합니다.');
+                    toggleModal('agent-form-modal');
+                    await loadAgents(); // 에이전트 목록 새로고침
+                } else {
+                    const errorData = await response.json();
+                    errorDiv.textContent = errorData.detail || '에이전트 추가에 실패했습니다.';
+                }
+            } catch (error) {
+                console.error('Error adding new agent:', error);
+                errorDiv.textContent = '서버 통신 중 오류가 발생했습니다.';
+            } finally {
+                saveButton.disabled = false;
+                saveButton.textContent = '저장';
+            }
         }
 
     </script>
