@@ -59,12 +59,22 @@ async def list_agents(
     else:
         pipeline.append({"$sort": {"name": 1}})
     
-    # [원상 복구] Beanie의 표준적인 aggregation 사용법으로 되돌립니다.
-    # 단일 워커 환경에서는 이 코드가 정상적으로 동작합니다.
-    agent_docs = await AgentSettings.aggregate(pipeline).to_list()
-    
-    return agent_docs
-
+    # [FIX] Beanie의 고수준 API가 초기화 문제로 실패하므로,
+    # 더 안정적인 저수준 motor collection을 직접 사용하여 쿼리를 실행합니다.
+    try:
+        collection = AgentSettings.get_motor_collection()
+        cursor = collection.aggregate(pipeline)
+        # motor cursor의 to_list는 length 인자가 필요합니다 (모두 가져오려면 None).
+        agent_docs_raw = await cursor.to_list(length=None)
+        # Raw dictionary를 Pydantic 모델로 다시 파싱하여 반환합니다.
+        agent_docs = [AgentSettings.model_validate(doc) for doc in agent_docs_raw]
+        return agent_docs
+    except Exception as e:
+        # DB 쿼리 중 발생할 수 있는 예외를 처리합니다.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve agents from database: {e}"
+        )
 
 @router.post(
     "/",
