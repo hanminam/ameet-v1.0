@@ -535,26 +535,33 @@
         };
 
         function showPage(pageId) {
+            // 모든 '.page' div를 숨깁니다.
             document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
-            document.getElementById(pageId).classList.add('active');
+            
+            // 요청된 ID의 div가 존재하는지 확인 후 보여줍니다.
+            const targetPage = document.getElementById(pageId);
+            if (targetPage) {
+                targetPage.classList.add('active');
+            } else {
+                console.error(`[오류] showPage: '${pageId}' ID를 가진 페이지 div를 찾을 수 없습니다.`);
+                return; // 페이지가 없으면 함수를 중단합니다.
+            }
 
+            // 모든 사이드바 링크의 활성 상태를 제거합니다.
             document.querySelectorAll('.sidebar-link').forEach(link => link.classList.remove('active'));
 
-            // 1. 활성화할 링크의 ID를 결정합니다.
+            // 활성화할 링크 ID를 결정합니다 (상세 페이지는 모니터링 메뉴를 활성화).
             let linkToActivateId = pageId;
             if (pageId === 'discussion-detail') {
-                // 상세 보기 페이지일 경우, '토론 모니터링' 링크를 활성화하도록 변경합니다.
                 linkToActivateId = 'monitoring';
             }
 
-            // 2. 활성화할 링크를 찾습니다.
             const activeLink = document.querySelector(`.sidebar-link[onclick="showPage('${linkToActivateId}')"]`);
-            
-            // 3. 링크가 존재할 경우에만 active 클래스를 추가하여 오류를 방지합니다.
             if (activeLink) {
                 activeLink.classList.add('active');
             }
-
+            
+            // 페이지별 데이터 로딩
             if (pageId === 'users') {
                 loadUsers();
             }
@@ -1142,7 +1149,6 @@
                 const data = await response.json();
                 console.log('[3] API로부터 데이터 수신 성공:', data);
                 
-                // 상세 정보 렌더링
                 renderDiscussionDetail(data);
 
             } catch (error) {
@@ -1159,7 +1165,6 @@
             console.log('[4] renderDiscussionDetail 함수 시작. 받은 데이터:', data);
             const detailContent = document.getElementById('discussion-detail-content');
 
-            // 1. 기본 정보 섹션 렌더링
             const summaryHtml = `
                 <div class="card mb-6">
                     <h2 class="text-2xl font-bold mb-4">${data.topic || '주제 없음'}</h2>
@@ -1172,7 +1177,6 @@
                 </div>
             `;
 
-            // 2. 대화록(Transcript) 섹션 렌더링
             const participantMap = (data.participants || []).reduce((map, p) => {
                 map[p.name] = p;
                 return map;
@@ -1196,7 +1200,6 @@
                 `;
             }).join('');
 
-            // 최종 HTML 조립
             const finalHtml = `
                 ${summaryHtml}
                 <div class="card">
