@@ -10,7 +10,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 
 from app.core.config import settings
-from app.models.discussion import AgentSettings, AgentConfig
+from app.models.discussion import AgentSettings, AgentConfig, SystemSettings
 
 from app.schemas.orchestration import (
     IssueAnalysisReport, 
@@ -269,18 +269,30 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
         config={"tags": [f"discussion_id:{discussion_id}", f"agent_name:{JURY_SELECTOR_NAME}"]}
     )
 
+    # 하드코딩된 프롬프트 대신 DB에서 기본 프롬프트를 조회합니다.
+    default_prompt_setting = await SystemSettings.find_one(SystemSettings.key == "default_agent_prompt")
+    
+    PROMPT_TEMPLATE = (
+        "당신의 역할은 '{role}'이며 지정된 역할 관점에서 말하세요.\n"
+        "당신의 역할에 맞는 대화스타일을 사용하세요.\n"
+        "토의 규칙을 숙지하고 토론의 목표를 달성하기 위해 제시된 의견들을 바탕으로 보완의견을 제시하거나, 주장을 강화,철회,수정 하세요.\n"
+        "모든 의견은 논리적이고 일관성이 있어야 하며 신뢰할 수 있는 출처에 기반해야하고 자세하게 답변하여야 합니다.\n"
+        "사용자가 질문한 언어로 답변하여야 합니다."
+    )
+    
+    if default_prompt_setting:
+        PROMPT_TEMPLATE = default_prompt_setting.value
+        print("--- [Orchestrator] DB에서 기본 프롬프트를 성공적으로 로드했습니다. ---")
+    else:
+        # DB에 설정이 없는 경우, 하드코딩된 값을 기본값으로 사용하고 DB에 저장
+        print("--- [Orchestrator] DB에 기본 프롬프트 설정이 없어 기본값으로 생성합니다. ---")
+        await SystemSettings(key="default_agent_prompt", value=PROMPT_TEMPLATE, description="Jury Selector가 동적으로 에이전트를 생성할 때 사용하는 기본 프롬프트 템플릿. '{role}' 변수를 포함해야 합니다.").insert()
+
     newly_created_agents = []
     if selected_jury.new_agent_proposals:
         for agent_name in selected_jury.new_agent_proposals:
             existing_agent = await AgentSettings.find_one(AgentSettings.name == agent_name)
             if not existing_agent:
-                PROMPT_TEMPLATE = (
-                    "당신의 역할은 '{role}'이며 지정된 역할 관점에서 말하세요.\n"
-                    "당신의 역할에 맞는 대화스타일을 사용하세요.\n"
-                    "토의 규칙을 숙지하고 토론의 목표를 달성하기 위해 제시된 의견들을 바탕으로 보완의견을 제시하거나, 주장을 강화,철회,수정 하세요.\n"
-                    "모든 의견은 논리적이고 일관성이 있어야 하며 신뢰할 수 있는 출처에 기반해야하고 자세하게 답변하여야 합니다.\n"
-                    "사용자가 질문한 언어로 답변하여야 합니다."
-                )
                 agent_prompt = PROMPT_TEMPLATE.format(role=agent_name)
 
                 agent_info_for_icon = {"name": agent_name, "prompt": agent_prompt}

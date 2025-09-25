@@ -111,3 +111,16 @@ class User(Document):
 
     class Settings:
         name = "users"
+
+# 시스템 전반의 설정을 저장하기 위한 모델
+class SystemSettings(Document):
+    """
+    시스템 설정을 Key-Value 형태로 저장하는 모델.
+    (예: key='default_agent_prompt')
+    """
+    key: str = Field(..., description="설정의 고유 키", unique=True)
+    value: str = Field(..., description="설정 값")
+    description: Optional[str] = Field(default=None, description="설명")
+    
+    class Settings:
+        name = "system_settings"

@@ -19,6 +19,8 @@ from app.api.v1.admin import users as admin_users
 
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
+from app.api.v1.admin import settings as admin_settings
+
 app = FastAPI(title=settings.APP_TITLE)
 
 # --- main.py 파일의 위치를 기준으로 절대 경로 생성 ---
@@ -69,6 +71,12 @@ app.include_router(
     admin_users.router,
     prefix="/api/v1/admin/users",
     tags=["Admin: Users"]
+)
+
+app.include_router(
+    admin_settings.router,
+    prefix="/api/v1/admin/settings",
+    tags=["Admin: Settings"]
 )
 
 # 이 미들웨어는 Cloud Run과 같은 프록시 환경에서 

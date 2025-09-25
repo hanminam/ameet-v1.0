@@ -352,6 +352,19 @@
                     <button class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700" onclick="openAgentAddModal()">＋ 새 에이전트 추가</button>
                 </div>
 
+                <div class="card mb-6">
+                    <h3 class="font-bold text-slate-700 text-lg mb-2">동적 생성 에이전트 기본 프롬프트</h3>
+                    <p class="text-sm text-slate-500 mb-4">
+                        토론 중 필요한 전문가가 없을 때 AI가 동적으로 에이전트를 생성할 때 사용되는 기본 프롬프트 템플릿.
+                        <code class="bg-slate-200 text-slate-700 px-1 rounded text-xs">{role}</code> 변수는 반드시 포함되어야 합니다.
+                    </p>
+                    <textarea id="default-prompt-textarea" rows="5" class="w-full mt-1 p-2 border-gray-300 border rounded-lg font-mono text-sm" placeholder="기본 프롬프트를 입력하세요..."></textarea>
+                    <div class="flex justify-end items-center mt-4">
+                        <span id="default-prompt-status" class="text-sm mr-4 h-5"></span>
+                        <button id="default-prompt-save-btn" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">기본 프롬프트 저장</button>
+                    </div>
+                </div>
+
                 <div class="border-b border-gray-200 mb-6">
                     <nav class="flex -mb-px space-x-8" aria-label="Tabs">
                         <a id="expert-agents-tab" class="tab-link active">
@@ -555,6 +568,11 @@
         // 전역 변수로 사용자 목록 데이터 저장
         let currentUsers = [];
 
+        // 기본 프롬프트 관련 DOM 요소
+        const defaultPromptTextarea = document.getElementById('default-prompt-textarea');
+        const defaultPromptSaveBtn = document.getElementById('default-prompt-save-btn');
+        const defaultPromptStatus = document.getElementById('default-prompt-status');
+
         // Mock Data for Detail Page
         const detailData = {
             "sess_abc123": {
@@ -609,6 +627,7 @@
             }
             if (pageId === 'agents') {
                 loadAgents();
+                loadDefaultPrompt();
             }
         }
 
@@ -928,6 +947,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             
             showPage('agents'); // Default page
+
+            // 기본 프롬프트 저장 버튼 이벤트 리스너
+            if (defaultPromptSaveBtn) {
+                defaultPromptSaveBtn.addEventListener('click', handleUpdateDefaultPrompt);
+            }
 
             const searchButton = document.getElementById('expert-agent-search-button');
             const searchInput = document.getElementById('expert-agent-search-input');
@@ -1584,6 +1608,74 @@
                 errorDiv.textContent = '서버 통신 중 오류가 발생했습니다.';
             } finally {
                 saveButton.disabled = false;
+            }
+        }
+
+        /**
+         * API에서 기본 프롬프트 설정을 가져와 textarea에 표시하는 함수
+         */
+        async function loadDefaultPrompt() {
+            const token = localStorage.getItem('accessToken');
+            if (!token) return;
+            
+            try {
+                const response = await fetch('/api/v1/admin/settings/default_agent_prompt', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const setting = await response.json();
+                    defaultPromptTextarea.value = setting.value;
+                } else if (response.status === 404) {
+                    defaultPromptStatus.textContent = "저장된 기본 프롬프트가 없습니다. 저장 시 새로 생성됩니다.";
+                    defaultPromptStatus.className = "text-sm text-yellow-600";
+                } else {
+                    throw new Error('기본 프롬프트를 가져오는데 실패했습니다.');
+                }
+            } catch (error) {
+                console.error('Error loading default prompt:', error);
+                defaultPromptStatus.textContent = error.message;
+                defaultPromptStatus.className = "text-sm text-red-500";
+            }
+        }
+
+        /**
+         * 수정된 기본 프롬프트를 서버에 PUT 요청으로 저장하는 함수
+         */
+        async function handleUpdateDefaultPrompt() {
+            const token = localStorage.getItem('accessToken');
+            if (!token) return;
+
+            const updatedPrompt = defaultPromptTextarea.value;
+            defaultPromptSaveBtn.disabled = true;
+            defaultPromptSaveBtn.textContent = '저장 중...';
+            defaultPromptStatus.textContent = "";
+
+            try {
+                const response = await fetch('/api/v1/admin/settings/default_agent_prompt', {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ value: updatedPrompt })
+                });
+
+                if (response.ok) {
+                    defaultPromptStatus.textContent = "성공적으로 저장되었습니다.";
+                    defaultPromptStatus.className = "text-sm text-green-600";
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || '저장에 실패했습니다.');
+                }
+            } catch (error) {
+                console.error('Error updating default prompt:', error);
+                defaultPromptStatus.textContent = error.message;
+                defaultPromptStatus.className = "text-sm text-red-500";
+            } finally {
+                defaultPromptSaveBtn.disabled = false;
+                defaultPromptSaveBtn.textContent = '기본 프롬프트 저장';
+                setTimeout(() => { defaultPromptStatus.textContent = "" }, 3000); // 3초 후 메시지 사라짐
             }
         }
 
