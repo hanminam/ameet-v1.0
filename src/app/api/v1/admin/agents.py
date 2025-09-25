@@ -8,6 +8,9 @@ from app.models.discussion import AgentSettings, AgentConfig
 from app.api.v1.users import get_current_admin_user
 from app.models.user import User as UserModel
 
+from app.core.config import settings
+from app import db 
+
 router = APIRouter()
 
 # --- API 요청/응답을 위한 Pydantic 스키마 정의 ---
@@ -59,21 +62,32 @@ async def list_agents(
     else:
         pipeline.append({"$sort": {"name": 1}})
     
-    # [FIX] Beanie의 고수준 API가 초기화 문제로 실패하므로,
-    # 더 안정적인 저수준 motor collection을 직접 사용하여 쿼리를 실행합니다.
+    # [최종 수정] Beanie 모델의 메서드 대신, 초기화가 보장된 db.mongo_client를 직접 사용합니다.
     try:
-        collection = AgentSettings.get_motor_collection()
+        if not db.mongo_client:
+            raise HTTPException(status_code=503, detail="Database is not available.")
+
+        # 1. 데이터베이스 이름을 가져옵니다.
+        db_name = settings.MONGO_DB_URL.split("/")[-1].split("?")[0]
+        
+        # 2. mongo_client에서 직접 데이터베이스와 컬렉션을 선택합니다.
+        collection = db.mongo_client[db_name]["agents"]
+        
+        # 3. 컬렉션 객체에 직접 aggregation을 실행합니다.
         cursor = collection.aggregate(pipeline)
-        # motor cursor의 to_list는 length 인자가 필요합니다 (모두 가져오려면 None).
+        
+        # 4. motor cursor의 to_list를 사용하여 결과를 가져옵니다.
         agent_docs_raw = await cursor.to_list(length=None)
-        # Raw dictionary를 Pydantic 모델로 다시 파싱하여 반환합니다.
+        
+        # 5. Raw dictionary를 Pydantic 모델로 파싱하여 응답 형식을 맞춥니다.
         agent_docs = [AgentSettings.model_validate(doc) for doc in agent_docs_raw]
         return agent_docs
+        
     except Exception as e:
         # DB 쿼리 중 발생할 수 있는 예외를 처리합니다.
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve agents from database: {e}"
+            detail=f"Failed to retrieve agents from database: {str(e)}"
         )
 
 @router.post(
