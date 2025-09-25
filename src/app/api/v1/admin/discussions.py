@@ -176,7 +176,30 @@ async def list_all_discussions(
 
     # 모든 검색 조건을 함께 적용하여 쿼리 실행
     discussions = await DiscussionLog.find(*search_queries).sort(-DiscussionLog.created_at).to_list()
-    return discussions
+    
+    # 1. 조회된 토론에서 사용자 이메일 목록을 추출합니다.
+    if not discussions:
+        return []
+    
+    discussion_user_emails = list({d.user_email for d in discussions})
+    
+    # 2. 해당 이메일을 가진 사용자 정보를 DB에서 조회합니다.
+    users = await User.find(In(User.email, discussion_user_emails)).to_list()
+    email_to_name_map = {user.email: user.name for user in users}
+    
+    # 3. 최종 응답 데이터를 조립합니다. (DiscussionLogItem 스키마에 맞게)
+    response_data = [
+        DiscussionLogItem(
+            discussion_id=d.discussion_id,
+            topic=d.topic,
+            status=d.status,
+            created_at=d.created_at,
+            user_email=d.user_email,
+            user_name=email_to_name_map.get(d.user_email, "N/A") # 사용자를 찾지 못할 경우 'N/A'
+        ) for d in discussions
+    ]
+    
+    return response_data
 
 @router.get(
     "/{discussion_id}",

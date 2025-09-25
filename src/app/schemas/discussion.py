@@ -10,6 +10,7 @@ class DiscussionLogItem(BaseModel):
     topic: str
     status: str # Literal 타입 대신 string으로 유연하게 처리
     created_at: datetime
+    user_name: str  # 사용자 이름
     user_email: str
 
     class Config:

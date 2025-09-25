@@ -172,6 +172,7 @@
                         <thead>
                             <tr class="bg-gray-50">
                                 <th>토론 ID</th>
+                                <th>사용자명</th> 
                                 <th>사용자 이메일</th>
                                 <th>주제</th>
                                 <th>시작 시간</th>
@@ -1061,7 +1062,7 @@
                 tbody.innerHTML = ''; 
 
                 if (discussions.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">표시할 토론이 없습니다.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4">표시할 토론이 없습니다.</td></tr>';
                     return;
                 }
 
@@ -1069,7 +1070,7 @@
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td class="font-mono text-sm">${discussion.discussion_id}</td>
-                        <td>${discussion.user_email}</td>
+                        <td>${discussion.user_name}</td> <td>${discussion.user_email}</td>
                         <td class="max-w-xs truncate">${discussion.topic}</td>
                         <td>${formatDateTime(discussion.created_at)}</td>
                         <td>${renderStatusBadge(discussion.status)}</td>
