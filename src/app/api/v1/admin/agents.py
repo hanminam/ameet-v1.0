@@ -30,34 +30,32 @@ async def list_agents(
     'agent_type' 쿼리 파라미터를 통해 'special' 또는 'expert' 에이전트만 필터링할 수 있습니다.
     'expert' 타입 조회 시 토론 참여 횟수(discussion_participation_count)가 많은 순으로 정렬됩니다.
     """
-    match_stage = {}
+    # [수정] 파이프라인을 동적으로 구성하여 안정성을 높입니다.
+    pipeline = []
+    
+    # 1. agent_type 필터가 있을 경우에만 $match 단계를 추가합니다.
     if agent_type:
-        match_stage = {"agent_type": agent_type}
+        pipeline.append({"$match": {"agent_type": agent_type}})
 
-    if agent_type == "expert":
-        sort_stage = {"$sort": {"discussion_participation_count": -1, "name": 1}}
-    else:
-        sort_stage = {"$sort": {"name": 1}}
-
-    pipeline = [
-        {"$match": match_stage} if match_stage else {"$match": {}},
+    # 2. 나머지 공통 단계를 추가합니다.
+    pipeline.extend([
         {"$sort": {"name": 1, "version": -1}},
         {"$group": {
             "_id": "$name",
             "latest_doc": {"$first": "$$ROOT"}
         }},
-        {"$replaceRoot": {"newRoot": "$latest_doc"}},
-        sort_stage
-    ]
-    
-    # [수정] 올바른 메서드 이름인 get_collection()을 사용합니다.
-    collection = AgentSettings.get_collection()
-    
-    cursor = collection.aggregate(pipeline)
-    
-    agent_docs_raw = await cursor.to_list(length=None)
+        {"$replaceRoot": {"newRoot": "$latest_doc"}}
+    ])
 
-    agent_docs = [AgentSettings(**doc) for doc in agent_docs_raw]
+    # 3. 최종 정렬 단계를 추가합니다.
+    if agent_type == "expert":
+        pipeline.append({"$sort": {"discussion_participation_count": -1, "name": 1}})
+    else:
+        pipeline.append({"$sort": {"name": 1}})
+    
+    # [수정] 가장 표준적인 Beanie aggregate 호출 방식으로 되돌립니다.
+    # 깨끗하게 구성된 pipeline을 인자로 전달합니다.
+    agent_docs = await AgentSettings.aggregate(pipeline).to_list()
     
     return agent_docs
 
