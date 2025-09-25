@@ -40,6 +40,7 @@ class DiscussionLogDetail(DiscussionLogItem):
     
     class Config:
         from_attributes = True
+        
 class VoteContent(BaseModel):
     """AI가 생성한 투표의 주제와 선택지를 정의하는 모델"""
     topic: str = Field(description="투표의 주제가 될 질문입니다.")

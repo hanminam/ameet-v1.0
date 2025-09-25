@@ -211,11 +211,21 @@ async def get_any_discussion_detail(
     admin_user: UserModel = Depends(get_current_admin_user)
 ):
     """
-    ID로 특정 토론의 상세 내용을 조회합니다. (소유자 제한 없음)
+    ID로 특정 토론의 상세 내용을 조회합니다.
+    사용자 이름을 포함하여 반환합니다.
     """
     discussion = await DiscussionLog.find_one(DiscussionLog.discussion_id == discussion_id)
     
     if not discussion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discussion not found.")
-        
-    return discussion
+    
+    # 사용자 이메일로 사용자 정보를 찾습니다.
+    user = await User.find_one(User.email == discussion.user_email)
+    user_name = user.name if user else "사용자 정보 없음"
+
+    # DiscussionLogDetail 스키마에 맞게 응답 데이터를 구성하여 반환합니다.
+    # model_dump()를 사용해 기존 discussion 데이터를 모두 포함시킵니다.
+    return DiscussionLogDetail(
+        **discussion.model_dump(),
+        user_name=user_name
+    )
