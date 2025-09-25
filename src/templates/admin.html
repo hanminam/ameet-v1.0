@@ -364,8 +364,12 @@
                 </div>
 
                 <div id="expert-agents-content" class="tab-content active">
-                    <div id="expert-agents-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                    <div class="mb-6 flex gap-2">
+                        <input type="text" id="expert-agent-search-input" placeholder="에이전트 이름으로 검색..." class="w-full md:w-1/3 p-2 border-gray-300 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button id="expert-agent-search-button" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700">검색</button>
                     </div>
+                    <div id="expert-agents-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                        </div>
                 </div>
 
                 <div id="special-agents-content" class="tab-content">
@@ -924,6 +928,19 @@
             
             showPage('agents'); // Default page
 
+            const searchButton = document.getElementById('expert-agent-search-button');
+            const searchInput = document.getElementById('expert-agent-search-input');
+
+            searchButton.addEventListener('click', () => {
+                loadExpertAgents(searchInput.value.trim());
+            });
+
+            searchInput.addEventListener('keypress', (event) => {
+                if (event.key === 'Enter') {
+                    loadExpertAgents(searchInput.value.trim());
+                }
+            });
+
             document.getElementById('agent-save-button').addEventListener('click', handleSaveAgent);
 
             // 탭 클릭 이벤트 리스너 추가
@@ -1275,39 +1292,51 @@
             document.getElementById(`${targetTabId}-content`).classList.add('active');
         }
 
-        /**
-         * API에서 에이전트 목록을 가져와 탭별로 렌더링하는 메인 함수
-         */
-        async function loadAgents() {
+        // Expert 에이전트 로딩/검색을 위한 별도 함수
+        async function loadExpertAgents(searchTerm = '') {
             const token = localStorage.getItem('accessToken');
             if (!token) return;
 
-            // 로딩 상태 표시
-            document.getElementById('expert-agents-grid').innerHTML = '<p class="text-slate-500 col-span-full">Expert 에이전트 목록을 불러오는 중...</p>';
-            document.getElementById('special-agents-grid').innerHTML = '<p class="text-slate-500 col-span-full">Special 에이전트 목록을 불러오는 중...</p>';
+            const grid = document.getElementById('expert-agents-grid');
+            grid.innerHTML = '<p class="text-slate-500 col-span-full">Expert 에이전트 목록을 불러오는 중...</p>';
+            
+            let apiUrl = '/api/v1/admin/agents?agent_type=expert';
+            if (searchTerm) {
+                apiUrl += `&name_like=${encodeURIComponent(searchTerm)}`;
+            }
 
             try {
-                // 두 API를 병렬로 호출
-                const [expertRes, specialRes] = await Promise.all([
-                    fetch('/api/v1/admin/agents?agent_type=expert', { headers: { 'Authorization': `Bearer ${token}` } }),
-                    fetch('/api/v1/admin/agents?agent_type=special', { headers: { 'Authorization': `Bearer ${token}` } })
-                ]);
-
-                if (!expertRes.ok || !specialRes.ok) {
-                    throw new Error('에이전트 목록을 가져오는데 실패했습니다.');
-                }
-
-                const expertAgents = await expertRes.json();
-                const specialAgents = await specialRes.json();
-                
-                renderAgentCards(expertAgents, 'expert-agents-grid', 'expert');
-                renderAgentCards(specialAgents, 'special-agents-grid', 'special');
-
+                const response = await fetch(apiUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!response.ok) throw new Error('Expert 에이전트 목록을 가져오는데 실패했습니다.');
+                const agents = await response.json();
+                renderAgentCards(agents, 'expert-agents-grid', 'expert');
             } catch (error) {
-                console.error('Error loading agents:', error);
-                document.getElementById('expert-agents-grid').innerHTML = `<p class="text-red-500 col-span-full">${error.message}</p>`;
-                document.getElementById('special-agents-grid').innerHTML = `<p class="text-red-500 col-span-full">${error.message}</p>`;
+                console.error('Error loading expert agents:', error);
+                grid.innerHTML = `<p class="text-red-500 col-span-full">${error.message}</p>`;
             }
+        }
+        
+        // Special 에이전트 로딩을 위한 별도 함수
+        async function loadSpecialAgents() {
+            const token = localStorage.getItem('accessToken');
+            if (!token) return;
+            const grid = document.getElementById('special-agents-grid');
+            grid.innerHTML = '<p class="text-slate-500 col-span-full">Special 에이전트 목록을 불러오는 중...</p>';
+            try {
+                const response = await fetch('/api/v1/admin/agents?agent_type=special', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!response.ok) throw new Error('Special 에이전트 목록을 가져오는데 실패했습니다.');
+                const agents = await response.json();
+                renderAgentCards(agents, 'special-agents-grid', 'special');
+            } catch (error) {
+                console.error('Error loading special agents:', error);
+                grid.innerHTML = `<p class="text-red-500 col-span-full">${error.message}</p>`;
+            }
+        }
+
+        // 초기 로딩 함수는 각 타입별 로딩 함수를 호출하도록 변경
+        function loadAgents() {
+            loadExpertAgents();
+            loadSpecialAgents();
         }
 
         /**

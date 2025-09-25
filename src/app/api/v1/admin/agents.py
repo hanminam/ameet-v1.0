@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional, Literal
 from pydantic import BaseModel
 
@@ -24,31 +24,46 @@ class AgentCreateRequest(BaseModel):
 )
 async def list_agents(
     agent_type: Optional[Literal["special", "expert"]] = None,
+    # 이름 검색을 위한 쿼리 파라미터
+    name_like: Optional[str] = Query(None, description="에이전트 이름에 포함될 검색어"),
     admin_user: UserModel = Depends(get_current_admin_user)
 ):
     """
     DB에 저장된 모든 에이전트의 최신 버전 목록을 조회합니다.
-    DB 집계(aggregate) 대신 Python으로 직접 데이터를 처리하여 안정성을 확보합니다.
+    name_like 파라미터를 통해 expert 에이전트의 이름 검색을 지원합니다.
     """
-    find_query = {"status": "active"}
-    if agent_type:
-        find_query["agent_type"] = agent_type
+    pipeline = []
     
-    all_active_agents = await AgentSettings.find(find_query).to_list()
+    # 1. 기본 필터 쿼리를 구성합니다.
+    match_query = {"status": "active"}
+    if agent_type:
+        match_query["agent_type"] = agent_type
+    
+    # 2. expert 에이전트에 대해서만 이름 검색($regex) 조건을 추가합니다.
+    if agent_type == "expert" and name_like:
+        match_query["name"] = {"$regex": name_like, "$options": "i"} # i: case-insensitive
 
-    latest_agents_map = {}
-    for agent in all_active_agents:
-        if (agent.name not in latest_agents_map) or (agent.version > latest_agents_map[agent.name].version):
-            latest_agents_map[agent.name] = agent
-            
-    latest_agents_list = list(latest_agents_map.values())
+    pipeline.append({"$match": match_query})
 
+    # 3. 공통 파이프라인 단계를 추가하여 각 에이전트의 최신 버전을 찾습니다.
+    pipeline.extend([
+        {"$sort": {"name": 1, "version": -1}},
+        {"$group": {
+            "_id": "$name",
+            "latest_doc": {"$first": "$$ROOT"}
+        }},
+        {"$replaceRoot": {"newRoot": "$latest_doc"}}
+    ])
+
+    # 4. 최종 결과를 정렬합니다.
     if agent_type == "expert":
-        latest_agents_list.sort(key=lambda x: (-x.discussion_participation_count, x.name))
+        pipeline.append({"$sort": {"discussion_participation_count": -1, "name": 1}})
     else:
-        latest_agents_list.sort(key=lambda x: x.name)
-
-    return latest_agents_list
+        pipeline.append({"$sort": {"name": 1}})
+    
+    agent_docs = await AgentSettings.aggregate(pipeline).to_list()
+    
+    return agent_docs
 
 @router.post(
     "/",
