@@ -50,8 +50,8 @@ async def list_agents(
         sort_stage
     ]
     
-    # [수정] pipeline 리스트를 '*' 연산자로 언패킹하여 개별 인자로 전달합니다.
-    agent_docs = await AgentSettings.aggregate(*pipeline).to_list()
+    # [수정] pipeline 리스트를 명시적인 'aggregation_pipeline' 키워드 인자로 전달합니다.
+    agent_docs = await AgentSettings.aggregate(aggregation_pipeline=pipeline).to_list()
     return agent_docs
 
 @router.post(
