@@ -62,7 +62,10 @@ async def list_agents(
     else:
         pipeline.append({"$sort": {"name": 1}})
     
-    agent_docs = await AgentSettings.aggregate(pipeline).to_list()
+    # Beanie의 고수준 헬퍼 대신 motor 컬렉션을 직접 사용하여 집계 쿼리 실행
+    collection = AgentSettings.get_motor_collection()
+    cursor = collection.aggregate(pipeline)
+    agent_docs = await cursor.to_list(length=None)
     
     return agent_docs
 
