@@ -551,6 +551,7 @@
             ]
         };
 
+        let allAgentsData = {};
         // 전역 변수로 사용자 목록 데이터 저장
         let currentUsers = [];
 
@@ -943,6 +944,13 @@
 
             document.getElementById('agent-save-button').addEventListener('click', handleSaveAgent);
 
+            // 에이전트 저장 및 삭제 버튼에 대한 이벤트 리스너 추가
+            document.getElementById('agent-save-button').addEventListener('click', handleSaveAgent);
+            document.getElementById('agent-delete-button').addEventListener('click', () => {
+                const agentName = document.getElementById('agent-form-name').value;
+                handleDeleteAgent(agentName);
+            });
+
             // 탭 클릭 이벤트 리스너 추가
             document.getElementById('expert-agents-tab').addEventListener('click', (e) => {
                 e.preventDefault();
@@ -1309,6 +1317,11 @@
                 const response = await fetch(apiUrl, { headers: { 'Authorization': `Bearer ${token}` } });
                 if (!response.ok) throw new Error('Expert 에이전트 목록을 가져오는데 실패했습니다.');
                 const agents = await response.json();
+                
+                agents.forEach(agent => {
+                    allAgentsData[agent._id] = agent;
+                });
+
                 renderAgentCards(agents, 'expert-agents-grid', 'expert');
             } catch (error) {
                 console.error('Error loading expert agents:', error);
@@ -1326,6 +1339,11 @@
                 const response = await fetch('/api/v1/admin/agents?agent_type=special', { headers: { 'Authorization': `Bearer ${token}` } });
                 if (!response.ok) throw new Error('Special 에이전트 목록을 가져오는데 실패했습니다.');
                 const agents = await response.json();
+                
+                agents.forEach(agent => {
+                    allAgentsData[agent._id] = agent;
+                });
+                
                 renderAgentCards(agents, 'special-agents-grid', 'special');
             } catch (error) {
                 console.error('Error loading special agents:', error);
@@ -1335,6 +1353,7 @@
 
         // 초기 로딩 함수는 각 타입별 로딩 함수를 호출하도록 변경
         function loadAgents() {
+            allAgentsData = {};
             loadExpertAgents();
             loadSpecialAgents();
         }
@@ -1344,7 +1363,7 @@
          */
         function renderAgentCards(agents, containerId, agentType) {
             const container = document.getElementById(containerId);
-            container.innerHTML = ''; // 기존 내용 삭제
+            container.innerHTML = ''; 
 
             if (!agents || agents.length === 0) {
                 container.innerHTML = '<p class="text-slate-500 col-span-full">표시할 에이전트가 없습니다.</p>';
@@ -1352,12 +1371,10 @@
             }
 
             agents.forEach(agent => {
-                // Expert 에이전트의 경우 토론 참여 횟수를 표시, Special은 타입 표시
                 const subtext = agentType === 'expert'
                     ? `<p class="text-xs text-gray-500 mt-1">참여 횟수: <strong>${agent.discussion_participation_count || 0}</strong></p>`
                     : `<p class="text-xs text-gray-500 mt-1 capitalize">${agent.agent_type}</p>`;
                 
-                // 활성화/비활성화 토글은 제거하고 설정 버튼만 남김
                 const cardHtml = `
                     <div class="card text-center relative transition-all hover:shadow-lg hover:-translate-y-1">
                         <div class="absolute top-4 right-4">
@@ -1412,17 +1429,73 @@
         }
 
         /**
+         * 에이전트 수정 모달을 여는 함수
+         */
+        function openAgentEditModal(agentId) {
+            const agent = allAgentsData[agentId];
+            if (!agent) {
+                alert('에이전트 정보를 찾을 수 없습니다.');
+                return;
+            }
+
+            document.getElementById('agent-form-mode').value = 'edit';
+            document.getElementById('agent-modal-title').textContent = '에이전트 수정';
+
+            const nameInput = document.getElementById('agent-form-name');
+            nameInput.value = agent.name;
+            nameInput.readOnly = true; // 이름은 고유 식별자이므로 수정 불가
+
+            document.getElementById('agent-form-icon').value = agent.config.icon;
+            document.getElementById('agent-form-prompt').value = agent.config.prompt;
+            document.getElementById('agent-form-error').textContent = '';
+
+            // 삭제 버튼 표시
+            const deleteButton = document.getElementById('agent-delete-button');
+            deleteButton.classList.remove('hidden');
+            // Special 에이전트는 삭제(비활성화)할 수 없도록 처리
+            if (agent.agent_type === 'special') {
+                deleteButton.disabled = true;
+                deleteButton.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                deleteButton.disabled = false;
+                deleteButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+
+
+            // LLM 모델 드롭다운 채우고 현재 모델 선택
+            const modelSelect = document.getElementById('agent-form-model');
+            modelSelect.innerHTML = '';
+            for (const provider in SUPPORTED_MODELS) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = provider;
+                SUPPORTED_MODELS[provider].forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    if (model.id === agent.config.model) {
+                        option.selected = true;
+                    }
+                    optgroup.appendChild(option);
+                });
+                modelSelect.appendChild(optgroup);
+            }
+            
+            toggleModal('agent-form-modal');
+        }
+
+        /**
          * '저장' 버튼 클릭 시 새 에이전트 정보를 서버에 POST 요청하는 함수
          */
         async function handleSaveAgent() {
+            const mode = document.getElementById('agent-form-mode').value;
             const name = document.getElementById('agent-form-name').value.trim();
             const icon = document.getElementById('agent-form-icon').value.trim();
-            const prompt = document.getElementById('agent-form-prompt').value.trim();
+            const promptText = document.getElementById('agent-form-prompt').value.trim();
             const model = document.getElementById('agent-form-model').value;
             const errorDiv = document.getElementById('agent-form-error');
             const saveButton = document.getElementById('agent-save-button');
-            
-            if (!name || !prompt) {
+
+            if (!name || !promptText) {
                 errorDiv.textContent = '에이전트 이름과 프롬프트는 필수 항목입니다.';
                 return;
             }
@@ -1430,43 +1503,87 @@
             saveButton.disabled = true;
             saveButton.textContent = '저장 중...';
 
-            const payload = {
-                name: name,
-                agent_type: "expert", // 항상 expert로 고정
-                config: {
-                    prompt: prompt,
-                    model: model,
-                    icon: icon || '🤖', // 아이콘이 비어있으면 기본값 사용
-                    temperature: 0.3, // 기본값
-                    tools: [] // 기본값
-                }
+            const configPayload = {
+                prompt: promptText,
+                model: model,
+                icon: icon || '🤖',
+                temperature: 0.3,
+                tools: []
             };
-            
+
             const token = localStorage.getItem('accessToken');
+            let url, method;
+
+            if (mode === 'add') {
+                url = '/api/v1/admin/agents/';
+                method = 'POST';
+            } else { // edit mode
+                url = `/api/v1/admin/agents/${encodeURIComponent(name)}`;
+                method = 'PUT';
+            }
+
+            const bodyPayload = mode === 'add' ? { name: name, agent_type: "expert", config: configPayload } : configPayload;
+
             try {
-                const response = await fetch('/api/v1/admin/agents/', {
-                    method: 'POST',
+                const response = await fetch(url, {
+                    method: method,
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(bodyPayload)
                 });
 
-                if (response.status === 201) { // 201 Created
-                    alert('새로운 에이전트 초안이 성공적으로 추가되었습니다. 게시 후 사용 가능합니다.');
+                if (response.ok) {
+                    const actionText = mode === 'add' ? '추가' : '수정';
+                    alert(`에이전트가 성공적으로 ${actionText}되었습니다. 새 버전이 초안으로 생성되었습니다.`);
                     toggleModal('agent-form-modal');
-                    await loadAgents(); // 에이전트 목록 새로고침
+                    await loadAgents();
                 } else {
                     const errorData = await response.json();
-                    errorDiv.textContent = errorData.detail || '에이전트 추가에 실패했습니다.';
+                    errorDiv.textContent = errorData.detail || '에이전트 저장에 실패했습니다.';
                 }
             } catch (error) {
-                console.error('Error adding new agent:', error);
+                console.error('Error saving agent:', error);
                 errorDiv.textContent = '서버 통신 중 오류가 발생했습니다.';
             } finally {
                 saveButton.disabled = false;
                 saveButton.textContent = '저장';
+            }
+        }
+
+        /**
+         * 에이전트 삭제(비활성화)를 처리하는 함수
+         */
+        async function handleDeleteAgent(agentName) {
+            if (!confirm(`정말로 '${agentName}' 에이전트를 비활성화하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
+                return;
+            }
+
+            const token = localStorage.getItem('accessToken');
+            const saveButton = document.getElementById('agent-save-button'); // 버튼 비활성화용
+            const errorDiv = document.getElementById('agent-form-error');
+            saveButton.disabled = true;
+            errorDiv.textContent = '삭제 중...';
+
+            try {
+                const response = await fetch(`/api/v1/admin/agents/${encodeURIComponent(agentName)}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    alert(`'${agentName}' 에이전트가 비활성화되었습니다.`);
+                    toggleModal('agent-form-modal');
+                    await loadAgents();
+                } else {
+                    const errorData = await response.json();
+                    errorDiv.textContent = `삭제 실패: ${errorData.detail}`;
+                }
+            } catch (error) {
+                errorDiv.textContent = '서버 통신 중 오류가 발생했습니다.';
+            } finally {
+                saveButton.disabled = false;
             }
         }
 
