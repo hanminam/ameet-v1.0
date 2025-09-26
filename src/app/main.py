@@ -23,80 +23,34 @@ from app.api.v1.admin import settings as admin_settings
 
 app = FastAPI(title=settings.APP_TITLE)
 
-# --- main.py 파일의 위치를 기준으로 절대 경로 생성 ---
+# --- 기본 설정 및 이벤트 핸들러 ---
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 app.add_event_handler("startup", db.init_db_connections)
 app.add_event_handler("shutdown", db.close_db_connections)
 
-app.include_router(login.router, prefix="/api/v1/login", tags=["login"])
-app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
-app.include_router(setup.router, prefix="/api/v1/setup", tags=["setup"])
-
-# 사용자 토론 관련 API 라우터 등록 (생성, 진행, 조회 모두 포함)
-app.include_router(
-    discussions_router.router,
-    prefix="/api/v1/discussions",
-    tags=["Discussions"]
-)
-
-# --- 관리자용 API 라우터 등록 ---
-app.include_router(
-    admin_agents.router, 
-    prefix="/api/v1/admin/agents", 
-    tags=["Admin: Agents"]
-)
-
-# --- 토론 관리 API 라우터 등록 ---
-app.include_router(
-    admin_discussions.router,
-    prefix="/api/v1/admin/discussions",
-    tags=["Admin: Discussions"]
-)
-app.include_router(
-    admin_discussions.router,
-    prefix="/api/v1/admin/discussions",
-    tags=["Admin: Discussions"]
-)
-
-# --- 관리자용 API 라우터 등록 ---
-app.include_router(
-    admin_agents.router, 
-    prefix="/api/v1/admin/agents", 
-    tags=["Admin: Agents"]
-)
-
-# --- 관리자용 사용자 관리 API 라우터 ---
-app.include_router(
-    admin_users.router,
-    prefix="/api/v1/admin/users",
-    tags=["Admin: Users"]
-)
-
-app.include_router(
-    admin_settings.router,
-    prefix="/api/v1/admin/settings",
-    tags=["Admin: Settings"]
-)
-
-# 이 미들웨어는 Cloud Run과 같은 프록시 환경에서 
-# X-Forwarded-Proto, X-Forwarded-For 등의 헤더를 신뢰하도록 하여
-# 애플리케이션이 실제 요청 프로토콜(https)을 인지하게 해줍니다.
-# CORS 미들웨어보다 앞에 추가하는 것이 좋습니다.
+# --- 미들웨어 설정 ---
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
-
-# --- CORS 미들웨어 추가 ---
-# 모든 출처(origins)에서의 요청을 허용합니다. (개발 및 테스트용)
-origins = ["*"]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# --- CORS 설정 끝 ---
+
+# --- API 라우터 등록 ---
+
+# v1 사용자용 API
+app.include_router(login.router, prefix="/api/v1/login", tags=["login"])
+app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
+app.include_router(setup.router, prefix="/api/v1/setup", tags=["setup"])
+app.include_router(discussions_router.router, prefix="/api/v1/discussions", tags=["Discussions"])
+
+# v1 관리자용 API (여기에 모두 정리)
+app.include_router(admin_agents.router, prefix="/api/v1/admin/agents", tags=["Admin: Agents"])
+app.include_router(admin_discussions.router, prefix="/api/v1/admin/discussions", tags=["Admin: Discussions"])
+app.include_router(admin_users.router, prefix="/api/v1/admin/users", tags=["Admin: Users"])
+app.include_router(admin_settings.router, prefix="/api/v1/admin/settings", tags=["Admin: Settings"])
 
 # --- 루트 엔드포인트 ---
 @app.get("/", response_class=HTMLResponse)
