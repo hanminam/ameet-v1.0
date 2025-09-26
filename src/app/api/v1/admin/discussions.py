@@ -48,9 +48,20 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timedelta
+from calendar import monthrange
+import logging
+
+logger = logging.getLogger(__name__)
+
 @router.get("/usage-summary", response_model=UsageSummaryResponse, summary="이번 달 토큰 사용량 요약 정보 조회")
 async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_user)):
     try:
+        # 로깅 레벨 설정 확인
+        logger.setLevel(logging.DEBUG)
+        logger.debug("Starting get_usage_summary endpoint")
+
         today = datetime.utcnow()
         start_of_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         days_in_month = monthrange(today.year, today.month)[1]
@@ -66,21 +77,24 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
         logger.debug(f"Total discussions this month: {total_discussions_this_month}")
 
         if total_discussions_this_month == 0:
+            logger.info("No discussions found for this month")
             return UsageSummaryResponse(total_cost_this_month=0.0, total_discussions_this_month=0, average_cost_per_discussion=0.0)
 
-        discussion_ids = [d.discussion_id for d in discussions_this_month]
+        # discussion_ids 유효성 검사
+        discussion_ids = [str(d.discussion_id) for d in discussions_this_month if d.discussion_id is not None and str(d.discussion_id).strip()]
         logger.debug(f"Discussion IDs: {discussion_ids}")
 
-        # 필터 문자열 생성: has_some 대신 OR 조건으로 태그 필터링
         if not discussion_ids:
-            logger.warning("No discussion IDs found, returning empty response")
+            logger.warning("No valid discussion IDs found, returning empty response")
             return UsageSummaryResponse(total_cost_this_month=0.0, total_discussions_this_month=0, average_cost_per_discussion=0.0)
 
-        # 각 discussion_id를 태그로 변환하고 OR 조건으로 결합
-        tag_filters = [f'tags:"discussion_id:{did}"' for did in discussion_ids]
-        combined_filter = " OR ".join(tag_filters)
+        # 필터 문자열 생성: tag IN 형식 사용
+        tags_to_check = [f"discussion_id:{did}" for did in discussion_ids]
+        tags_list_str = f"[{', '.join([f'\"{tag}\"' for tag in tags_to_check])}]"
+        combined_filter = f"tag IN {tags_list_str}"
         logger.debug(f"Combined filter: {combined_filter}")
 
+        # LangSmith API 호출
         client = Client()
         runs = list(client.list_runs(
             project_name="AMEET-MVP-v1.0",
