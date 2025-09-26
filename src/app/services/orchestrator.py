@@ -317,7 +317,7 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
                 # 신규 에이전트 설정에서 'tools' 필드 완전 삭제
                 new_agent_config = AgentConfig(
                     prompt=agent_prompt,
-                    model="gemini-1.5-pro",
+                    model="gemini-2.5-flash",
                     temperature=0.3,
                     icon=selected_icon
                 )

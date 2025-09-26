@@ -15,7 +15,7 @@ async def summarize_text(content: str, topic: str, discussion_id: str) -> str:
     logger.info(f"--- [DEBUG] Calling 'summarize_text' LLM with hardcoded model: 'gemini-1.5-pro' ---")
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-pro", 
+        model="gemini-2.5-flash", 
         temperature=0.0, 
         google_api_key=settings.GOOGLE_API_KEY
     )

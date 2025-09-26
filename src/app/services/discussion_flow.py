@@ -691,4 +691,4 @@ def get_llm_client(model_name: str, temperature: float):
     else:
         # 알 수 없는 모델 이름일 경우, 기본 모델로 대체하여 오류 방지
         logger.warning(f"Unrecognized model name '{model_name}'. Falling back to Gemini 1.5 pro.")
-        return ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=temperature)
+        return ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=temperature)
