@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, logger, status, Query
 from typing import List, Optional
 
 from langsmith import Client
@@ -7,12 +7,16 @@ from datetime import datetime
 
 from app.api.v1.users import get_current_admin_user
 from app.models.user import User as UserModel
-from app.schemas.admin import DiscussionUsageResponse, TurnUsageDetail, AgentCostSummary
+from app.schemas.admin import DiscussionUsageResponse, TurnUsageDetail, AgentCostSummary, UsageSummaryResponse
 from app.models.discussion import DiscussionLog
 from app.schemas.discussion import DiscussionLogItem, DiscussionLogDetail
 from app.models.discussion import User 
 import re
 from beanie.operators import In, RegEx
+
+from datetime import datetime, timedelta
+from calendar import monthrange
+from beanie.operators import GTE, LT
 
 router = APIRouter()
 
@@ -228,3 +232,62 @@ async def get_any_discussion_detail(
         **discussion.model_dump(),
         user_name=user_name
     )
+
+@router.get(
+    "/usage-summary",
+    response_model=UsageSummaryResponse,
+    summary="이번 달 토큰 사용량 요약 정보 조회"
+)
+async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_user)):
+    """
+    이번 달의 총 토론 수, 총 비용, 토론 당 평균 비용을 계산하여 반환합니다.
+    """
+    try:
+        # 1. 이번 달의 시작일과 종료일 계산
+        today = datetime.utcnow()
+        start_of_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        days_in_month = monthrange(today.year, today.month)[1]
+        end_of_month = start_of_month + timedelta(days=days_in_month)
+
+        # 2. DB에서 이번 달에 생성된 토론 목록 조회
+        discussions_this_month = await DiscussionLog.find(
+            GTE(DiscussionLog.created_at, start_of_month),
+            LT(DiscussionLog.created_at, end_of_month)
+        ).to_list()
+
+        total_discussions_this_month = len(discussions_this_month)
+        if total_discussions_this_month == 0:
+            return UsageSummaryResponse(
+                total_cost_this_month=0.0,
+                total_discussions_this_month=0,
+                average_cost_per_discussion=0.0
+            )
+
+        # 3. LangSmith에서 각 토론의 비용 집계
+        client = Client()
+        total_cost_this_month = 0.0
+        
+        for discussion in discussions_this_month:
+            runs = list(client.list_runs(
+                project_name="AMEET-MVP-v1.0",
+                filter=f"has_tag('discussion_id:{discussion.discussion_id}')",
+                run_type="llm"
+            ))
+            for run in runs:
+                model_name = run.extra.get("metadata", {}).get("model_name", "unknown")
+                total_cost_this_month += calculate_cost(model_name, run.prompt_tokens, run.completion_tokens)
+        
+        # 4. 평균 비용 계산
+        average_cost = total_cost_this_month / total_discussions_this_month
+
+        return UsageSummaryResponse(
+            total_cost_this_month=total_cost_this_month,
+            total_discussions_this_month=total_discussions_this_month,
+            average_cost_per_discussion=average_cost
+        )
+    except Exception as e:
+        logger.error(f"Failed to get usage summary: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to retrieve data from LangSmith or DB: {e}"
+        )

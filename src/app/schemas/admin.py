@@ -32,3 +32,9 @@ class DiscussionUsageResponse(BaseModel):
     duration_seconds: float
     turn_details: List[TurnUsageDetail] = Field(description="단계별 상세 사용 내역 (테이블용)")
     agent_summary: List[AgentCostSummary] = Field(description="에이전트별 비용 요약 (도넛 차트용)")
+
+class UsageSummaryResponse(BaseModel):
+    """대시보드 상단 카드에 표시될 사용량 요약 정보"""
+    total_cost_this_month: float
+    total_discussions_this_month: int
+    average_cost_per_discussion: float

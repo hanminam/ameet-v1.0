@@ -219,15 +219,15 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <div class="card text-center">
                         <p class="text-gray-500 text-sm">총 사용 비용 (이번 달)</p>
-                        <p class="text-3xl font-bold mt-2">$182.50</p>
+                        <p id="summary-total-cost" class="text-3xl font-bold mt-2">$0.00</p>
                     </div>
                     <div class="card text-center">
                         <p class="text-gray-500 text-sm">총 토론 수</p>
-                        <p class="text-3xl font-bold mt-2">482</p>
+                        <p id="summary-total-discussions" class="text-3xl font-bold mt-2">0</p>
                     </div>
                     <div class="card text-center">
                         <p class="text-gray-500 text-sm">토론 당 평균 비용</p>
-                        <p class="text-3xl font-bold mt-2">$0.378</p>
+                        <p id="summary-avg-cost" class="text-3xl font-bold mt-2">$0.000</p>
                     </div>
                 </div>
 
@@ -625,6 +625,9 @@
                 loadAgents();
                 loadDefaultPrompt();
             }
+            if (pageId === 'tokens') {
+                loadUsageSummary();
+            }
         }
 
         function toggleModal(modalId) {
@@ -942,7 +945,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             
-            showPage('agents'); // Default page
+            showPage('dashboard'); // Default page
 
             // 기본 프롬프트 저장 버튼 이벤트 리스너
             if (defaultPromptSaveBtn) {
@@ -1672,6 +1675,47 @@
                 defaultPromptSaveBtn.disabled = false;
                 defaultPromptSaveBtn.textContent = '기본 프롬프트 저장';
                 setTimeout(() => { defaultPromptStatus.textContent = "" }, 3000); // 3초 후 메시지 사라짐
+            }
+        }
+
+        /**
+         * API에서 요약 정보를 가져와 상단 카드 UI를 업데이트하는 함수
+         */
+        async function loadUsageSummary() {
+            const token = localStorage.getItem('accessToken');
+            if (!token) return;
+
+            // UI 요소를 가져옵니다.
+            const totalCostEl = document.getElementById('summary-total-cost');
+            const totalDiscussionsEl = document.getElementById('summary-total-discussions');
+            const avgCostEl = document.getElementById('summary-avg-cost');
+
+            // 로딩 중 상태로 초기화
+            totalCostEl.textContent = '...';
+            totalDiscussionsEl.textContent = '...';
+            avgCostEl.textContent = '...';
+
+            try {
+                const response = await fetch('/api/v1/admin/discussions/usage-summary', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`[${response.status}] 요약 정보를 가져오는데 실패했습니다.`);
+                }
+
+                const summary = await response.json();
+
+                // 받아온 데이터로 UI 업데이트
+                totalCostEl.textContent = `$${summary.total_cost_this_month.toFixed(2)}`;
+                totalDiscussionsEl.textContent = summary.total_discussions_this_month.toLocaleString();
+                avgCostEl.textContent = `$${summary.average_cost_per_discussion.toFixed(3)}`;
+
+            } catch (error) {
+                console.error('Error loading usage summary:', error);
+                totalCostEl.textContent = '오류';
+                totalDiscussionsEl.textContent = '오류';
+                avgCostEl.textContent = '오류';
             }
         }
 

@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     DB_PORT: str = "3306"
 
     # --- LangSmith 환경 변수 추가 ---
-    LANGCHAIN_TRACING_V2: bool = False
+    LANGCHAIN_TRACING_V2: bool = True
     LANGCHAIN_ENDPOINT: str = "https://api.smith.langchain.com"
     LANGCHAIN_API_KEY: Optional[str] = None
     LANGCHAIN_PROJECT: Optional[str] = None
