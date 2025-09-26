@@ -3,9 +3,9 @@
 from datetime import datetime
 import os
 from pathlib import Path
-from fastapi import FastAPI, logger
+from fastapi import FastAPI
 
-from app.core.config import settings
+from app.core.config import settings, logger
 from app import db
 from app.api.v1 import login, users, setup, discussions as discussions_router
 from app.api.v1.admin import (
