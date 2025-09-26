@@ -249,7 +249,7 @@ async def _run_single_agent_turn(
         #    temperature=agent_config.get("temperature", 0.2)
         #)
         # 헬퍼 함수를 통해 모델 이름에 맞는 클라이언트를 동적으로 가져옴
-        model_name = agent_config.get("model", "gemini-1.5-flash")
+        model_name = agent_config.get("model", "gemini-1.5-flash-latest")
         temperature = agent_config.get("temperature", 0.2)
         llm = get_llm_client(model_name=model_name, temperature=temperature)
 
@@ -688,4 +688,4 @@ def get_llm_client(model_name: str, temperature: float):
     else:
         # 알 수 없는 모델 이름일 경우, 기본 모델로 대체하여 오류 방지
         logger.warning(f"Unrecognized model name '{model_name}'. Falling back to Gemini 1.5 Flash.")
-        return ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=temperature)
+        return ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=temperature)

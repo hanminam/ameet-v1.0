@@ -13,7 +13,7 @@ async def summarize_text(content: str, topic: str, discussion_id: str) -> str:
         return content
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash", 
+        model="gemini-1.5-flash-latest", 
         temperature=0.0, 
         google_api_key=settings.GOOGLE_API_KEY
     )
