@@ -62,8 +62,11 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
         total_cost_this_month = 0.0
         
         for discussion in discussions_this_month:
+            # [수정] filter 대신 tags 파라미터 사용
             runs = list(client.list_runs(
-                project_name="AMEET-MVP-v1.0", filter=f"has_tag('discussion_id:{discussion.discussion_id}')", run_type="llm"
+                project_name="AMEET-MVP-v1.0",
+                tags=[f"discussion_id:{discussion.discussion_id}"],
+                run_type="llm"
             ))
             for run in runs:
                 model_name = run.extra.get("metadata", {}).get("model_name", "unknown")
@@ -79,6 +82,8 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
     except Exception as e:
         logger.error(f"Failed to get usage summary: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Failed to retrieve data: {e}")
+
+
     
 @router.get(
     "/",
