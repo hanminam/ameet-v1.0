@@ -106,7 +106,8 @@ async def analyze_topic(topic: str, special_agents: Dict[str, Dict], discussion_
 
     llm = ChatGoogleGenerativeAI(
         model=analyst_config["model"],
-        temperature=analyst_config["temperature"]
+        temperature=analyst_config["temperature"],
+        location="asia-northeast3"
     )
     structured_llm = llm.with_structured_output(IssueAnalysisReport)
     

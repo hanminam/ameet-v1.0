@@ -680,7 +680,11 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
 def get_llm_client(model_name: str, temperature: float):
     """모델 이름을 기반으로 올바른 LangChain LLM 클라이언트 인스턴스를 생성합니다."""
     if model_name.startswith("gemini"):
-        return ChatGoogleGenerativeAI(model=model_name, temperature=temperature)
+        return ChatGoogleGenerativeAI(
+            model=model_name, 
+            temperature=temperature,
+            location="asia-northeast3"
+        )
     elif model_name.startswith("gpt"):
         return ChatOpenAI(model=model_name, temperature=temperature)
     elif model_name.startswith("claude"):
