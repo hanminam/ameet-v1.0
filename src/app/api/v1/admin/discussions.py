@@ -56,39 +56,31 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
         days_in_month = monthrange(today.year, today.month)[1]
         end_of_month = start_of_month + timedelta(days=days_in_month)
 
-        # 이번 달 DiscussionLog 조회
         discussions_this_month = await DiscussionLog.find(
             GTE(DiscussionLog.created_at, start_of_month),
             LT(DiscussionLog.created_at, end_of_month)
         ).to_list()
 
         total_discussions_this_month = len(discussions_this_month)
-        logger.debug(f"Total discussions this month: {total_discussions_this_month}")
-
         if total_discussions_this_month == 0:
             return UsageSummaryResponse(total_cost_this_month=0.0, total_discussions_this_month=0, average_cost_per_discussion=0.0)
 
         discussion_ids = [d.discussion_id for d in discussions_this_month]
-        logger.debug(f"Discussion IDs: {discussion_ids}")
+        
+        tags_to_check = [f'"discussion_id:{did}"' for did in discussion_ids]
+        tags_list_str = f"[{', '.join(tags_to_check)}]"
+        combined_filter = f"has_some(tags, {tags_list_str})"
 
-        # 필터 문자열 생성: has_some 대신 OR 조건으로 태그 필터링
-        if not discussion_ids:
-            logger.warning("No discussion IDs found, returning empty response")
-            return UsageSummaryResponse(total_cost_this_month=0.0, total_discussions_this_month=0, average_cost_per_discussion=0.0)
-
-        # 각 discussion_id를 태그로 변환하고 OR 조건으로 결합
-        tag_filters = [f'tags:"discussion_id:{did}"' for did in discussion_ids]
-        combined_filter = " OR ".join(tag_filters)
-        logger.debug(f"Combined filter: {combined_filter}")
-
+        # [디버깅 로그 추가] LangSmith로 전송될 최종 필터 문자열을 확인합니다.
+        logger.info(f"--- [LangSmith Filter Debug] Final filter string being sent: {combined_filter} ---")
+        
         client = Client()
         runs = list(client.list_runs(
             project_name="AMEET-MVP-v1.0",
             filter=combined_filter,
             run_type="llm"
         ))
-        logger.debug(f"Retrieved {len(runs)} runs from LangSmith")
-
+        
         total_cost_this_month = 0.0
         for run in runs:
             model_name = run.extra.get("metadata", {}).get("model_name", "unknown")
@@ -102,8 +94,9 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
             average_cost_per_discussion=average_cost
         )
     except Exception as e:
-        logger.error(f"Failed to get usage summary: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Failed to retrieve data: {str(e)}")
+        logger.error(f"Failed to get usage summary: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Failed to retrieve data: {e}")
+
     
 @router.get(
     "/",
