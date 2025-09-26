@@ -60,11 +60,12 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
 
         discussion_ids = [d.discussion_id for d in discussions_this_month]
         
-        # [수정된 핵심 로직] LangSmith API 요구사항에 맞춰 큰따옴표를 이스케이프 처리합니다.
-        tag_filters = [f'contains(tags, \\"discussion_id:{did}\\")' for did in discussion_ids]
+        # [최종 수정] 'has' 연산자를 사용하고, 큰따옴표를 명확히 이스케이프 처리합니다.
+        tag_filters = [f'has(tags, \\"discussion_id:{did}\\")' for did in discussion_ids]
         
         if len(tag_filters) > 1:
-            combined_filter = f"or({', '.join(tag_filters)})"
+            # 쉼표 뒤 공백을 제거하여 파싱 오류 가능성을 최소화합니다.
+            combined_filter = f"or({','.join(tag_filters)})"
         elif len(tag_filters) == 1:
             combined_filter = tag_filters[0]
         else:
