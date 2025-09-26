@@ -1,8 +1,9 @@
 # src/app/main.py
 
+from datetime import datetime
 import os
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, logger
 
 from app.core.config import settings
 from app import db
@@ -17,6 +18,13 @@ from app.api.v1.admin import (
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+# ===== [배포 확인용 로그] =====
+logger.info("############################################")
+logger.info("### AMEET v1.0 - DEPLOYMENT CHECK v2 ###")
+logger.info(f"### DEPLOYED AT: {datetime.now()} ###")
+logger.info("############################################")
+# =================================
 
 app = FastAPI(title=settings.APP_TITLE)
 
