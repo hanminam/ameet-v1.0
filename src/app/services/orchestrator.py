@@ -9,7 +9,7 @@ from beanie.operators import In
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 
-from app.core.config import settings
+from app.core.config import settings, logger
 from app.models.discussion import AgentSettings, AgentConfig, SystemSettings
 
 from app.schemas.orchestration import (
@@ -24,6 +24,7 @@ from app.schemas.orchestration import (
 from app.tools.search import perform_web_search_async
 from app.services.document_processor import process_uploaded_file
 from app.services.summarizer import summarize_text
+from app import db
 
 # --- 역할 기반 상수 정의 ---
 JUDGE_AGENT_NAME = "재판관"
@@ -270,7 +271,9 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
     )
 
     # 하드코딩된 프롬프트 대신 DB에서 기본 프롬프트를 조회합니다.
-    default_prompt_setting = await SystemSettings.find_one(SystemSettings.key == "default_agent_prompt")
+    db_name = settings.MONGO_DB_URL.split("/")[-1].split("?")[0]
+    settings_collection = db.mongo_client[db_name]["system_settings"]
+    default_prompt_setting = await settings_collection.find_one({"key": "default_agent_prompt"})
     
     PROMPT_TEMPLATE = (
         "당신의 역할은 '{role}'이며 지정된 역할 관점에서 말하세요.\n"
@@ -280,13 +283,20 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
         "사용자가 질문한 언어로 답변하여야 합니다."
     )
     
-    if default_prompt_setting:
-        PROMPT_TEMPLATE = default_prompt_setting.value
-        print("--- [Orchestrator] DB에서 기본 프롬프트를 성공적으로 로드했습니다. ---")
+    if default_prompt_setting and default_prompt_setting.get("value"):
+        PROMPT_TEMPLATE = default_prompt_setting["value"]
+        logger.info("--- [Orchestrator] DB에서 기본 프롬프트를 성공적으로 로드했습니다. ---")
     else:
-        # DB에 설정이 없는 경우, 하드코딩된 값을 기본값으로 사용하고 DB에 저장
-        print("--- [Orchestrator] DB에 기본 프롬프트 설정이 없어 기본값으로 생성합니다. ---")
-        await SystemSettings(key="default_agent_prompt", value=PROMPT_TEMPLATE, description="Jury Selector가 동적으로 에이전트를 생성할 때 사용하는 기본 프롬프트 템플릿. '{role}' 변수를 포함해야 합니다.").insert()
+        logger.info("--- [Orchestrator] DB에 기본 프롬프트 설정이 없어 기본값으로 생성합니다. ---")
+        # Beanie 대신 motor 드라이버를 사용하여 DB에 저장
+        await settings_collection.update_one(
+            {"key": "default_agent_prompt"},
+            {"$set": {
+                "value": PROMPT_TEMPLATE,
+                "description": "Jury Selector가 동적으로 에이전트를 생성할 때 사용하는 기본 프롬프트 템플릿. '{role}' 변수를 포함해야 합니다."
+            }},
+            upsert=True
+        )
 
     newly_created_agents = []
     if selected_jury.new_agent_proposals:
