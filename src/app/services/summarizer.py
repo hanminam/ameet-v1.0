@@ -12,7 +12,7 @@ async def summarize_text(content: str, topic: str, discussion_id: str) -> str:
     if len(content) < 150:
         return content
     
-    logger.info(f"--- [DEBUG] Calling 'summarize_text' LLM with hardcoded model: 'gemini-1.5-pro' ---")
+    logger.info(f"--- [DEBUG] Calling 'summarize_text' LLM with hardcoded model: 'gemini-2.5-flash' ---")
 
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash", 

@@ -95,12 +95,12 @@ async def main():
         agent_name = agent_data.get("name")
         if not agent_name: continue
 
-        # [핵심 수정] get_icon_for_agent 함수를 호출하여 아이콘 결정
+        # get_icon_for_agent 함수를 호출하여 아이콘 결정
         selected_icon = get_icon_for_agent(agent_data)
 
         agent_config = AgentConfig(
             prompt=agent_data.get("prompt", ""),
-            model=agent_data.get("model", "gemini-1.5-pro"),
+            model=agent_data.get("model", "gemini-2.5-flash"),
             temperature=agent_data.get("temperature", 0.2),
             tools=agent_data.get("tools", []),
             icon=selected_icon # 결정된 아이콘을 할당

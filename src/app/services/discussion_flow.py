@@ -245,11 +245,11 @@ async def _run_single_agent_turn(
 
     try:
         #llm = ChatGoogleGenerativeAI(
-        #    model=agent_config.get("model", "gemini-1.5-pro"),
+        #    model=agent_config.get("model", "gemini-2.5-flash"),
         #    temperature=agent_config.get("temperature", 0.2)
         #)
         # 헬퍼 함수를 통해 모델 이름에 맞는 클라이언트를 동적으로 가져옴
-        model_name = agent_config.get("model", "gemini-1.5-pro")
+        model_name = agent_config.get("model", "gemini-2.5-flash")
         temperature = agent_config.get("temperature", 0.2)
         llm = get_llm_client(model_name=model_name, temperature=temperature)
 
