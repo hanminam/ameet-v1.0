@@ -67,24 +67,42 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
 
         discussion_ids = [d.discussion_id for d in discussions_this_month]
         
-        tags_to_check = [f'"discussion_id:{did}"' for did in discussion_ids]
-        tags_list_str = f"[{', '.join(tags_to_check)}]"
-        combined_filter = f"has_some(tags, {tags_list_str})"
-
-        # [디버깅 로그 추가] LangSmith로 전송될 최종 필터 문자열을 확인합니다.
-        logger.info(f"--- [LangSmith Filter Debug] Final filter string being sent: {combined_filter} ---")
+        # [최종 수정] Rate Limit과 필터 파싱 오류를 모두 피하기 위해 ID를 20개씩 묶어 처리합니다.
+        CHUNK_SIZE = 20
+        id_chunks = [discussion_ids[i:i + CHUNK_SIZE] for i in range(0, len(discussion_ids), CHUNK_SIZE)]
         
+        all_runs = []
         client = Client()
-        runs = list(client.list_runs(
-            project_name="AMEET-MVP-v1.0",
-            filter=combined_filter,
-            run_type="llm"
-        ))
-        
+
+        for chunk in id_chunks:
+            if not chunk:
+                continue
+
+            tags_to_check = [f'"discussion_id:{did}"' for did in chunk]
+            tags_list_str = f"[{', '.join(tags_to_check)}]"
+            chunk_filter = f"has_some(tags, {tags_list_str})"
+            
+            logger.info(f"--- [LangSmith Filter Debug] Sending chunk filter with {len(chunk)} IDs ---")
+            
+            try:
+                runs_chunk = list(client.list_runs(
+                    project_name="AMEET-MVP-v1.0",
+                    filter=chunk_filter,
+                    run_type="llm"
+                ))
+                all_runs.extend(runs_chunk)
+            except Exception as e:
+                logger.error(f"Failed to fetch runs for a chunk. Filter: {chunk_filter}. Error: {e}")
+                continue # 한 묶음이 실패해도 다음 묶음은 계속 시도
+
         total_cost_this_month = 0.0
-        for run in runs:
+        for run in all_runs:
             model_name = run.extra.get("metadata", {}).get("model_name", "unknown")
-            total_cost_this_month += calculate_cost(model_name, run.prompt_tokens, run.completion_tokens)
+            total_cost_this_month += calculate_cost(
+                model_name,
+                run.prompt_tokens,
+                run.completion_tokens
+            )
 
         average_cost = total_cost_this_month / total_discussions_this_month if total_discussions_this_month > 0 else 0
 
@@ -96,7 +114,6 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
     except Exception as e:
         logger.error(f"Failed to get usage summary: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Failed to retrieve data: {e}")
-
     
 @router.get(
     "/",
