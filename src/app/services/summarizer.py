@@ -2,7 +2,7 @@
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
-from app.core.config import settings
+from app.core.config import settings, logger
 
 async def summarize_text(content: str, topic: str, discussion_id: str) -> str:
     """
@@ -11,6 +11,8 @@ async def summarize_text(content: str, topic: str, discussion_id: str) -> str:
     # 내용이 너무 짧으면(약 2~3문장) 요약 없이 원본을 반환합니다.
     if len(content) < 150:
         return content
+    
+    logger.info(f"--- [DEBUG] Calling 'summarize_text' LLM with hardcoded model: 'gemini-1.5-pro' ---")
 
     llm = ChatGoogleGenerativeAI(
         model="gemini-1.5-pro", 

@@ -103,6 +103,8 @@ async def analyze_topic(topic: str, special_agents: Dict[str, Dict], discussion_
     analyst_config = special_agents.get(TOPIC_ANALYST_NAME)
     if not analyst_config:
         raise ValueError(f"'{TOPIC_ANALYST_NAME}' 설정을 찾을 수 없습니다.")
+    
+    logger.info(f"--- [DEBUG] Calling 'analyze_topic' LLM with model: '{analyst_config.get('model')}' ---")
 
     llm = ChatGoogleGenerativeAI(
         model=analyst_config["model"],
@@ -252,6 +254,8 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
 
     You must only respond with a single, valid JSON object that strictly adheres to the required schema.
     """
+
+    logger.info(f"--- [DEBUG] Calling 'select_debate_team' LLM with model: '{selector_config.get('model')}' ---")
 
     llm = ChatGoogleGenerativeAI(
         model=selector_config["model"],
