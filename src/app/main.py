@@ -6,20 +6,17 @@ from fastapi import FastAPI
 
 from app.core.config import settings
 from app import db
-from app.api.v1 import login, users, setup
+from app.api.v1 import login, users, setup, discussions as discussions_router
+from app.api.v1.admin import (
+    agents as admin_agents, 
+    discussions as admin_discussions,
+    users as admin_users,
+    settings as admin_settings
+)
 
-from sqlalchemy.sql import text
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-
-from app.api.v1 import discussions as discussions_router
-from app.api.v1.admin import agents as admin_agents, discussions as admin_discussions
-
-from app.api.v1.admin import users as admin_users
-
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-
-from app.api.v1.admin import settings as admin_settings
 
 app = FastAPI(title=settings.APP_TITLE)
 
