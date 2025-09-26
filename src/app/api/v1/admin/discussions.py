@@ -58,18 +58,18 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
         if total_discussions_this_month == 0:
             return UsageSummaryResponse(total_cost_this_month=0.0, total_discussions_this_month=0, average_cost_per_discussion=0.0)
 
-        # [수정된 핵심 로직] LangSmith 필터의 'contains' 연산자를 사용하여 여러 태그를 조회합니다.
         discussion_ids = [d.discussion_id for d in discussions_this_month]
-        tag_filters = [f'contains(tags, "discussion_id:{did}")' for did in discussion_ids]
+        
+        # [수정된 핵심 로직] LangSmith API 요구사항에 맞춰 큰따옴표를 이스케이프 처리합니다.
+        tag_filters = [f'contains(tags, \\"discussion_id:{did}\\")' for did in discussion_ids]
         
         if len(tag_filters) > 1:
             combined_filter = f"or({', '.join(tag_filters)})"
         elif len(tag_filters) == 1:
             combined_filter = tag_filters[0]
         else:
-            # 조회할 토론이 없으면 0을 반환합니다.
             return UsageSummaryResponse(total_cost_this_month=0.0, total_discussions_this_month=0, average_cost_per_discussion=0.0)
-        
+
         client = Client()
         runs = list(client.list_runs(
             project_name="AMEET-MVP-v1.0",
