@@ -60,17 +60,14 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
 
         discussion_ids = [d.discussion_id for d in discussions_this_month]
         
-        # [최종 수정] 'has' 연산자를 사용하고, 큰따옴표를 명확히 이스케이프 처리합니다.
-        tag_filters = [f'has(tags, \\"discussion_id:{did}\\")' for did in discussion_ids]
+        # [최종 수정] 복잡한 or() 구문 대신 'has_some' 연산자를 사용하여 안정성을 확보합니다.
+        # 1. 각 discussion_id를 "discussion_id:{id}" 형태의 문자열로 만듭니다.
+        tags_to_check = [f'"discussion_id:{did}"' for did in discussion_ids]
+        # 2. 이 문자열 목록을 콤마로 연결하여 리스트 형태의 문자열로 만듭니다. 예: ["tag1", "tag2"]
+        tags_list_str = f"[{', '.join(tags_to_check)}]"
+        # 3. 최종적으로 has_some(tags, ["tag1", "tag2"]) 형태의 필터를 생성합니다.
+        combined_filter = f"has_some(tags, {tags_list_str})"
         
-        if len(tag_filters) > 1:
-            # 쉼표 뒤 공백을 제거하여 파싱 오류 가능성을 최소화합니다.
-            combined_filter = f"or({','.join(tag_filters)})"
-        elif len(tag_filters) == 1:
-            combined_filter = tag_filters[0]
-        else:
-            return UsageSummaryResponse(total_cost_this_month=0.0, total_discussions_this_month=0, average_cost_per_discussion=0.0)
-
         client = Client()
         runs = list(client.list_runs(
             project_name="AMEET-MVP-v1.0",
