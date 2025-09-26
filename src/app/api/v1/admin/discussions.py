@@ -22,15 +22,25 @@ from app.core.config import logger
 router = APIRouter()
 
 # --- 비용 계산을 위한 모델별 단가표 (USD per 1M tokens) ---
-# ※ 참고: 이 단가는 예시이며, 실제 최신 단가는 각 LLM 공급자 사이트에서 확인해야 합니다.
 TOKEN_PRICING_MAP = {
-    # OpenAI
-    "gpt-4o": {"input": 5.0, "output": 15.0},
-    # Google
-    "gemini-2.5-flash": {"input": 3.5, "output": 10.5},
-    # Anthropic
-    "claude-3-opus-20240229": {"input": 15.0, "output": 75.0},
-    "claude-3-5-sonnet-20240620": {"input": 3.0, "output": 15.0},
+    # Google (Gemini)
+    "gemini-2.5-pro": {"input": 1.25, "output": 10.0},       # 200K 초과시 input $2.50, output $15.0
+    "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+
+    # OpenAI (GPT)
+    "gpt-4o": {"input": 2.5, "output": 10.0},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.6},
+    "gpt-4-turbo": {"input": 10.0, "output": 30.0},
+    "gpt-4": {"input": 30.0, "output": 60.0},
+    "gpt-3.5-turbo": {"input": 0.5, "output": 1.5},
+
+    # Anthropic (Claude)
+    "claude-opus-4-1-20250805": {"input": 15.0, "output": 75.0},
+    "claude-opus-4-20250514": {"input": 3.0, "output": 15.0},
+    "claude-3-5-haiku-20241022": {"input": 0.8, "output": 4.0},
+    "claude-3-7-sonnet-20250219": {"input": 3.0, "output": 15.0},
+    "claude-3-5-sonnet-20241022": {"input": 3.0, "output": 15.0},
+    "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25}
 }
 
 def calculate_cost(model_name: str, input_tokens: int, output_tokens: int) -> float:
@@ -45,8 +55,26 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from datetime import datetime, timedelta
 from calendar import monthrange
 import logging
+from tenacity import retry, stop_after_attempt, wait_exponential
+import asyncio
 
 logger = logging.getLogger(__name__)
+
+# Rate Limit 발생 시 재시도 로직이 적용된 헬퍼 함수
+@retry(
+    stop=stop_after_attempt(5), # 최대 5번까지 재시도
+    wait=wait_exponential(multiplier=1, min=2, max=60) # 2초, 4초, 8초... 간격으로 재시도
+)
+def _fetch_runs_with_retry(client: Client, filter_string: str) -> List:
+    """LangSmith API를 호출하고 Rate Limit 발생 시 자동으로 재시도합니다."""
+    logger.info(f"--- [LangSmith Fetch] Attempting to fetch runs with filter: {filter_string} ---")
+    runs = list(client.list_runs(
+        project_name="AMEET-MVP-v1.0",
+        filter=filter_string,
+        run_type="llm"
+    ))
+    logger.info(f"--- [LangSmith Fetch] Successfully fetched {len(runs)} runs for chunk. ---")
+    return runs
 
 @router.get("/usage-summary", response_model=UsageSummaryResponse, summary="이번 달 토큰 사용량 요약 정보 조회")
 async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_user)):
@@ -67,12 +95,12 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
 
         discussion_ids = [d.discussion_id for d in discussions_this_month]
         
-        # [최종 수정] Rate Limit과 필터 파싱 오류를 모두 피하기 위해 ID를 20개씩 묶어 처리합니다.
         CHUNK_SIZE = 20
         id_chunks = [discussion_ids[i:i + CHUNK_SIZE] for i in range(0, len(discussion_ids), CHUNK_SIZE)]
         
         all_runs = []
         client = Client()
+        loop = asyncio.get_running_loop()
 
         for chunk in id_chunks:
             if not chunk:
@@ -82,18 +110,15 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
             tags_list_str = f"[{', '.join(tags_to_check)}]"
             chunk_filter = f"has_some(tags, {tags_list_str})"
             
-            logger.info(f"--- [LangSmith Filter Debug] Sending chunk filter with {len(chunk)} IDs ---")
-            
             try:
-                runs_chunk = list(client.list_runs(
-                    project_name="AMEET-MVP-v1.0",
-                    filter=chunk_filter,
-                    run_type="llm"
-                ))
+                # [수정] 재시도 로직이 적용된 헬퍼 함수를 비동기적으로 호출합니다.
+                runs_chunk = await loop.run_in_executor(
+                    None, lambda: _fetch_runs_with_retry(client, chunk_filter)
+                )
                 all_runs.extend(runs_chunk)
             except Exception as e:
-                logger.error(f"Failed to fetch runs for a chunk. Filter: {chunk_filter}. Error: {e}")
-                continue # 한 묶음이 실패해도 다음 묶음은 계속 시도
+                logger.error(f"A chunk failed to fetch runs after all retries. Filter: {chunk_filter}. Error: {e}")
+                continue
 
         total_cost_this_month = 0.0
         for run in all_runs:
