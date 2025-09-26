@@ -108,7 +108,8 @@ async def analyze_topic(topic: str, special_agents: Dict[str, Dict], discussion_
 
     llm = ChatGoogleGenerativeAI(
         model=analyst_config["model"],
-        temperature=analyst_config["temperature"]
+        temperature=analyst_config["temperature"],
+        google_api_key=settings.GOOGLE_API_KEY
     )
     structured_llm = llm.with_structured_output(IssueAnalysisReport)
     
@@ -259,7 +260,8 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
 
     llm = ChatGoogleGenerativeAI(
         model=selector_config["model"],
-        temperature=selector_config["temperature"]
+        temperature=selector_config["temperature"],
+        google_api_key=settings.GOOGLE_API_KEY
     )
     structured_llm = llm.with_structured_output(SelectedJury)
 
