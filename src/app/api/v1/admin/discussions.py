@@ -64,6 +64,8 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
         tags_to_check = [f'\\"discussion_id:{did}\\"' for did in discussion_ids]  # Escape quotes
         tags_list_str = f"[{', '.join(tags_to_check)}]"
         combined_filter = f"has_some(tags, {tags_list_str})"
+
+        logger.debug(f"Filter string: {combined_filter}")
         
         client = Client()
         runs = list(client.list_runs(
