@@ -102,6 +102,7 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
         client = Client()
         loop = asyncio.get_running_loop()
 
+        # [최종 수정] 병렬 처리(asyncio.gather) 대신 순차 루프로 변경하여 Rate Limit 회피
         for chunk in id_chunks:
             if not chunk:
                 continue
@@ -111,13 +112,14 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
             chunk_filter = f"has_some(tags, {tags_list_str})"
             
             try:
-                # [수정] 재시도 로직이 적용된 헬퍼 함수를 비동기적으로 호출합니다.
                 runs_chunk = await loop.run_in_executor(
                     None, lambda: _fetch_runs_with_retry(client, chunk_filter)
                 )
                 all_runs.extend(runs_chunk)
+                # [핵심] 각 API 호출 사이에 1초의 지연 시간을 두어 Rate Limit을 확실하게 피합니다.
+                await asyncio.sleep(1) 
             except Exception as e:
-                logger.error(f"A chunk failed to fetch runs after all retries. Filter: {chunk_filter}. Error: {e}")
+                logger.error(f"A chunk failed after all retries. Filter: {chunk_filter}. Error: {e}")
                 continue
 
         total_cost_this_month = 0.0
@@ -139,6 +141,7 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
     except Exception as e:
         logger.error(f"Failed to get usage summary: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Failed to retrieve data: {e}")
+
     
 @router.get(
     "/",
