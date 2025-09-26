@@ -34,113 +34,51 @@ TOKEN_PRICING_MAP = {
 }
 
 def calculate_cost(model_name: str, input_tokens: int, output_tokens: int) -> float:
-    """모델 이름과 토큰 수를 기반으로 비용을 계산합니다."""
-    # model_name에 버전이 포함된 경우(예: gpt-4o-2024-05-13) base model 이름만 추출
     base_model = next((key for key in TOKEN_PRICING_MAP if model_name.startswith(key)), None)
-    
-    if not base_model:
-        return 0.0
-
+    if not base_model: return 0.0
     pricing = TOKEN_PRICING_MAP[base_model]
     input_cost = (input_tokens / 1_000_000) * pricing["input"]
     output_cost = (output_tokens / 1_000_000) * pricing["output"]
     return input_cost + output_cost
 
-@router.get(
-    "/{discussion_id}/usage",
-    response_model=DiscussionUsageResponse,
-    summary="특정 토론의 토큰/비용 사용량 상세 조회"
-)
-async def get_discussion_usage_details(
-    discussion_id: str,
-    admin_user: UserModel = Depends(get_current_admin_user)
-):
-    """
-    LangSmith에서 특정 discussion_id 태그를 가진 모든 LLM 호출 기록을 가져와
-    상세 사용 내역을 분석하여 반환합니다.
-    """
+@router.get("/usage-summary", response_model=UsageSummaryResponse, summary="이번 달 토큰 사용량 요약 정보 조회")
+async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_user)):
     try:
+        today = datetime.utcnow()
+        start_of_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        days_in_month = monthrange(today.year, today.month)[1]
+        end_of_month = start_of_month + timedelta(days=days_in_month)
+
+        discussions_this_month = await DiscussionLog.find(
+            GTE(DiscussionLog.created_at, start_of_month),
+            LT(DiscussionLog.created_at, end_of_month)
+        ).to_list()
+
+        total_discussions_this_month = len(discussions_this_month)
+        if total_discussions_this_month == 0:
+            return UsageSummaryResponse(total_cost_this_month=0.0, total_discussions_this_month=0, average_cost_per_discussion=0.0)
+
         client = Client()
-        # 1. LangSmith에서 해당 discussion_id 태그를 가진 모든 LLM 실행 기록 조회
-        runs = list(client.list_runs(
-            project_name="AMEET-v1.0",
-            filter=f"has_tag('discussion_id:{discussion_id}')",
-            run_type="llm"
-        ))
+        total_cost_this_month = 0.0
         
-        if not runs:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usage data not found for this discussion ID.")
-
-        # 2. 조회된 기록을 순회하며 상세 내역(turn_details) 생성
-        turn_details = []
-        agent_cost_agg = defaultdict(lambda: {"tokens": 0, "cost": 0.0})
-
-        for run in sorted(runs, key=lambda r: r.start_time):
-            model_name = run.extra.get("metadata", {}).get("model_name", "unknown")
-            input_tokens = run.prompt_tokens
-            output_tokens = run.completion_tokens
-            total_tokens = run.total_tokens
-            cost = calculate_cost(model_name, input_tokens, output_tokens)
-            
-            # run.name은 보통 'ChatGoogleGenerativeAI' 등으로 기록되므로, 더 의미있는 이름을 찾아야 함
-            # 예시: 부모 run의 이름을 가져오는 로직 (추후 고도화 가능)
-            turn_name = run.name 
-
-            turn_details.append(TurnUsageDetail(
-                turn_name=turn_name,
-                model_name=model_name,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                total_tokens=total_tokens,
-                cost_usd=cost,
-                latency_ms=(run.end_time - run.start_time).total_seconds() * 1000,
-                start_time=run.start_time
+        for discussion in discussions_this_month:
+            runs = list(client.list_runs(
+                project_name="AMEET-MVP-v1.0", filter=f"has_tag('discussion_id:{discussion.discussion_id}')", run_type="llm"
             ))
-            
-            agent_cost_agg[turn_name]["tokens"] += total_tokens
-            agent_cost_agg[turn_name]["cost"] += cost
-
-        # 3. 에이전트별 비용/토큰 요약 (agent_summary) 생성
-        agent_summary = [
-            AgentCostSummary(
-                agent_name=name,
-                total_cost_usd=data["cost"],
-                total_tokens=data["tokens"]
-            ) for name, data in agent_cost_agg.items()
-        ]
-
-        # 4. 토론의 메타데이터(주제, 사용자 이메일)를 우리 DB에서 조회
-        # discussion_id 형식이 dscn_... 이므로 beanie가 인식할 수 있게 변환 필요
-        mongo_discussion_id = discussion_id.replace("dscn_", "")
-        discussion_log = await DiscussionLog.get(mongo_discussion_id)
+            for run in runs:
+                model_name = run.extra.get("metadata", {}).get("model_name", "unknown")
+                total_cost_this_month += calculate_cost(model_name, run.prompt_tokens, run.completion_tokens)
         
-        topic = discussion_log.topic if discussion_log else "Topic not found"
-        user_email = discussion_log.user_email if discussion_log else "User not found"
+        average_cost = total_cost_this_month / total_discussions_this_month
 
-        # 5. 최종 응답 데이터 조립
-        total_cost = sum(t.cost_usd for t in turn_details)
-        total_tokens = sum(t.total_tokens for t in turn_details)
-        start_time = min(t.start_time for t in turn_details)
-        end_time = max(t.start_time for t in turn_details) # end_time이 없는 경우 start_time으로 대체
-        
-        return DiscussionUsageResponse(
-            discussion_id=discussion_id,
-            topic=topic,
-            user_email=user_email,
-            total_cost_usd=total_cost,
-            total_tokens=total_tokens,
-            start_time=start_time,
-            duration_seconds=(end_time - start_time).total_seconds(),
-            turn_details=turn_details,
-            agent_summary=agent_summary
+        return UsageSummaryResponse(
+            total_cost_this_month=total_cost_this_month,
+            total_discussions_this_month=total_discussions_this_month,
+            average_cost_per_discussion=average_cost
         )
-
     except Exception as e:
-        # LangSmith API 키가 잘못되었거나 네트워크 오류 발생 시
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to retrieve data from LangSmith: {e}"
-        )
+        logger.error(f"Failed to get usage summary: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Failed to retrieve data: {e}")
     
 @router.get(
     "/",
