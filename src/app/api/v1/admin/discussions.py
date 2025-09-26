@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, logger, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional
 
 from langsmith import Client
@@ -17,6 +17,7 @@ from beanie.operators import In, RegEx
 from datetime import datetime, timedelta
 from calendar import monthrange
 from beanie.operators import GTE, LT
+from app.core.config import logger
 
 router = APIRouter()
 
