@@ -7,6 +7,7 @@ from fastapi import UploadFile
 
 from beanie.operators import In
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai import ChatVertexAI
 from langchain_core.prompts import ChatPromptTemplate
 
 from app.core.config import settings, logger
@@ -104,8 +105,8 @@ async def analyze_topic(topic: str, special_agents: Dict[str, Dict], discussion_
     if not analyst_config:
         raise ValueError(f"'{TOPIC_ANALYST_NAME}' 설정을 찾을 수 없습니다.")
 
-    llm = ChatGoogleGenerativeAI(
-        model=analyst_config["model"],
+    llm = ChatVertexAI(
+        model_name=analyst_config["model"], # ChatVertexAI는 model_name 파라미터를 사용합니다.
         temperature=analyst_config["temperature"],
         location="asia-northeast3"
     )

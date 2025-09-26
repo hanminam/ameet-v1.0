@@ -4,6 +4,7 @@ import asyncio
 import json
 from typing import Dict, List, Literal, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai import ChatVertexAI
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -680,8 +681,8 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
 def get_llm_client(model_name: str, temperature: float):
     """모델 이름을 기반으로 올바른 LangChain LLM 클라이언트 인스턴스를 생성합니다."""
     if model_name.startswith("gemini"):
-        return ChatGoogleGenerativeAI(
-            model=model_name, 
+        return ChatVertexAI(
+            model_name=model_name, 
             temperature=temperature,
             location="asia-northeast3"
         )
