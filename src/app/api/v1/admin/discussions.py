@@ -58,17 +58,17 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
         if total_discussions_this_month == 0:
             return UsageSummaryResponse(total_cost_this_month=0.0, total_discussions_this_month=0, average_cost_per_discussion=0.0)
 
-        # 토론 수에 따라 필터를 동적으로 생성
+        # [수정된 핵심 로직] LangSmith 필터의 'contains' 연산자를 사용하여 여러 태그를 조회합니다.
         discussion_ids = [d.discussion_id for d in discussions_this_month]
+        tag_filters = [f'contains(tags, "discussion_id:{did}")' for did in discussion_ids]
         
-        combined_filter = ""
-        if len(discussion_ids) == 1:
-            # 토론이 1개일 경우 or()로 감싸지 않음
-            combined_filter = f"has_tag('discussion_id:{discussion_ids[0]}')"
-        else:
-            # 토론이 2개 이상일 경우 or() 사용
-            tag_filters = [f"has_tag('discussion_id:{did}')" for did in discussion_ids]
+        if len(tag_filters) > 1:
             combined_filter = f"or({', '.join(tag_filters)})"
+        elif len(tag_filters) == 1:
+            combined_filter = tag_filters[0]
+        else:
+            # 조회할 토론이 없으면 0을 반환합니다.
+            return UsageSummaryResponse(total_cost_this_month=0.0, total_discussions_this_month=0, average_cost_per_discussion=0.0)
         
         client = Client()
         runs = list(client.list_runs(
@@ -82,7 +82,7 @@ async def get_usage_summary(admin_user: UserModel = Depends(get_current_admin_us
             model_name = run.extra.get("metadata", {}).get("model_name", "unknown")
             total_cost_this_month += calculate_cost(model_name, run.prompt_tokens, run.completion_tokens)
 
-        average_cost = total_cost_this_month / total_discussions_this_month
+        average_cost = total_cost_this_month / total_discussions_this_month if total_discussions_this_month > 0 else 0
 
         return UsageSummaryResponse(
             total_cost_this_month=total_cost_this_month,
