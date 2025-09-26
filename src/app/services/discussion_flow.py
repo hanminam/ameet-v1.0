@@ -679,6 +679,9 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
 # 모델 이름에 따라 적절한 LLM 클라이언트를 반환하는 헬퍼 함수 추가
 def get_llm_client(model_name: str, temperature: float):
     """모델 이름을 기반으로 올바른 LangChain LLM 클라이언트 인스턴스를 생성합니다."""
+
+    logger.info(f"--- [LLM Client] Creating client for model: '{model_name}' with temp: {temperature} ---")
+
     if model_name.startswith("gemini"):
         return ChatGoogleGenerativeAI(model=model_name, temperature=temperature)
     elif model_name.startswith("gpt"):
