@@ -370,6 +370,15 @@
         let regularMessageCount = 0;        // 일반 에이전트 메시지 카운터 (좌/우 정렬용)
         let isRendering = false;
         let isAutoScrollActive = true;      // 자동 스크롤 상태 변수 (기본값 ON)
+        let discussionWorker; // 웹 워커 인스턴스를 저장할 변수
+        let messageQueue = []; // [NEW] For Page Visibility API
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                console.log("Tab is visible again. Processing message queue.");
+                processMessageQueue();
+            }
+        });
 
         /**
          * 자동 스크롤이 활성화된 경우에만 채팅창을 맨 아래로 내립니다.
@@ -409,6 +418,128 @@
             ]
         };
         
+        
+        // --- [NEW] Page Visibility & Rendering Functions ---
+        function processMessageQueue() {
+            if (document.hidden || isRendering || messageQueue.length === 0) {
+                return;
+            }
+            isRendering = true;
+
+            if (messageQueue.length > 1) {
+                const latestData = messageQueue.pop(); 
+                messageQueue = []; 
+                renderTranscriptInstantly(latestData);
+                isRendering = false; 
+                processMessageQueue();
+                return;
+            }
+
+            const dataToRender = messageQueue.shift();
+            if (dataToRender) {
+                renderTranscriptWithAnimation(dataToRender);
+            } else {
+                isRendering = false;
+            }
+        }
+
+        function renderTranscriptInstantly(data) {
+            console.log("Rendering discussion backlog instantly.");
+            const chatbox = document.getElementById('chatbox');
+            if (!chatbox) {
+                isRendering = false;
+                return;
+            }
+
+            const participantMap = getParticipantMap(data.participants);
+            let html = '';
+            let currentRegularCount = 0;
+            const systemAgents = ['SNR 전문가', '정보 검증부', '사회자', '구분선'];
+
+            data.transcript.forEach(turn => {
+                if (systemAgents.includes(turn.agent_name)) {
+                    html += createSystemMessageHtml(turn);
+                } else {
+                    html += createAgentMessageHtml(turn, participantMap, currentRegularCount);
+                    currentRegularCount++;
+                }
+            });
+
+            chatbox.innerHTML = html;
+            regularMessageCount = currentRegularCount;
+            displayedMessagesCount = data.transcript.length;
+            
+            renderUxPanels(data);
+            checkDiscussionStatus(data);
+            scrollToBottomIfEnabled();
+        }
+
+        function createAgentMessageHtml(turn, participantMap, count) {
+            const agentDetails = participantMap[turn.agent_name] || {};
+            const alignment = getAlignmentInfo(count);
+            const iconHtml = `<div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${agentDetails.icon || '🤖'}</div>`;
+            const messageHtml = `
+                <div class="flex flex-col ${alignment.isIconFirst ? '' : 'items-end'}">
+                    <p class="text-sm font-bold text-slate-800">${turn.agent_name}</p>
+                    <p class="text-xs text-slate-500 -mt-1">${getModelNameById(agentDetails.model || '')}</p>
+                    <div class="p-3 rounded-lg mt-1 text-base inline-block max-w-xl ${alignment.bubbleClasses} ${alignment.textAlignClass}">
+                         <span class="message-content">${markdownToHtml(turn.message)}</span>
+                    </div>
+                </div>`;
+            return `<div class="${alignment.containerClasses}">${alignment.isIconFirst ? iconHtml + messageHtml : messageHtml + iconHtml}</div>`;
+        }
+
+        function createSystemMessageHtml(turn) {
+            let contentHtml = '';
+            if (turn.agent_name === 'SNR 전문가' || turn.agent_name === '정보 검증부') {
+                const data = JSON.parse(turn.message);
+                let icon = '';
+                let colorClass = '';
+                if (turn.agent_name === 'SNR 전문가') {
+                    icon = '📈';
+                    colorClass = 'text-blue-600';
+                    contentHtml = `<strong>SNR Score:</strong> ${data.snr_score} - ${data.reason}`;
+                } else {
+                    icon = '✅';
+                    colorClass = 'text-green-600';
+                    if (data.status === '주의 필요') {
+                        icon = '⚠️';
+                        colorClass = 'text-orange-600';
+                    }
+                    contentHtml = `<strong>검증 상태:</strong> ${data.reason}`;
+                }
+                return `<div class="flex justify-center items-center gap-2 my-2 text-xs font-semibold animate-fade-in ${colorClass}">
+                                 <span>${icon}</span>
+                                 <span>[${turn.agent_name}]</span>
+                                 <span>${contentHtml}</span>
+                               </div>`;
+            } else if (turn.agent_name === '사회자' || turn.agent_name === '재판관') {
+                return `<div class="flex justify-center items-center gap-2 my-4 text-sm text-amber-800 animate-fade-in">
+                                 <span class="text-xl">🧑</span>
+                                 <span class="font-semibold">${turn.message}</span>
+                               </div>`;
+            } else if (turn.agent_name === '구분선') {
+                return `<div class="text-center my-6 font-bold text-gray-400 animate-fade-in">${turn.message}</div>`;
+            }
+            return '';
+        }
+
+        function checkDiscussionStatus(data) {
+            if (data.status === 'waiting_for_vote') {
+                isPollingActive = false;
+                renderUserActionPanel(data);
+                if (discussionWorker) discussionWorker.postMessage({ command: 'stop' });
+            } else if (data.status === 'completed') {
+                isPollingActive = false;
+                displayReport(data.report_html, data.pdf_url);
+                if (discussionWorker) discussionWorker.postMessage({ command: 'stop' });
+            } else if (data.status === 'failed') {
+                isPollingActive = false;
+                document.getElementById('user-action-panel').innerHTML = `<div class="text-center p-4 border rounded-lg bg-red-50 border-red-400"><h3 class="text-xl font-bold text-red-800">❌ 처리 실패</h3><p class="text-slate-600 mt-2">오류가 발생했습니다. 관리자에게 문의하세요.</p></div>`;
+                if (discussionWorker) discussionWorker.postMessage({ command: 'stop' });
+            }
+        }
+
         // --- Functions ---
 
         /**
@@ -987,42 +1118,20 @@
                 return;
             }
             isPollingActive = true;
-
-            // 기존 워커가 있으면 종료
+            messageQueue = []; // Clear queue for new discussion
+            
             if (discussionWorker) {
                 discussionWorker.terminate();
             }
 
-            // 새 워커 생성
             discussionWorker = new Worker('/tools/worker.js');
 
-            // 워커로부터 메시지를 수신했을 때의 처리
-            discussionWorker.onmessage = async function(e) {
+            discussionWorker.onmessage = function(e) {
                 const { type, data, error, status } = e.data;
 
                 if (type === 'data') {
-                    await updateTranscript(data.transcript, data.participants);
-
-                    if (data.status === 'waiting_for_vote') {
-                        console.log('[Worker] Status is "waiting_for_vote". Stopping poll.');
-                        isPollingActive = false;
-                        renderUxPanels(data);
-                        renderUserActionPanel(data);
-                        discussionWorker.postMessage({ command: 'stop' });
-                    } else if (data.status === 'completed') {
-                        console.log('%c[Worker] Report generation is "completed". Stopping poll and displaying report.', 'color: blue; font-weight: bold;');
-                        isPollingActive = false;
-                        displayReport(data.report_html, data.pdf_url);
-                        discussionWorker.postMessage({ command: 'stop' });
-                    } else if (data.status === 'failed') {
-                        isPollingActive = false;
-                        document.getElementById('user-action-panel').innerHTML = `
-                            <div class="text-center p-4 border rounded-lg bg-red-50 border-red-400">
-                                <h3 class="text-xl font-bold text-red-800">❌ 처리 실패</h3>
-                                <p class="text-slate-600 mt-2">오류가 발생했습니다. 관리자에게 문의하세요.</p>
-                            </div>`;
-                        discussionWorker.postMessage({ command: 'stop' });
-                    }
+                    messageQueue.push(data);
+                    processMessageQueue();
                 } else if (type === 'error') {
                     console.error('Worker error:', error);
                     isPollingActive = false;
@@ -1032,13 +1141,10 @@
             };
 
             discussionWorker.onerror = function(e) {
-                // 워커에서 발생하는 오류는 e.message에 내용이 없는 경우가 있어,
-                // 전체 오류 이벤트(e)를 로깅하여 더 자세한 정보를 확인합니다.
                 console.error('Worker error event:', e);
                 isPollingActive = false;
             };
 
-            // 워커에 폴링 시작 명령 전송
             const token = localStorage.getItem('accessToken');
             discussionWorker.postMessage({
                 command: 'start',
@@ -1596,19 +1702,18 @@
         /**
          * 수신된 대화록을 기반으로 새 메시지만 순차적으로 화면에 추가하는 함수
          */
-        async function updateTranscript(transcript, participants) {
-            if (!transcript || transcript.length <= displayedMessagesCount || isRendering) {
+        async function renderTranscriptWithAnimation(data) {
+            const transcript = data.transcript;
+            if (!transcript || transcript.length <= displayedMessagesCount) {
+                isRendering = false;
+                processMessageQueue(); // Check for more messages
                 return;
             }
 
-            isRendering = true;
             showGeneralTypingIndicator(false);
-            const chatbox = document.getElementById('chatbox');
-            
-            const shouldScroll = isScrolledToBottom(chatbox);
             
             const newMessages = transcript.slice(displayedMessagesCount);
-            const participantMap = getParticipantMap(participants);
+            const participantMap = getParticipantMap(data.participants);
 
             for (const turn of newMessages) {
                 const systemAgents = ['SNR 전문가', '정보 검증부', '사회자', '구분선'];
@@ -1622,15 +1727,20 @@
                     indicator.remove();
                     const messageContainer = appendMessage(turn, participantMap);
                     const contentSpan = messageContainer.querySelector('.message-content');
-                    await typeMessage(contentSpan, turn.message); // 타이핑 효과 자체에서는 스크롤을 제어하지 않음
-                    scrollToBottomIfEnabled(); // 타이핑이 끝나면 스크롤 여부 확인
+                    await typeMessage(contentSpan, turn.message);
+                    scrollToBottomIfEnabled();
                 }
                 displayedMessagesCount++;
                 if (!systemAgents.includes(turn.agent_name)) {
                     regularMessageCount++;
                 }
             }
+            
+            renderUxPanels(data);
+            checkDiscussionStatus(data); // Check for end of discussion
+            
             isRendering = false;
+            processMessageQueue(); // After finishing, check if more messages queued up
         }
 
         /**
