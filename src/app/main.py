@@ -16,6 +16,7 @@ from app.api.v1.admin import (
 )
 
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
@@ -42,6 +43,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- 정적 파일 마운트 (worker.js 등을 위함) ---
+# BASE_DIR (src 폴더)를 /src 경로에 마운트합니다.
+# 이제 /src/app/tools/worker.js 같은 경로로 브라우저에서 파일에 접근할 수 있습니다.
+app.mount("/src", StaticFiles(directory=BASE_DIR), name="src")
 
 # --- API 라우터 등록 ---
 
