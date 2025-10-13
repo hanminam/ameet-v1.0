@@ -977,68 +977,77 @@
             }
         }
 
+        let discussionWorker; // 웹 워커 인스턴스를 저장할 변수
+
         /**
-         * 주기적으로 토론 상태를 서버에 요청하는 폴링을 시작하는 함수
+         * 웹 워커를 사용하여 주기적으로 토론 상태를 요청하는 함수
          */
         function startPolling(discussionId) {
             if (isPollingActive) {
-                return; // 이미 폴링이 진행 중이면 중복 실행 방지
-            }
-            isPollingActive = true;
-            console.log(`Polling started for ${discussionId}`);
-            pollDiscussionStatus(discussionId); // 즉시 첫 번째 폴링 시작
-        }
-
-        /**
-         * 서버에 토론 상태를 GET으로 요청하는 함수
-         */
-        async function pollDiscussionStatus(discussionId) {
-            if (!isPollingActive) {
-                console.log("Polling stopped.");
                 return;
             }
+            isPollingActive = true;
 
-            const token = localStorage.getItem('accessToken');
-            try {
-                const response = await fetch(`/api/v1/discussions/${discussionId}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (response.ok) {
-                    const discussionData = await response.json();
-                    await updateTranscript(discussionData.transcript, discussionData.participants);
+            // 기존 워커가 있으면 종료
+            if (discussionWorker) {
+                discussionWorker.terminate();
+            }
 
-                    if (discussionData.status === 'waiting_for_vote') {
-                        console.log('[Polling] Status is "waiting_for_vote". Stopping poll.');
-                        isPollingActive = false; 
-                        renderUxPanels(discussionData); 
-                        renderUserActionPanel(discussionData); 
-                    } else if (discussionData.status === 'report_generating') {
-                        console.log(`[Polling] Status is "report_generating". Continuing poll in 3 seconds.`);
-                        setTimeout(() => pollDiscussionStatus(discussionId), 3000);
-                    } else if (discussionData.status === 'completed') {
-                        console.log(`%c[Polling] Report generation is "completed". Stopping poll and displaying report.`, 'color: blue; font-weight: bold;');
+            // 새 워커 생성
+            discussionWorker = new Worker('/src/app/tools/worker.js');
+
+            // 워커로부터 메시지를 수신했을 때의 처리
+            discussionWorker.onmessage = async function(e) {
+                const { type, data, error, status } = e.data;
+
+                if (type === 'data') {
+                    await updateTranscript(data.transcript, data.participants);
+
+                    if (data.status === 'waiting_for_vote') {
+                        console.log('[Worker] Status is "waiting_for_vote". Stopping poll.');
                         isPollingActive = false;
-                        displayReport(discussionData.report_html, discussionData.pdf_url);
-                    } else if (discussionData.status === 'failed') {
+                        renderUxPanels(data);
+                        renderUserActionPanel(data);
+                        discussionWorker.postMessage({ command: 'stop' });
+                    } else if (data.status === 'completed') {
+                        console.log('%c[Worker] Report generation is "completed". Stopping poll and displaying report.', 'color: blue; font-weight: bold;');
+                        isPollingActive = false;
+                        displayReport(data.report_html, data.pdf_url);
+                        discussionWorker.postMessage({ command: 'stop' });
+                    } else if (data.status === 'failed') {
                         isPollingActive = false;
                         document.getElementById('user-action-panel').innerHTML = `
                             <div class="text-center p-4 border rounded-lg bg-red-50 border-red-400">
                                 <h3 class="text-xl font-bold text-red-800">❌ 처리 실패</h3>
                                 <p class="text-slate-600 mt-2">오류가 발생했습니다. 관리자에게 문의하세요.</p>
                             </div>`;
-                    } else { // 'turn_inprogress' 등
-                        console.log(`[Polling] Status is "${discussionData.status}". Continuing poll in 3 seconds.`);
-                        setTimeout(() => pollDiscussionStatus(discussionId), 3000);
+                        discussionWorker.postMessage({ command: 'stop' });
                     }
-                } else {
-                    console.error('Polling failed with status:', response.status);
+                } else if (type === 'error') {
+                    console.error('Worker error:', error);
                     isPollingActive = false;
+                } else if (type === 'status') {
+                    console.log(`Worker status: ${status}`);
                 }
-            } catch (error) {
-                console.error('Polling network error:', error);
+            };
+
+            discussionWorker.onerror = function(e) {
+                console.error(`Worker error: ${e.message}`);
                 isPollingActive = false;
-            }
+            };
+
+            // 워커에 폴링 시작 명령 전송
+            const token = localStorage.getItem('accessToken');
+            discussionWorker.postMessage({
+                command: 'start',
+                data: { discussionId, token }
+            });
         }
+
+        // 기존 pollDiscussionStatus 함수는 이제 워커가 담당하므로 삭제하거나 주석 처리합니다.
+        /*
+         async function pollDiscussionStatus(discussionId) { ... }
+        */
 
         /**
         * 보고서와 PDF 다운로드 버튼을 화면에 표시하는 함수
