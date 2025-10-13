@@ -48,6 +48,7 @@ app.add_middleware(
 # BASE_DIR (src 폴더)를 /src 경로에 마운트합니다.
 # 이제 /src/app/tools/worker.js 같은 경로로 브라우저에서 파일에 접근할 수 있습니다.
 app.mount("/src", StaticFiles(directory=BASE_DIR), name="src")
+app.mount("/tools", StaticFiles(directory=BASE_DIR / "app" / "tools"), name="tools")
 
 # --- API 라우터 등록 ---
 

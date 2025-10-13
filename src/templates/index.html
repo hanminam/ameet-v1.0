@@ -994,7 +994,7 @@
             }
 
             // 새 워커 생성
-            discussionWorker = new Worker('/src/app/tools/worker.js');
+            discussionWorker = new Worker('/tools/worker.js');
 
             // 워커로부터 메시지를 수신했을 때의 처리
             discussionWorker.onmessage = async function(e) {
