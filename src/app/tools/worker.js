@@ -1,15 +1,17 @@
 // src/app/tools/worker.js
 
-let pollingInterval;
 let isPollingActive = false;
 let discussionId;
 let token;
+const POLLING_INTERVAL_MS = 3000;
 
 /**
- * 서버에 토론 상태를 GET으로 요청하는 함수
+ * 서버에 토론 상태를 GET으로 요청하고, 완료되면 다음 요청을 스케줄링하는 함수
  */
 async function pollDiscussionStatus() {
-    if (!isPollingActive || !discussionId || !token) {
+    // isPollingActive 플래그를 먼저 확인하여, 중지 명령을 받았으면 즉시 중단
+    if (!isPollingActive) {
+        self.postMessage({ type: 'status', status: 'stopped' });
         return;
     }
 
@@ -25,19 +27,22 @@ async function pollDiscussionStatus() {
 
             // 특정 상태가 되면 폴링 중지
             if (discussionData.status === 'waiting_for_vote' || discussionData.status === 'completed' || discussionData.status === 'failed') {
-                self.postMessage({ type: 'status', status: 'stopped' });
-                isPollingActive = false;
-                clearInterval(pollingInterval);
+                isPollingActive = false; // 루프 중단 플래그 설정
             }
         } else {
             self.postMessage({ type: 'error', error: `Polling failed with status: ${response.status}` });
-            isPollingActive = false;
-            clearInterval(pollingInterval);
+            isPollingActive = false; // 루프 중단
         }
     } catch (error) {
         self.postMessage({ type: 'error', error: `Polling network error: ${error.message}` });
-        isPollingActive = false;
-        clearInterval(pollingInterval);
+        isPollingActive = false; // 루프 중단
+    } finally {
+        // 여전히 폴링이 활성 상태이면, 다음 인터벌 후에 다시 함수를 호출
+        if (isPollingActive) {
+            setTimeout(pollDiscussionStatus, POLLING_INTERVAL_MS);
+        } else {
+            self.postMessage({ type: 'status', status: 'stopped' });
+        }
     }
 }
 
@@ -49,14 +54,10 @@ self.onmessage = function(e) {
         token = data.token;
         if (!isPollingActive) {
             isPollingActive = true;
-            // 즉시 첫 실행 후 3초 간격으로 반복
-            pollDiscussionStatus();
-            pollingInterval = setInterval(pollDiscussionStatus, 3000);
             self.postMessage({ type: 'status', status: 'started' });
+            pollDiscussionStatus(); // 재귀 루프 시작
         }
     } else if (command === 'stop') {
-        isPollingActive = false;
-        clearInterval(pollingInterval);
-        self.postMessage({ type: 'status', status: 'stopped' });
+        isPollingActive = false; // 루프가 다음 반복에서 멈추도록 플래그 설정
     }
 };
