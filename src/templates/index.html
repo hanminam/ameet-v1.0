@@ -1256,6 +1256,7 @@
                 return;
             }
 
+            /* [임시 비활성화] 투표 기능 UI 렌더링 로직
             const voteData = discussionData.current_vote;
             
             // 렌더링 조건 검사 강화 및 로그 추가
@@ -1288,12 +1289,23 @@
                         <button id="end-debate-btn" class="btn btn-secondary">이대로 토론 종료</button>
                     </div>`;
             }
+            */
+
+            // [수정] 투표 기능 비활성화를 위해 항상 진행/종료 버튼만 표시
+            actionPanel.innerHTML = `
+                <div class="flex justify-center gap-4 mt-6">
+                    <button id="next-round-btn" class="btn btn-primary">다음 라운드 진행</button>
+                    <button id="end-debate-report-btn" class="btn btn-secondary">보고서 생성하고 종료</button>
+                    <button id="end-debate-no-report-btn" class="btn bg-slate-600 text-white hover:bg-slate-700">보고서 없이 종료</button>
+                </div>
+            `;
 
             // 이벤트 리스너 연결
             document.getElementById('next-round-btn').addEventListener('click', handleNextRound);
             document.getElementById('end-debate-report-btn').addEventListener('click', handleEndDebate); // 보고서 생성
             document.getElementById('end-debate-no-report-btn').addEventListener('click', handleEndDebateWithoutReport); // 보고서 없이 종료
             
+            /* [임시 비활성화] 투표 옵션 컨테이너 이벤트 리스너
             const voteOptionsContainer = document.getElementById('vote-options-container');
             if (voteOptionsContainer) {
                 voteOptionsContainer.addEventListener('click', (event) => {
@@ -1305,6 +1317,7 @@
                     }
                 });
             }
+            */
         }
 
         /**
@@ -1318,12 +1331,13 @@
             const selectedOption = document.querySelector('.vote-option.bg-blue-600');
             const userVote = selectedOption ? selectedOption.dataset.vote : null;
             
-            // 사용자가 투표를 선택하지 않았을 경우 확인창 표시
+            /* [임시 비활성화] 투표를 선택하지 않았을 경우의 확인창 로직
             if (userVote === null) {
                 if (!confirm("투표 항목을 선택하지 않았습니다. 그대로 다음 라운드를 진행할까요?")) {
                     return; // 사용자가 '취소'를 누르면 함수 실행 중단
                 }
             }
+            */
 
             const token = localStorage.getItem('accessToken');
             try {
