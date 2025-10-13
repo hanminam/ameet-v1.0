@@ -1032,7 +1032,9 @@
             };
 
             discussionWorker.onerror = function(e) {
-                console.error(`Worker error: ${e.message}`);
+                // 워커에서 발생하는 오류는 e.message에 내용이 없는 경우가 있어,
+                // 전체 오류 이벤트(e)를 로깅하여 더 자세한 정보를 확인합니다.
+                console.error('Worker error event:', e);
                 isPollingActive = false;
             };
 
