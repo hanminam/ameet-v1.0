@@ -359,47 +359,6 @@ async def generate_report_background(discussion_id: str):
         # 4단계 : 최종 HTML 본문 생성
         report_body_html = await _generate_final_html(structured_data, discussion_id)
 
-        # [NEW] Inject "Copy HTML" button and script
-        copy_button_html = """
-            <style>
-                #copy-html-btn {
-                    position: fixed; top: 15px; right: 20px; z-index: 10000;
-                    padding: 8px 12px; font-size: 12px; font-weight: bold;
-                    color: white; background-color: #0D6EFD; border: none;
-                    border-radius: 5px; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-                }
-                #copy-html-btn:hover { background-color: #0B5ED7; }
-            </style>
-            <button id=\"copy-html-btn\">HTML 복사</button>
-            <script>
-                document.addEventListener('DOMContentLoaded', function() {
-                    const copyBtn = document.getElementById('copy-html-btn');
-                    if (copyBtn) {
-                        copyBtn.addEventListener('click', function() {
-                            const htmlContent = document.documentElement.outerHTML;
-                            navigator.clipboard.writeText(htmlContent).then(() => {
-                                const originalText = copyBtn.textContent;
-                                copyBtn.textContent = '복사 완료!';
-                                copyBtn.style.backgroundColor = '#198754'; // success color
-                                setTimeout(() => {
-                                    copyBtn.textContent = originalText;
-                                    copyBtn.style.backgroundColor = '#0D6EFD';
-                                }, 2000);
-                            }).catch(err => {
-                                console.error('HTML 복사 실패: ', err);
-                                alert('클립보드 복사에 실패했습니다.');
-                            });
-                        });
-                    }
-                });
-            </script>
-        """
-        if "</body>" in report_body_html:
-            report_body_html = report_body_html.replace("</body>", copy_button_html + "</body>")
-        else:
-            report_body_html += copy_button_html
-
         # 5단계 : 참여자 발언 전문 HTML 섹션 생성
         participant_map = {p['name']: p for p in discussion_log.participants}
         transcript_html_items = []

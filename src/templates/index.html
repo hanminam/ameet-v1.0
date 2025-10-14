@@ -333,6 +333,7 @@
             <div class="screen-header">
                 <span id="report-modal-title">최종 분석 보고서</span>
                 <div class="flex items-center gap-4">
+                    <button id="copy-report-html-btn" class="btn btn-primary text-sm py-2 px-4">HTML 복사</button>
                     <!--<a href="#" id="report-pdf-download-btn" target="_blank" class="btn btn-primary text-sm py-2 px-4">📥 PDF 다운로드</a>-->
                     <button class="text-2xl font-bold" onclick="toggleModal('report-modal')">&times;</button>
                 </div>
@@ -2189,6 +2190,34 @@
             }
         });
 
+            // [NEW] Event listener for copying report HTML
+            document.addEventListener('DOMContentLoaded', function() {
+                const copyHtmlBtn = document.getElementById('copy-report-html-btn');
+                if (copyHtmlBtn) {
+                    copyHtmlBtn.addEventListener('click', function() {
+                        const iframe = document.getElementById('report-modal-iframe');
+                        const htmlContent = iframe.srcdoc;
+
+                        if (!htmlContent) {
+                            alert('복사할 HTML 내용이 없습니다.');
+                            return;
+                        }
+
+                        navigator.clipboard.writeText(htmlContent).then(() => {
+                            const originalText = copyHtmlBtn.textContent;
+                            copyHtmlBtn.textContent = '복사 완료!';
+                            copyHtmlBtn.disabled = true;
+                            setTimeout(() => {
+                                copyHtmlBtn.textContent = originalText;
+                                copyHtmlBtn.disabled = false;
+                            }, 2000);
+                        }).catch(err => {
+                            console.error('HTML 복사 실패: ', err);
+                            alert('클립보드 복사에 실패했습니다.');
+                        });
+                    });
+                }
+            });
     </script>
 </body>
 </html>
