@@ -530,6 +530,7 @@
                 renderUserActionPanel(data);
                 if (discussionWorker) discussionWorker.postMessage({ command: 'stop' });
             } else if (data.status === 'completed') {
+                console.log('[checkDiscussionStatus] "completed" status detected.');
                 isPollingActive = false;
                 displayReport(data.report_html, data.pdf_url);
                 if (discussionWorker) discussionWorker.postMessage({ command: 'stop' });
@@ -1128,6 +1129,7 @@
             discussionWorker = new Worker('/tools/worker.js');
 
             discussionWorker.onmessage = function(e) {
+                console.log('[Worker Data Received]', e.data); // Log all received data
                 const { type, data, error, status } = e.data;
 
                 if (type === 'data') {
@@ -1162,6 +1164,7 @@
         * 보고서와 PDF 다운로드 버튼을 화면에 표시하는 함수
         */
         function displayReport(reportHtml, pdfUrl) {
+            console.log('[displayReport] Function called with reportHtml length:', reportHtml ? reportHtml.length : 0, 'and pdfUrl:', pdfUrl);
             const actionPanel = document.getElementById('user-action-panel');
             if (!actionPanel) return;
 
