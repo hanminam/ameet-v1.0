@@ -45,7 +45,7 @@ class DiscussionLog(Document):
 
     # --- UX 데이터 필드 ---
     flow_data: Optional[Dict[str, Any]] = Field(default=None, description="라운드별 에이전트 상호작용 데이터")
-    round_summary: Optional[Dict[str, Any]] = Field(default=None, description="라운드별 결정적 발언, 입장 변화 데이터")
+    round_summaries: List[Dict[str, Any]] = Field(default_factory=list, description="라운드별 요약 데이터 리스트")
     
     class Settings:
         name = "discussions"

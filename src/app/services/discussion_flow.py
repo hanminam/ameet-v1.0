@@ -651,10 +651,16 @@ async def execute_turn(discussion_log: DiscussionLog, user_vote: Optional[str] =
     analysis_results = await asyncio.gather(*analysis_tasks.values())
     analysis_map = dict(zip(analysis_tasks.keys(), analysis_results))
 
-    discussion_log.round_summary = {
+    # 라운드 요약을 round_summaries 리스트에 추가
+    current_round_summary = {
+        "turn_number": discussion_log.turn_number,
         "critical_utterance": analysis_map.get("round_summary"),
         "stance_changes": analysis_map.get("stance_changes")
     }
+    if discussion_log.round_summaries is None:
+        discussion_log.round_summaries = []
+    discussion_log.round_summaries.append(current_round_summary)
+
     discussion_log.flow_data = analysis_map.get("flow_data")
 
     logger.info(f"--- [BG Task] 분석 완료. 결과를 DB에 저장합니다. (ID: {discussion_log.discussion_id})")

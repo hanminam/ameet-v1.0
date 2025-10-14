@@ -65,26 +65,13 @@ class ResolverOutput(BaseModel):
 
 # OutlineGenerator의 출력을 받을 Pydantic 모델
 class ReportOutline(BaseModel):
-    title: Optional[str] = None # title 마저 Optional로 변경
-    subtitle: Optional[str] = None
-    expert_opinions: List[Dict[str, str]] = Field(default_factory=list)
-    key_factors: Optional[Dict[str, List[str]]] = Field(default_factory=dict)
-    conclusion: Optional[str] = None
-    chart_worthy_entities: List[str] = Field(
-        default_factory=list, 
-        description="A list of key entities from the text that can be visualized (e.g., 'Tesla stock price', 'US unemployment rate')."
-    )
-
-    # 문자열로 반환된 JSON 필드를 자동으로 파싱하는 검증기 추가
-    @field_validator('key_factors', 'expert_opinions', mode='before')
-    @classmethod
-    def parse_str_json(cls, v: Any) -> Any:
-        if isinstance(v, str):
-            try:
-                return json.loads(v)
-            except json.JSONDecodeError:
-                pass
-        return v
+    title: str = Field(description="보고서의 전체 제목")
+    subtitle: Optional[str] = Field(default=None, description="보고서의 부제")
+    executive_summary: str = Field(description="토론 전체를 2~3문장으로 요약한 핵심 결론")
+    pro_arguments: List[str] = Field(default_factory=list, description="토론의 주요 긍정/찬성 논거 목록")
+    con_arguments: List[str] = Field(default_factory=list, description="토론의 주요 부정/반대 논거 목록")
+    overall_conclusion: str = Field(description="토론 내용을 종합하여 AI가 내리는 최종 결론 및 제언")
+    chart_worthy_entities: List[str] = Field(default_factory=list, description="차트 생성이 유의미한 핵심 개체 목록")
 
 # ChartPlanValidator의 출력을 받을 Pydantic 모델
 class ValidatedChartPlan(BaseModel):

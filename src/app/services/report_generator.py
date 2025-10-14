@@ -339,7 +339,17 @@ async def generate_report_background(discussion_id: str):
         if not outline_plan:
             raise ValueError("Report Outline Generator failed to produce an outline.")
         
-        structured_data = outline_plan.model_dump(exclude={'chart_worthy_entities'}) # 최종 보고서에는 엔티티 목록 불필요
+        structured_data = outline_plan.model_dump(exclude={'chart_worthy_entities'})
+
+        # [NEW] Add round-by-round summaries to the structured data
+        if discussion_log.round_summaries:
+            structured_data['round_summaries'] = [
+                {
+                    "turn_number": summary.get("turn_number"),
+                    "critical_utterance": summary.get("critical_utterance")
+                }
+                for summary in discussion_log.round_summaries
+            ]
 
         # 2단계 & 3단계: 차트 생성 기능 임시 비활성화 (오류 발생으로 인한 안정성 확보)
         # chart_requests = await _create_chart_requests_intelligently(discussion_log, outline_plan)
