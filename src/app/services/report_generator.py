@@ -393,7 +393,7 @@ async def generate_report_background(discussion_id: str):
         # 8단계 (기존): DB 업데이트
         discussion_log.report_html = final_report_html
         #discussion_log.pdf_url = pdf_url
-        discussion_log.pdf_url = None
+        discussion_log.pdf_url = f"/api/v1/discussions/{discussion_id}/report/html"
         discussion_log.status = "completed"
         await discussion_log.save()
         logger.info(f"--- [Report BG Task] Successfully completed for {discussion_id} ---")
