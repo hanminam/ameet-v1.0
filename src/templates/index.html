@@ -1130,6 +1130,14 @@
 
             discussionWorker.onmessage = function(e) {
                 console.log('[Worker Data Received]', e.data); // Log all received data
+
+                // [HIGH PRIORITY] Check for final 'completed' status and process immediately
+                if (e.data.type === 'data' && e.data.data.status === 'completed') {
+                    console.log('[High Priority] "completed" status received. Bypassing queue and rendering report directly.');
+                    checkDiscussionStatus(e.data.data);
+                    return; // Stop further processing of this message
+                }
+
                 const { type, data, error, status } = e.data;
 
                 if (type === 'data') {
