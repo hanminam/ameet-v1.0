@@ -236,6 +236,12 @@
                 <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mx-auto"></div>
                 <h2 id="analysis-status-text" class="text-2xl font-bold text-slate-800 mt-6">주제를 분석하고 있습니다...</h2>
                 <p class="text-slate-600 mt-2">최적의 토론을 위해 AI가 3단계에 걸쳐 준비합니다.</p>
+                <!-- 상세 진행 상황 메시지 추가 -->
+                <div class="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                    <p id="detail-progress-text" class="text-sm text-blue-700">
+                        진행 상황을 확인하고 있습니다...
+                    </p>
+                </div>
             </div>
             <div class="relative w-full max-w-2xl mx-auto p-4">
                 <div class="absolute top-1/2 left-0 w-full h-1 bg-slate-200 -translate-y-1/2"></div>
@@ -244,7 +250,7 @@
                     <div id="step-1" class="text-center z-10">
                         <div class="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto font-bold text-xl ring-4 ring-white">1</div>
                         <p class="text-sm font-bold mt-3">주제 분석</p>
-                        <p id="step-1-status" class="text-xs text-slate-500">쟁점 도출 중</p>
+                        <p id="step-1-status" class="text-xs text-slate-500">대기 중</p>
                     </div>
                     <div id="step-2" class="text-center z-10 opacity-50">
                         <div class="w-12 h-12 rounded-full bg-white border-2 border-slate-300 flex items-center justify-center mx-auto font-bold text-xl text-slate-400 ring-4 ring-white">2</div>
@@ -758,7 +764,6 @@
             }
 
             showScreen('screen-analysis');
-            //runAnalysisAnimation();
             updateAnalysisStep(1, '주제 분석 중...'); // 1단계 시작
 
             const formData = new FormData();
@@ -768,8 +773,7 @@
             }
 
             try {
-                // 2. API 호출 시작
-                updateAnalysisStep(2, '자료 수집 중...'); // 2단계 시작
+                // API 호출 시작 (백그라운드에서 오케스트레이션 진행)
                 const response = await fetch('/api/v1/discussions/', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` },
@@ -777,19 +781,14 @@
                 });
 
                 if (response.status === 201) {
-                    // 3. API 응답 성공 시 '3단계' 애니메이션 시작
-                    updateAnalysisStep(3, '패널 선정 중...'); // 3단계 시작
                     const debateTeam = await response.json();
-                    console.log('Orchestration 성공:', debateTeam);
-                    
+                    console.log('Orchestration 시작:', debateTeam);
+
                     currentDiscussionId = debateTeam.discussion_id;
                     console.log('저장된 Discussion ID:', currentDiscussionId);
 
-                    // 4. 잠시 후 최종 화면으로 전환
-                    setTimeout(() => {
-                        renderJuryScreen(debateTeam);
-                        showScreen('screen-jury');
-                    }, 1000); // 1초 후 전환
+                    // 진행 상황 폴링 시작
+                    startProgressPolling(currentDiscussionId, token, debateTeam);
 
                 } else {
                     const errorData = await response.json();
@@ -800,6 +799,106 @@
                 alert('서버에 연결할 수 없습니다.');
                 showScreen('screen-topic');
                 console.error('Orchestration 네트워크 오류:', error);
+            }
+        }
+
+        /**
+         * 진행 상황을 폴링하여 UI를 실시간으로 업데이트하는 함수
+         */
+        function startProgressPolling(discussionId, token, debateTeam) {
+            let pollCount = 0;
+            const maxPolls = 600; // 5분 타임아웃 (500ms * 600 = 300초)
+
+            const intervalId = setInterval(async () => {
+                pollCount++;
+
+                // 타임아웃 체크
+                if (pollCount > maxPolls) {
+                    clearInterval(intervalId);
+                    alert('진행 상황을 확인할 수 없습니다. 새로고침 후 다시 시도해주세요.');
+                    showScreen('screen-topic');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/v1/discussions/${discussionId}/progress`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    if (!response.ok) {
+                        console.warn('진행 상황 조회 실패:', response.status);
+                        return; // 다음 폴링에서 재시도
+                    }
+
+                    const progressData = await response.json();
+                    console.log('진행 상황:', progressData);
+
+                    // UI 업데이트
+                    updateProgressUI(progressData);
+
+                    // 100% 완료 시 폴링 중단 및 화면 전환
+                    if (progressData.progress >= 100) {
+                        clearInterval(intervalId);
+                        setTimeout(() => {
+                            renderJuryScreen(debateTeam);
+                            showScreen('screen-jury');
+                        }, 1500); // 사용자가 완료 메시지를 볼 수 있도록 1.5초 대기
+                    }
+
+                } catch (error) {
+                    console.error('진행 상황 폴링 오류:', error);
+                    // 에러가 발생해도 계속 폴링 (일시적인 네트워크 오류일 수 있음)
+                }
+            }, 500); // 500ms마다 폴링
+        }
+
+        /**
+         * Redis에서 받은 진행 상황 데이터로 UI를 업데이트하는 함수
+         */
+        function updateProgressUI(progressData) {
+            const progressBar = document.getElementById('progress-bar');
+            const analysisStatusText = document.getElementById('analysis-status-text');
+            const detailProgressText = document.getElementById('detail-progress-text');
+
+            // 프로그레스 바 업데이트
+            progressBar.style.width = progressData.progress + '%';
+
+            // 상태 메시지 업데이트 (큰 제목)
+            if (progressData.stage) {
+                analysisStatusText.textContent = `[${progressData.stage}] ${progressData.message}`;
+            } else {
+                analysisStatusText.textContent = progressData.message;
+            }
+
+            // 상세 메시지 업데이트 (파란색 박스)
+            detailProgressText.textContent = progressData.message;
+
+            // 단계별 UI 업데이트
+            if (progressData.progress >= 10 && progressData.progress < 35) {
+                // 1단계: 주제 분석
+                document.getElementById('step-1-status').textContent = '진행 중';
+            } else if (progressData.progress >= 35 && progressData.progress < 75) {
+                // 2단계: 자료 수집
+                const step2Div = document.getElementById('step-2');
+                step2Div.classList.remove('opacity-50');
+                step2Div.querySelector('div').className = 'w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto font-bold text-xl ring-4 ring-white';
+                const step2Text = step2Div.querySelector('p.text-slate-400');
+                if (step2Text) step2Text.classList.remove('text-slate-400');
+                document.getElementById('step-1-status').textContent = '완료';
+                document.getElementById('step-2-status').textContent = '진행 중';
+            } else if (progressData.progress >= 75) {
+                // 3단계: 전문가 선정
+                const step3Div = document.getElementById('step-3');
+                step3Div.classList.remove('opacity-50');
+                step3Div.querySelector('div').className = 'w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto font-bold text-xl ring-4 ring-white';
+                const step3Text = step3Div.querySelector('p.text-slate-400');
+                if (step3Text) step3Text.classList.remove('text-slate-400');
+                document.getElementById('step-2-status').textContent = '완료';
+                document.getElementById('step-3-status').textContent = '진행 중';
+
+                if (progressData.progress === 100) {
+                    document.getElementById('step-3-status').textContent = '완료';
+                }
             }
         }
 

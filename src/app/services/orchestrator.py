@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from datetime import datetime
 from typing import List, Dict, Tuple
 from fastapi import UploadFile
 
@@ -31,6 +32,29 @@ JUDGE_AGENT_NAME = "재판관"
 CRITICAL_AGENT_NAME = "비판적 관점"
 TOPIC_ANALYST_NAME = "Topic Analyst"
 JURY_SELECTOR_NAME = "Jury Selector"
+
+# --- 진행 상황 업데이트 헬퍼 함수 ---
+async def _update_progress(discussion_id: str, stage: str, message: str, progress: int):
+    """
+    Redis에 오케스트레이션 진행 상황을 저장합니다.
+    TTL을 5분으로 설정하여 자동으로 만료되도록 합니다.
+    """
+    try:
+        progress_data = {
+            "stage": stage,
+            "message": message,
+            "progress": progress,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await db.redis_client.set(
+            f"orchestration_progress:{discussion_id}",
+            json.dumps(progress_data, ensure_ascii=False),
+            ex=300  # 5분 TTL
+        )
+        logger.info(f"[Progress] {discussion_id} | {stage} ({progress}%) | {message}")
+    except Exception as e:
+        # Redis 오류가 전체 프로세스를 중단시키지 않도록 로그만 남김
+        logger.error(f"Failed to update progress for {discussion_id}: {e}")
 
 # --- 아이콘 생성을 위한 헬퍼 함수 및 상수 ---
 ICON_MAP = {
@@ -99,11 +123,12 @@ async def get_active_agents_from_db() -> Tuple[Dict[str, Dict], Dict[str, Dict]]
 # --- 1단계: 사건 분석 ---
 async def analyze_topic(topic: str, special_agents: Dict[str, Dict], discussion_id: str) -> IssueAnalysisReport:
     print(f"--- [Orchestrator] 1단계: 사건 분석 시작 (ID: {discussion_id}) ---")
-    
+    await _update_progress(discussion_id, "주제 분석", f"AI가 '{topic}' 주제를 분석하고 있습니다...", 10)
+
     analyst_config = special_agents.get(TOPIC_ANALYST_NAME)
     if not analyst_config:
         raise ValueError(f"'{TOPIC_ANALYST_NAME}' 설정을 찾을 수 없습니다.")
-    
+
     logger.info(f"--- [DEBUG] Calling 'analyze_topic' LLM with model: '{analyst_config.get('model')}' ---")
 
     llm = ChatGoogleGenerativeAI(
@@ -112,20 +137,21 @@ async def analyze_topic(topic: str, special_agents: Dict[str, Dict], discussion_
         google_api_key=settings.GOOGLE_API_KEY
     )
     structured_llm = llm.with_structured_output(IssueAnalysisReport)
-    
+
     prompt = ChatPromptTemplate.from_messages([
         ("system", analyst_config["prompt"]),
         ("human", "Please analyze the following topic: {topic}"),
     ])
-    
+
     chain = prompt | structured_llm
-    
+
     # LLM 호출 시 config에 태그 추가
     report = await chain.ainvoke(
         {"topic": topic},
         config={"tags": [f"discussion_id:{discussion_id}"]}
     )
-    
+
+    await _update_progress(discussion_id, "주제 분석 완료", f"핵심 쟁점 {len(report.core_keywords)}개를 발견했습니다", 25)
     print(f"--- [Orchestrator] 1단계: 사건 분석 완료 ---")
     return report
 
@@ -151,6 +177,15 @@ async def gather_evidence(
     
     evidence_map = dict(zip(tasks.keys(), results))
 
+    web_count = len(evidence_map["web"])
+    file_count = len(evidence_map["files"])
+    await _update_progress(
+        discussion_id,
+        "자료 수집 완료",
+        f"웹 자료 {web_count}건, 파일 자료 {file_count}건 수집 완료",
+        65
+    )
+
     print(f"--- [Orchestrator] 2단계: 증거 수집 완료 ---")
 
     return CoreEvidenceBriefing(
@@ -159,11 +194,17 @@ async def gather_evidence(
     )
 
 async def _get_web_evidence(report: IssueAnalysisReport, topic: str, discussion_id: str) -> List[EvidenceItem]:
+    keywords_preview = ', '.join(report.core_keywords[:3])
+    await _update_progress(discussion_id, "자료 수집", f"'{keywords_preview}' 키워드로 웹 검색 중...", 35)
+
     search_query = f"{topic}: {', '.join(report.core_keywords)}"
     search_results = await perform_web_search_async(search_query) # 웹 검색 자체는 LLM 호출이 아님
-    
+
     if not search_results:
+        await _update_progress(discussion_id, "자료 수집", "웹 검색 결과가 없습니다", 45)
         return []
+
+    await _update_progress(discussion_id, "자료 수집", f"관련 자료 {len(search_results)}건을 찾았습니다. 내용을 분석 중...", 45)
 
     summary_tasks = [
         # summarize_text 호출 시 discussion_id 전달
@@ -180,13 +221,16 @@ async def _get_web_evidence(report: IssueAnalysisReport, topic: str, discussion_
         )
         for i, result in enumerate(search_results) if result.get("content")
     ]
-            
+
     return evidence_items
 
 async def _get_file_evidence(files: List[UploadFile], topic: str, discussion_id: str) -> List[EvidenceItem]:
     """업로드된 파일들을 처리하고 요약하여 증거 항목 리스트를 반환합니다."""
     if not files:
         return []
+
+    file_names = ', '.join([f.filename for f in files[:2]])
+    await _update_progress(discussion_id, "파일 분석", f"업로드된 파일 {len(files)}개 분석 중: {file_names}...", 55)
 
     # 각 파일을 읽고 텍스트를 추출하는 작업을 병렬로 처리
     processing_tasks = [process_uploaded_file(file) for file in files]
@@ -208,7 +252,7 @@ async def _get_file_evidence(files: List[UploadFile], topic: str, discussion_id:
         )
         for i, content in enumerate(file_contents) if isinstance(content, str)
     ]
-        
+
     return evidence_items
 
 # --- 배심원단 선정 로직 ---
@@ -231,6 +275,7 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
     분석 보고서를 기반으로 AI 배심원단을 선정하고, 필요 시 새로운 에이전트를 생성한 후 재판관을 지정합니다.
     """
     print(f"--- [Orchestrator] 3단계: 배심원단 선정 시작 (ID: {discussion_id}) ---")
+    await _update_progress(discussion_id, "전문가 선정", "토론에 적합한 AI 전문가를 선정하고 있습니다...", 75)
 
     selector_config = special_agents.get(JURY_SELECTOR_NAME)
     if not selector_config:
@@ -359,6 +404,14 @@ async def select_debate_team(report: IssueAnalysisReport, jury_pool: Dict, speci
         judge=AgentDetail(**judge_config),
         jury=final_jury_details,
         reason=selected_jury.reason
+    )
+
+    expert_names = ', '.join([agent.name for agent in final_jury_details[:3]])
+    await _update_progress(
+        discussion_id,
+        "준비 완료",
+        f"'{expert_names}' 등 {len(final_jury_details)}명의 전문가가 선정되었습니다. 토론을 시작합니다!",
+        100
     )
 
     print(f"--- [Orchestrator] 3단계: 배심원단 선정 완료 ---")

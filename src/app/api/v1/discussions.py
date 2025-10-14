@@ -261,3 +261,39 @@ async def complete_discussion_and_generate_report(
     
     # 5. 클라이언트에게 작업이 접수되었음을 즉시 알림
     return {"message": "Discussion completed. Report generation has started in the background."}
+
+# --- 진행 상황 조회 API ---
+@router.get(
+    "/{discussion_id}/progress",
+    summary="오케스트레이션 진행 상황 조회"
+)
+async def get_orchestration_progress(
+    discussion_id: str,
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Redis에 저장된 오케스트레이션 진행 상황을 조회합니다.
+    프론트엔드에서 폴링하여 사용자에게 실시간 피드백을 제공합니다.
+    """
+    import json
+    from app import db
+
+    try:
+        progress_json = await db.redis_client.get(f"orchestration_progress:{discussion_id}")
+
+        if not progress_json:
+            return {
+                "stage": "대기 중",
+                "message": "진행 상황 정보를 불러오는 중입니다...",
+                "progress": 0
+            }
+
+        progress_data = json.loads(progress_json)
+        return progress_data
+
+    except Exception as e:
+        return {
+            "stage": "오류",
+            "message": f"진행 상황을 가져올 수 없습니다: {str(e)}",
+            "progress": 0
+        }
