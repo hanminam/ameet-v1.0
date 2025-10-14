@@ -341,12 +341,10 @@ async def generate_report_background(discussion_id: str):
         
         structured_data = outline_plan.model_dump(exclude={'chart_worthy_entities'}) # 최종 보고서에는 엔티티 목록 불필요
 
-        # 2단계 : 지능형 차트 계획 생성 파이프라인 호출
-        chart_requests = await _create_chart_requests_intelligently(discussion_log, outline_plan)
-
-        # 3단계 : 차트 데이터 생성 (이제 안정적으로 계획을 전달받음)
-        charts_data = await _create_charts_data(chart_requests, discussion_id)
-        structured_data['charts_data'] = charts_data
+        # 2단계 & 3단계: 차트 생성 기능 임시 비활성화 (오류 발생으로 인한 안정성 확보)
+        # chart_requests = await _create_chart_requests_intelligently(discussion_log, outline_plan)
+        # charts_data = await _create_charts_data(chart_requests, discussion_id)
+        # structured_data['charts_data'] = charts_data
 
         # 4단계 : 최종 HTML 본문 생성
         report_body_html = await _generate_final_html(structured_data, discussion_id)
