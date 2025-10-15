@@ -1,0 +1,174 @@
+
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            background-color: #f1f5f9;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .screen { display: none; }
+        .screen.active { display: block; }
+        .screen-card {
+            background-color: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            max-width: 48rem; /* 768px */
+            margin: 2rem;
+            overflow: hidden;
+        }
+        .screen-header {
+            background-color: #f8fafc;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 700;
+            color: #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .screen-body { padding: 2rem; }
+        .text-primary { color: #2563eb; }
+        .btn { border-radius: 0.75rem; font-weight: 700; padding: 0.75rem 1.5rem; transition: all 0.2s ease; cursor: pointer; }
+        .btn-primary { background-color: #2563eb; color: white; }
+        .btn-primary:hover { background-color: #1d4ed8; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+        .btn-primary:disabled { background-color: #93c5fd; cursor: not-allowed; }
+
+        /* 토론 흐름도 화살표 스타일 */
+        .flow-line {
+            position: absolute;
+            height: 3px; /* 기본 두께를 약간 두껍게 조정 */
+            transform-origin: 0 0;
+            transition: all 0.2s ease-in-out; /* 부드러운 효과를 위한 트랜지션 */
+            z-index: 10; /* 기본 화살표 z-index 설정 */
+        }
+        .flow-line::after {
+            content: '';
+            position: absolute;
+            right: -1px;
+            top: -3.5px; /* 두께에 맞춰 위치 조정 */
+            border-style: solid;
+            border-width: 0 3px 3px 0;
+            display: inline-block;
+            padding: 3.5px;
+            transform: rotate(-45deg);
+        }
+
+        /* 마우스 오버 시 비활성화된 화살표 스타일 */
+        .flow-line.dimmed {
+            opacity: 0.15;
+            z-index: 5; /* 흐려진 화살표는 뒤로 보냄 */
+        }
+
+        /* 마우스 오버 시 강조되는 화살표 스타일 */
+        .flow-line.highlighted {
+            height: 5px; /* 두께를 더 두껍게 */
+            opacity: 1;
+            z-index: 20; /* 강조된 화살표를 가장 위로 보냄 */
+        }
+        .flow-line.highlighted::after {
+            top: -4.5px; /* 강조된 두께에 맞춰 위치 재조정 */
+        }
+
+        /* 에이전트별 화살표 색상 정의 (7개) */
+        .flow-line-color-0 { background-color: #ef4444; } /* red-500 */
+        .flow-line-color-0::after { border-color: #ef4444; }
+        .flow-line-color-1 { background-color: #3b82f6; } /* blue-500 */
+        .flow-line-color-1::after { border-color: #3b82f6; }
+        .flow-line-color-2 { background-color: #22c55e; } /* green-500 */
+        .flow-line-color-2::after { border-color: #22c55e; }
+        .flow-line-color-3 { background-color: #eab308; } /* yellow-500 */
+        .flow-line-color-3::after { border-color: #eab308; }
+        .flow-line-color-4 { background-color: #8b5cf6; } /* violet-500 */
+        .flow-line-color-4::after { border-color: #8b5cf6; }
+        .flow-line-color-5 { background-color: #ec4899; } /* pink-500 */
+        .flow-line-color-5::after { border-color: #ec4899; }
+        .flow-line-color-6 { background-color: #f97316; } /* orange-500 */
+        .flow-line-color-6::after { border-color: #f97316; }
+
+        /* 긴 텍스트 (주로 URL) 줄바꿈 처리 */
+        .break-word-container {
+            word-wrap: break-word; /* 오래된 브라우저 호환 */
+            word-break: break-word; /* 최신 브라우저 (Chrome, Firefox 등) */
+        }
+
+        /* 토론 흐름도 화살표 스타일 개선 */
+        .flow-line {
+            position: absolute;
+            background-color: #cbd5e1; /* slate-300 */
+            height: 2px;
+            transform-origin: 0 0;
+            transition: all 0.3s ease-in-out;
+            z-index: 10;
+            opacity: 0.15; /* 기본 상태를 흐리게 (요청사항 3) */
+        }
+        .flow-line::after {
+            content: '';
+            position: absolute;
+            right: -1px;
+            top: -3.5px;
+            border-style: solid;
+            border-width: 0 2px 2px 0;
+            display: inline-block;
+            padding: 3px;
+            transform: rotate(-45deg);
+            border-color: #cbd5e1; /* slate-300 */
+        }
+        /* 마우스 오버 시 하이라이트 스타일 */
+        .flow-line.highlighted {
+            height: 3px;
+            opacity: 1;
+            z-index: 20;
+        }
+        .flow-line.highlighted::after {
+            right: -1.5px;
+            top: -4.5px;
+            padding: 4px;
+        }
+        /* 다른 에이전트 오버 시 숨김 처리 */
+        .flow-line.hidden {
+            opacity: 0;
+        }
+        /* 상호작용 유형별 색상 */
+        .flow-line-agreement { background-color: #22c55e; } /* green-500 */
+        .flow-line-agreement::after { border-color: #22c55e; }
+        .flow-line-disagreement { background-color: #ef4444; } /* red-500 */
+        .flow-line-disagreement::after { border-color: #ef4444; }
+
+        /* 단순화된 토론 흐름도 리스트 스타일 */
+        .flow-list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f5f9; /* slate-100 */
+        }
+        .flow-agent-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-basis: 40%; /* 양쪽 에이전트 박스가 공간을 차지하도록 */
+        }
+        .flow-agent-box.from {
+            justify-content: flex-start;
+        }
+        .flow-agent-box.to {
+            justify-content: flex-end;
+            text-align: right;
+        }
+        .flow-arrow {
+            flex-grow: 1;
+            text-align: center;
+        }
+        .flow-arrow svg {
+            width: 100%;
+            height: 16px;
+        }
+        .arrow-agreement path {
+            stroke: #22c55e; /* green-500 */
+        }
+        .arrow-disagreement path {
+            stroke: #ef4444; /* red-500 */
+        }
