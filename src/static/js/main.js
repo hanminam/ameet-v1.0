@@ -26,24 +26,96 @@
         let regularMessageCount = 0;        // 일반 에이전트 메시지 카운터 (좌/우 정렬용)
         let isRendering = false;
         let isAutoScrollActive = true;      // 자동 스크롤 상태 변수 (기본값 ON)
+        let userScrolledUp = false;         // 사용자가 수동으로 스크롤을 올렸는지 추적
+        let scrollListenerAttached = false; // 스크롤 이벤트 리스너 중복 방지
         let discussionWorker; // 웹 워커 인스턴스를 저장할 변수
         let messageQueue = []; // [NEW] For Page Visibility API
 
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
-                console.log("Tab is visible again. Processing message queue.");
+                console.log("[SmartScroll] Tab is visible again. Enabling auto-scroll and processing message queue.");
+                // 브라우저 포커싱 시 자동 스크롤 재활성화 (요구사항 4)
+                isAutoScrollActive = true;
+                userScrolledUp = false;
                 processMessageQueue();
+                // 최신 메시지로 스크롤
+                setTimeout(() => {
+                    scrollToBottom(true);
+                }, 100);
             }
         });
 
         /**
-         * 자동 스크롤이 활성화된 경우에만 채팅창을 맨 아래로 내립니다.
+         * [스마트 스크롤] 채팅창을 최하단으로 스크롤합니다.
+         * @param {boolean} force - true면 자동 스크롤 상태와 관계없이 강제 스크롤
+         */
+        function scrollToBottom(force = false) {
+            const chatbox = document.getElementById('chatbox');
+            if (!chatbox) return;
+
+            if (force || isAutoScrollActive) {
+                chatbox.scrollTop = chatbox.scrollHeight;
+                console.log("[SmartScroll] Scrolled to bottom. Force:", force, "Auto:", isAutoScrollActive);
+            }
+        }
+
+        /**
+         * [스마트 스크롤] 자동 스크롤이 활성화된 경우에만 채팅창을 맨 아래로 내립니다.
+         * @deprecated - scrollToBottom() 사용 권장
          */
         function scrollToBottomIfEnabled() {
-            if (isAutoScrollActive) {
-                const chatbox = document.getElementById('chatbox');
-                chatbox.scrollTop = chatbox.scrollHeight;
+            scrollToBottom(false);
+        }
+
+        /**
+         * [스마트 스크롤] 요소가 최하단 근처에 있는지 확인합니다.
+         * @param {HTMLElement} element - 확인할 요소
+         * @param {number} threshold - 임계값 (픽셀)
+         * @returns {boolean}
+         */
+        function isNearBottom(element, threshold = 50) {
+            if (!element) return false;
+            const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+            return distanceFromBottom <= threshold;
+        }
+
+        /**
+         * [스마트 스크롤] 스크롤 이벤트 리스너를 초기화합니다.
+         * 토론 화면으로 전환될 때 한 번만 호출되어야 합니다.
+         */
+        function initializeSmartScroll() {
+            if (scrollListenerAttached) {
+                console.log("[SmartScroll] Listener already attached. Skipping.");
+                return;
             }
+
+            const chatbox = document.getElementById('chatbox');
+            if (!chatbox) {
+                console.warn("[SmartScroll] Chatbox not found. Cannot initialize.");
+                return;
+            }
+
+            // 사용자 스크롤 감지 (요구사항 2, 3)
+            chatbox.addEventListener('scroll', () => {
+                // 최하단 근처에 있으면 자동 스크롤 ON
+                if (isNearBottom(chatbox, 50)) {
+                    if (!isAutoScrollActive) {
+                        console.log("[SmartScroll] User scrolled to bottom. Auto-scroll enabled.");
+                    }
+                    isAutoScrollActive = true;
+                    userScrolledUp = false;
+                } else {
+                    // 사용자가 위로 스크롤하면 자동 스크롤 OFF
+                    if (isAutoScrollActive) {
+                        console.log("[SmartScroll] User scrolled up. Auto-scroll disabled.");
+                    }
+                    isAutoScrollActive = false;
+                    userScrolledUp = true;
+                }
+            });
+
+            scrollListenerAttached = true;
+            console.log("[SmartScroll] Initialized successfully.");
         }
 
         // 지원 LLM 모델 목록 ---
@@ -299,6 +371,13 @@
                 screen.classList.remove('active');
             });
             document.getElementById(screenId).classList.add('active');
+
+            // [스마트 스크롤] 실시간 토론 화면으로 전환 시 스크롤을 최하단으로
+            if (screenId === 'screen-5') {
+                setTimeout(() => {
+                    scrollToBottom(true);
+                }, 100);
+            }
         }
 
         /**
@@ -1353,13 +1432,18 @@
             regularMessageCount = 0;
             evidenceDataCache = null;
             isPollingActive = false;
+            // [스마트 스크롤] 토론 시작 시 자동 스크롤 활성화 (요구사항 1)
             isAutoScrollActive = true;
+            userScrolledUp = false;
 
             // 2. 채팅창 내용 초기화
             const chatbox = document.getElementById('chatbox');
             if (chatbox) {
                 chatbox.innerHTML = '<div id="waiting-message" class="text-center text-slate-500">AI 에이전트들의 발언을 기다리고 있습니다...</div>';
             }
+
+            // 3. [스마트 스크롤] 이벤트 리스너 초기화
+            initializeSmartScroll();
 
             // 3. 우측 분석 패널 3종 초기화
             const criticalPanel = document.getElementById('critical-hit-panel');
@@ -1935,16 +2019,7 @@
                 showScreen('screen-login');
             }
 
-            // 채팅창 스크롤 이벤트 리스너 추가
-            const chatbox = document.getElementById('chatbox');
-            chatbox.addEventListener('scroll', () => {
-                // 사용자가 수동으로 스크롤을 올리면 자동 스크롤 비활성화
-                if (!isScrolledToBottom(chatbox)) {
-                    isAutoScrollActive = false;
-                } else {
-                    isAutoScrollActive = true;
-                }
-            });
+            // [스마트 스크롤] 기존 중복 코드 제거됨 - initializeSmartScroll()로 통합됨
 
             // HTML 복사 버튼 이벤트 리스너
             document.getElementById('copy-report-html-btn').addEventListener('click', () => {
