@@ -1495,10 +1495,15 @@
                 if (systemAgents.includes(turn.agent_name)) {
                     appendSystemMessage(turn);
                 } else {
-                    const indicator = showTypingIndicator(turn, participantMap);
-                    await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
-                    
-                    indicator.remove();
+                    // 브라우저가 백그라운드 상태이면 타이핑 인디케이터와 대기 시간을 건너뜀
+                    if (!document.hidden) {
+                        const indicator = showTypingIndicator(turn, participantMap);
+                        await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
+                        indicator.remove();
+                    } else {
+                        console.log('[renderNewMessages] Browser is hidden. Skipping typing indicator delay.');
+                    }
+
                     const messageContainer = appendMessage(turn, participantMap);
                     const contentSpan = messageContainer.querySelector('.message-content');
                     await typeMessage(contentSpan, turn.message);
@@ -1646,12 +1651,23 @@
 
         /**
          * 텍스트에 타이핑 효과를 적용하는 함수
+         * 브라우저가 백그라운드 상태이면 타이핑 효과를 건너뛰고 즉시 렌더링합니다.
          */
         function typeMessage(element, text) {
             return new Promise(resolve => {
                 const htmlText = markdownToHtml(text);
+
+                // 브라우저가 백그라운드(숨겨진 상태)이면 즉시 렌더링
+                if (document.hidden) {
+                    console.log('[typeMessage] Browser is hidden. Instant rendering.');
+                    element.innerHTML = htmlText;
+                    resolve();
+                    return;
+                }
+
+                // 포그라운드 상태일 때는 타이핑 효과 적용
                 let i = 0;
-                
+
                 function typing() {
                     if (i < htmlText.length) {
                         if (htmlText.charAt(i) === '<') {

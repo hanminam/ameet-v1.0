@@ -13,12 +13,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install dependencies (using pip-compile workflow)
 pip install -r requirements.txt
 
-# Run locally (development server with auto-reload)
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# If updating dependencies, edit requirements.in then:
+pip-compile --output-file=requirements.txt requirements.in
 
-# Note: Must run from src directory
+# Install Playwright browsers (required for web scraping)
+playwright install chromium
+
+# Run locally (development server with auto-reload)
+# MUST run from src directory
 cd src
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Access points:
+# - Main app: http://localhost:8000/
+# - Admin panel: http://localhost:8000/admin
+# - API docs: http://localhost:8000/docs
+# - Health check: http://localhost:8000/api/v1/health-check
 ```
 
 ### Docker
@@ -31,9 +41,19 @@ docker run -p 8080:8080 ameet-v1
 ```
 
 ### Deployment
-- Google Cloud Run via Cloud Build
-- Configuration in `cloudbuild.yaml`
-- Deployment triggered on repository pushes
+```bash
+# Google Cloud Run via Cloud Build
+# Configuration in `cloudbuild.yaml`
+# Deployment triggered on repository pushes
+
+# Manual deployment (if needed)
+gcloud run deploy ameet-v1-0 \
+  --image gcr.io/$PROJECT_ID/ameet-v1:latest \
+  --region asia-northeast3 \
+  --platform managed
+```
+
+**Important**: Cloud Run uses port 8080 (vs 8000 locally). Environment variables override `.env` values in production.
 
 ## Architecture Overview
 
@@ -66,15 +86,22 @@ The system follows a sophisticated orchestration pattern:
 
 ### Database Architecture
 
-**MongoDB (Beanie ODM)**:
+**MongoDB (Beanie ODM)** - Primary database:
 - `DiscussionLog` (collection: discussions): Full discussion state, transcript, status
 - `AgentSettings` (collection: agents): Dynamic agent configurations with versioning
 - `User` (collection: users): User accounts with role-based access
 - `SystemSettings` (collection: system_settings): Key-value configuration store
+- Connection string: `MONGO_DB_URL` environment variable
+- Models in `src/app/models/`
 
-**Redis**:
+**Redis** - Caching layer:
 - User vote history: `vote_history:{discussion_id}` (TTL: 24 hours)
-- Environment-aware: Uses `LOCAL_REDIS_HOST` locally, `CLOUD_REDIS_HOST` in Cloud Run
+- Environment-aware: Uses `LOCAL_REDIS_HOST` (127.0.0.1) locally, `CLOUD_REDIS_HOST` (10.48.219.179) in Cloud Run
+- Port: 6379
+
+**MySQL/Cloud SQL** - Legacy (disabled):
+- Previously used, now replaced by MongoDB
+- Configuration still exists in `config.py` but marked as disabled in health check
 
 ### Agent System
 
@@ -121,29 +148,65 @@ report_generating → completed
 ## File Structure
 
 ```
-src/app/
-├── main.py                   # FastAPI app, routes, middleware
-├── db.py                     # DB initialization (Redis, MongoDB via Beanie)
-├── core/
-│   ├── config.py            # Settings with environment-aware computed fields
-│   ├── security.py          # JWT authentication
-│   └── settings/            # Agent configuration JSONs
-├── api/v1/                  # REST endpoints
-│   ├── discussions.py       # User discussion API
-│   ├── login.py             # Authentication
-│   └── admin/               # Admin-only endpoints
-├── services/
-│   ├── orchestrator.py      # Stage 1: Team assembly
-│   ├── discussion_flow.py   # Stage 2: Discussion execution
-│   ├── report_generator.py  # Stage 3: Report creation
-│   ├── summarizer.py        # Web content summarization
-│   └── utility_agents.py    # SNR & Verifier agents
-├── models/
-│   └── discussion.py        # Beanie Document models
-├── schemas/                 # Pydantic schemas for validation
-└── tools/
-    └── search.py            # Tavily web search, yfinance, FRED API
+src/
+├── app/
+│   ├── main.py                   # FastAPI app, routes, middleware
+│   ├── db.py                     # DB initialization (Redis, MongoDB via Beanie)
+│   ├── core/
+│   │   ├── config.py            # Settings with environment-aware computed fields
+│   │   ├── security.py          # JWT authentication
+│   │   └── settings/            # Agent configuration JSONs
+│   ├── api/v1/                  # REST endpoints
+│   │   ├── discussions.py       # User discussion API
+│   │   ├── login.py             # Authentication
+│   │   ├── setup.py             # Initial setup endpoints
+│   │   ├── users.py             # User management
+│   │   └── admin/               # Admin-only endpoints
+│   │       ├── agents.py        # Agent configuration
+│   │       ├── discussions.py   # Discussion management
+│   │       ├── settings.py      # System settings
+│   │       └── users.py         # User administration
+│   ├── services/
+│   │   ├── orchestrator.py      # Stage 1: Team assembly
+│   │   ├── discussion_flow.py   # Stage 2: Discussion execution
+│   │   ├── report_generator.py  # Stage 3: Report creation
+│   │   ├── summarizer.py        # Web content summarization
+│   │   └── utility_agents.py    # SNR & Verifier agents
+│   ├── models/
+│   │   ├── discussion.py        # DiscussionLog, AgentSettings, SystemSettings
+│   │   ├── user.py              # User model
+│   │   └── base.py              # Base models
+│   ├── schemas/                 # Pydantic schemas for validation
+│   ├── crud/                    # Database operations
+│   │   └── user.py              # User CRUD operations
+│   └── tools/
+│       └── search.py            # Tavily web search, yfinance, FRED API
+├── templates/
+│   ├── index.html               # Main user interface
+│   └── admin.html               # Admin panel interface
+└── static/
+    ├── css/                     # Frontend stylesheets
+    └── js/                      # Frontend JavaScript
 ```
+
+### Frontend Architecture
+
+**Static Assets**:
+- Served via FastAPI's `StaticFiles` middleware
+- `/src` path: Maps to entire `src/` directory for module access
+- `/static` path: CSS and JavaScript files
+- `/tools` path: Worker scripts (e.g., for web scraping)
+
+**Templates**:
+- `index.html`: Main discussion interface with real-time updates
+- `admin.html`: Admin panel for managing agents, users, settings
+- Uses vanilla JavaScript (no framework) with fetch API for backend communication
+
+**Key Frontend Features**:
+- Real-time discussion status polling
+- Agent response streaming visualization
+- Vote option dynamic generation
+- Report viewing and PDF export
 
 ## Important Conventions
 
@@ -166,3 +229,23 @@ src/app/
 - Discussion rounds: `execute_turn()` runs async, updates DB status
 - Report generation: `generate_report_background()` runs async
 - Status checks via `/api/v1/discussions/{id}/status` endpoint
+
+**External Dependencies**:
+- **Tavily API**: Web search functionality in agent tools
+- **Google Cloud Storage**: Report PDF storage via `GCS_BUCKET_NAME`
+- **LangSmith**: Optional LLM call tracing and monitoring
+- **FRED API**: Economic data for financial reports (via `fredapi`)
+- **yfinance**: Stock market data retrieval
+- **Playwright**: Headless browser for web scraping (Chromium)
+
+**Required Environment Variables** (minimum for local dev):
+```
+OPENAI_API_KEY=...
+GOOGLE_API_KEY=...
+ANTHROPIC_API_KEY=...
+TAVILY_API_KEY=...
+MONGO_DB_URL=...
+LOCAL_REDIS_HOST=127.0.0.1
+GCS_BUCKET_NAME=...
+SECRET_KEY=...
+```
