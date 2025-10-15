@@ -513,13 +513,9 @@
          * 로그아웃 처리 함수
          */
         function handleLogout() {
-            // 저장된 토큰과 이메일 정보 삭제
+            // 저장된 토큰과 이메일 정보 삭제 (기억된 정보는 유지)
             localStorage.removeItem('accessToken');
             localStorage.removeItem('userEmail');
-
-            // 기억된 아이디/비밀번호 정보도 삭제
-            localStorage.removeItem('rememberedEmail');
-            localStorage.removeItem('rememberedPassword');
 
             console.log('로그아웃 되었습니다.');
 
@@ -2079,8 +2075,24 @@
 
         function updateUIForLoggedOutState() {
             userEmailDisplay.textContent = '';
-            emailInput.value = '';
-            passwordInput.value = '';
+
+            // 기억된 정보가 있으면 입력창에 표시, 없으면 비우기
+            const rememberedEmail = localStorage.getItem('rememberedEmail');
+            const rememberedPassword = localStorage.getItem('rememberedPassword');
+
+            if (rememberedEmail) {
+                emailInput.value = rememberedEmail;
+                document.getElementById('remember-me-checkbox').checked = true;
+            } else {
+                emailInput.value = '';
+                document.getElementById('remember-me-checkbox').checked = false;
+            }
+
+            if (rememberedPassword) {
+                passwordInput.value = rememberedPassword;
+            } else {
+                passwordInput.value = '';
+            }
         }
 
         // 페이지 로드 시 실행
