@@ -342,6 +342,46 @@
         }
 
         /**
+         * 인증이 필요한 API 호출을 위한 fetch 래퍼 함수
+         * 401 에러 발생 시 자동으로 로그인 화면으로 이동하고 사용자에게 알림
+         * @param {string} url - API 엔드포인트 URL
+         * @param {object} options - fetch 옵션 (method, headers, body 등)
+         * @returns {Promise<Response>} - fetch Response 객체
+         */
+        async function authenticatedFetch(url, options = {}) {
+            try {
+                const response = await fetch(url, options);
+
+                // 401 Unauthorized 에러 처리
+                if (response.status === 401) {
+                    console.warn('[Auth] 토큰이 만료되었거나 유효하지 않습니다. 로그인 화면으로 이동합니다.');
+
+                    // 토큰 및 사용자 정보 삭제
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('userEmail');
+
+                    // 사용자에게 알림
+                    alert('로그인 세션이 만료되었습니다. 다시 로그인해주세요.');
+
+                    // 로그인 화면으로 이동
+                    updateUIForLoggedOutState();
+                    showScreen('screen-login');
+
+                    // 에러 throw하여 호출한 곳에서 처리할 수 있도록 함
+                    throw new Error('Authentication expired');
+                }
+
+                return response;
+            } catch (error) {
+                // 네트워크 에러 등 다른 에러는 그대로 throw
+                if (error.message !== 'Authentication expired') {
+                    console.error('[Auth] API 호출 중 에러 발생:', error);
+                }
+                throw error;
+            }
+        }
+
+        /**
          * 사용자가 스크롤을 맨 아래로 내렸는지 확인하는 헬퍼 함수
          * @param {HTMLElement} element - 확인할 DOM 요소
          * @returns {boolean} - 맨 아래에 있는지 여부
@@ -513,7 +553,7 @@
 
             try {
                 // API 호출 시작 (백그라운드에서 오케스트레이션 진행)
-                const response = await fetch('/api/v1/discussions/', {
+                const response = await authenticatedFetch('/api/v1/discussions/', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` },
                     body: formData,
@@ -535,8 +575,11 @@
                     showScreen('screen-topic');
                 }
             } catch (error) {
-                alert('서버에 연결할 수 없습니다.');
-                showScreen('screen-topic');
+                // 인증 만료 에러는 이미 authenticatedFetch에서 처리됨
+                if (error.message !== 'Authentication expired') {
+                    alert('서버에 연결할 수 없습니다.');
+                    showScreen('screen-topic');
+                }
                 console.error('Orchestration 네트워크 오류:', error);
             }
         }
@@ -560,7 +603,7 @@
                 }
 
                 try {
-                    const response = await fetch(`/api/v1/discussions/${discussionId}/progress`, {
+                    const response = await authenticatedFetch(`/api/v1/discussions/${discussionId}/progress`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
 
@@ -581,7 +624,7 @@
 
                         // DB에서 완성된 팀 정보 조회
                         try {
-                            const detailResponse = await fetch(`/api/v1/discussions/${discussionId}`, {
+                            const detailResponse = await authenticatedFetch(`/api/v1/discussions/${discussionId}`, {
                                 headers: { 'Authorization': `Bearer ${token}` }
                             });
 
@@ -612,7 +655,11 @@
 
                 } catch (error) {
                     console.error('진행 상황 폴링 오류:', error);
-                    // 에러가 발생해도 계속 폴링 (일시적인 네트워크 오류일 수 있음)
+                    // 인증 만료 에러가 발생하면 폴링 중단
+                    if (error.message === 'Authentication expired') {
+                        clearInterval(intervalId);
+                    }
+                    // 일시적인 네트워크 오류는 계속 폴링
                 }
             }, 500); // 500ms마다 폴링
         }
@@ -814,23 +861,25 @@
                 return;
             }
             const token = localStorage.getItem('accessToken');
-            
+
             try {
-                const response = await fetch(`/api/v1/discussions/${currentDiscussionId}`, {
+                const response = await authenticatedFetch(`/api/v1/discussions/${currentDiscussionId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (!response.ok) throw new Error('Failed to fetch discussion details.');
-                
+
                 const discussionData = await response.json();
                 evidenceDataCache = discussionData.evidence_briefing; // 결과 캐싱
-                
+
                 renderEvidenceModal(evidenceDataCache);
                 toggleModal('evidence-modal');
 
             } catch (error) {
                 console.error("Error fetching evidence data:", error);
-                document.getElementById('evidence-modal-body').innerHTML = '<p>데이터를 불러오는 데 실패했습니다.</p>';
-                toggleModal('evidence-modal');
+                if (error.message !== 'Authentication expired') {
+                    document.getElementById('evidence-modal-body').innerHTML = '<p>데이터를 불러오는 데 실패했습니다.</p>';
+                    toggleModal('evidence-modal');
+                }
             }
         }
 
@@ -914,16 +963,16 @@
             console.log("사용자가 선택한 모델 구성:", modelOverrides);
 
             try {
-                const response = await fetch(`/api/v1/discussions/${currentDiscussionId}/turns`, {
+                const response = await authenticatedFetch(`/api/v1/discussions/${currentDiscussionId}/turns`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
                     // body에 사용자가 선택한 모델 정보를 포함하여 전송합니다.
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         user_vote: null, // 첫 턴이므로 user_vote는 null 입니다.
-                        model_overrides: modelOverrides 
+                        model_overrides: modelOverrides
                     })
                 });
 
@@ -954,10 +1003,12 @@
                     startDebateBtn.textContent = '이 구성으로 토론 시작하기';
                 }
             } catch (error) {
-                alert('서버 연결에 실패했습니다.');
-                console.error('토론 시작 API 호출 오류:', error);
-                startDebateBtn.disabled = false;
-                startDebateBtn.textContent = '이 구성으로 토론 시작하기';
+                if (error.message !== 'Authentication expired') {
+                    alert('서버 연결에 실패했습니다.');
+                    console.error('토론 시작 API 호출 오류:', error);
+                    startDebateBtn.disabled = false;
+                    startDebateBtn.textContent = '이 구성으로 토론 시작하기';
+                }
             }
         }
 
@@ -1311,7 +1362,7 @@
 
             const token = localStorage.getItem('accessToken');
             try {
-                const response = await fetch(`/api/v1/discussions/${currentDiscussionId}/turns`, {
+                const response = await authenticatedFetch(`/api/v1/discussions/${currentDiscussionId}/turns`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -1334,9 +1385,11 @@
                     nextRoundBtn.textContent = '다음 라운드 진행';
                 }
             } catch (error) {
-                alert('서버 연결에 실패했습니다.');
-                nextRoundBtn.disabled = false;
-                nextRoundBtn.textContent = '다음 라운드 진행';
+                if (error.message !== 'Authentication expired') {
+                    alert('서버 연결에 실패했습니다.');
+                    nextRoundBtn.disabled = false;
+                    nextRoundBtn.textContent = '다음 라운드 진행';
+                }
             }
         }
 
@@ -1366,7 +1419,7 @@
             const token = localStorage.getItem('accessToken');
             try {
                 // 백엔드에 토론 완료 및 보고서 생성 시작을 알리는 API 호출
-                const response = await fetch(`/api/v1/discussions/${currentDiscussionId}/complete`, {
+                const response = await authenticatedFetch(`/api/v1/discussions/${currentDiscussionId}/complete`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -1381,8 +1434,10 @@
                     actionPanel.innerHTML = `<div class="text-center p-4 border rounded-lg bg-red-50 border-red-400">...</div>`;
                 }
             } catch (error) {
-                alert("서버 통신 중 오류가 발생했습니다.");
-                console.error("보고서 생성 API 호출 중 네트워크 오류:", error);
+                if (error.message !== 'Authentication expired') {
+                    alert("서버 통신 중 오류가 발생했습니다.");
+                    console.error("보고서 생성 API 호출 중 네트워크 오류:", error);
+                }
             }
         }
 
@@ -1408,7 +1463,7 @@
             const token = localStorage.getItem('accessToken');
             try {
                 // 새로 추가된 /archive 엔드포인트 호출
-                const response = await fetch(`/api/v1/discussions/${currentDiscussionId}/archive`, {
+                const response = await authenticatedFetch(`/api/v1/discussions/${currentDiscussionId}/archive`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -1420,8 +1475,10 @@
                     alert("토론 상태를 서버에 저장하는 데 실패했습니다: " + errorData.detail);
                 }
             } catch (error) {
-                alert("서버 통신 중 오류가 발생했습니다.");
-                console.error("토론 아카이브 API 호출 중 네트워크 오류:", error);
+                if (error.message !== 'Authentication expired') {
+                    alert("서버 통신 중 오류가 발생했습니다.");
+                    console.error("토론 아카이브 API 호출 중 네트워크 오류:", error);
+                }
             } finally {
                 // API 성공/실패와 관계없이 2초 후 주제 입력 화면으로 이동
                 setTimeout(() => {
