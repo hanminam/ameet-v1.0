@@ -1604,10 +1604,8 @@
 
                     const messageContainer = appendMessage(turn, participantMap);
                     const contentSpan = messageContainer.querySelector('.message-content');
+                    // [스마트 스크롤] typeMessage 내부에서 타이핑 중 + 완료 후 자동 스크롤 처리됨
                     await typeMessage(contentSpan, turn.message);
-                    // [스마트 스크롤] 타이핑 완료 후 DOM 업데이트를 기다린 후 스크롤
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                    scrollToBottomIfEnabled();
                 }
                 displayedMessagesCount++;
                 if (!systemAgents.includes(turn.agent_name)) {
@@ -1752,6 +1750,7 @@
         /**
          * 텍스트에 타이핑 효과를 적용하는 함수
          * 브라우저가 백그라운드 상태이면 타이핑 효과를 건너뛰고 즉시 렌더링합니다.
+         * [스마트 스크롤] 타이핑 중에도 실시간으로 스크롤합니다.
          */
         function typeMessage(element, text) {
             return new Promise(resolve => {
@@ -1761,12 +1760,14 @@
                 if (document.hidden) {
                     console.log('[typeMessage] Browser is hidden. Instant rendering.');
                     element.innerHTML = htmlText;
+                    scrollToBottomIfEnabled(); // 즉시 렌더링 후 스크롤
                     resolve();
                     return;
                 }
 
                 // 포그라운드 상태일 때는 타이핑 효과 적용
                 let i = 0;
+                let charCount = 0; // 타이핑된 문자 수 추적
 
                 function typing() {
                     if (i < htmlText.length) {
@@ -1778,10 +1779,19 @@
                             }
                         } else {
                             element.innerHTML += htmlText.charAt(i);
+                            charCount++;
                         }
                         i++;
+
+                        // [스마트 스크롤] 매 10글자마다 스크롤 (너무 자주 호출하면 성능 저하)
+                        if (charCount % 10 === 0 && isAutoScrollActive) {
+                            scrollToBottomIfEnabled();
+                        }
+
                         setTimeout(typing, 20);
                     } else {
+                        // 타이핑 완료 후 최종 스크롤
+                        scrollToBottomIfEnabled();
                         resolve();
                     }
                 }
