@@ -516,9 +516,13 @@
             // 저장된 토큰과 이메일 정보 삭제
             localStorage.removeItem('accessToken');
             localStorage.removeItem('userEmail');
-            
+
+            // 기억된 아이디/비밀번호 정보도 삭제
+            localStorage.removeItem('rememberedEmail');
+            localStorage.removeItem('rememberedPassword');
+
             console.log('로그아웃 되었습니다.');
-            
+
             // UI 업데이트 및 로그인 화면으로 전환
             updateUIForLoggedOutState();
             showScreen('screen-login');
