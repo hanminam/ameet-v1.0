@@ -51,11 +51,19 @@
          */
         function scrollToBottom(force = false) {
             const chatbox = document.getElementById('chatbox');
-            if (!chatbox) return;
+            if (!chatbox) {
+                console.warn("[SmartScroll] Chatbox not found");
+                return;
+            }
 
             if (force || isAutoScrollActive) {
-                chatbox.scrollTop = chatbox.scrollHeight;
-                console.log("[SmartScroll] Scrolled to bottom. Force:", force, "Auto:", isAutoScrollActive);
+                // requestAnimationFrame을 사용하여 DOM 렌더링 후 스크롤 실행
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        chatbox.scrollTop = chatbox.scrollHeight;
+                        console.log("[SmartScroll] Scrolled to bottom. scrollTop:", chatbox.scrollTop, "scrollHeight:", chatbox.scrollHeight, "Force:", force, "Auto:", isAutoScrollActive);
+                    });
+                });
             }
         }
 
@@ -196,10 +204,13 @@
             chatbox.innerHTML = html;
             regularMessageCount = currentRegularCount;
             displayedMessagesCount = data.transcript.length;
-            
+
             renderUxPanels(data);
             checkDiscussionStatus(data);
-            scrollToBottomIfEnabled();
+            // [스마트 스크롤] innerHTML 변경 후 DOM 업데이트 대기
+            setTimeout(() => {
+                scrollToBottomIfEnabled();
+            }, 100);
         }
 
         function createAgentMessageHtml(turn, participantMap, count) {
@@ -1554,7 +1565,10 @@
             }
 
             chatbox.insertAdjacentHTML('beforeend', contentHtml);
-            scrollToBottomIfEnabled();
+            // [스마트 스크롤] DOM 업데이트 후 스크롤
+            setTimeout(() => {
+                scrollToBottomIfEnabled();
+            }, 50);
         }
 
         /**
@@ -1591,6 +1605,8 @@
                     const messageContainer = appendMessage(turn, participantMap);
                     const contentSpan = messageContainer.querySelector('.message-content');
                     await typeMessage(contentSpan, turn.message);
+                    // [스마트 스크롤] 타이핑 완료 후 DOM 업데이트를 기다린 후 스크롤
+                    await new Promise(resolve => setTimeout(resolve, 50));
                     scrollToBottomIfEnabled();
                 }
                 displayedMessagesCount++;
