@@ -780,56 +780,78 @@
          * API 응답 데이터를 기반으로 배심원단 확인 화면을 동적으로 생성하는 함수
          * @param {object} teamData - /orchestrate API의 응답 데이터 (DebateTeam)
          */
-        function renderJuryScreen(teamData) {
-            const iconMap = { 
-                "사회자": "🧑‍⚖️", "거시경제 전문가": "🌍", "산업 분석가": "🏭", 
-                "재무 분석가": "💹", "SNS 트렌드 분석가": "📱", "비판적 관점": "🤔", 
-                "워렌 버핏": "👴", "피터 린치": "👨‍💼", "스티브 잡스": "💡", 
-                "일론 머스크": "🚀", "심리학 전문가": "🧠", "미래학자": "🔭", "IT 전문가": "💻" 
-            };
-            
-            let juryHtml = '';
-            teamData.jury.forEach(agent => {
-                const icon = agent.icon || iconMap[agent.name] || '🤖';
-                const modelSelectorHtml = createModelSelector(agent); 
-                
-                juryHtml += `
-                    <div class="flex flex-col items-center text-center p-3 bg-white rounded-lg shadow-sm">
-                        <span class="text-3xl">${icon}</span>
-                        <p class="font-bold mt-2">${agent.name}</p>
-                        ${modelSelectorHtml}
-                    </div>`;
-            });
+        function sanitizeForId(name) {
+            if (!name) return '';
+            return name.replace(/[^a-zA-Z0-9가-힣]/g, '-');
+        }
 
-            const judgeName = teamData.judge.name;
-            const judgeIcon = teamData.judge.icon || iconMap[judgeName] || '🧑';
+        function createAgentCard(agent) {
+            const card = document.createElement('div');
+            card.className = 'agent-card relative';
+            const safeAgentName = sanitizeForId(agent.name);
             
-            const fullHtml = `
-                <div class="text-center mb-8">
-                    <h2 class="text-2xl font-bold text-slate-800">전문가 에이전트 구성이 완료되었습니다.</h2>
-                    <p class="text-slate-600 mt-2">각 전문가가 사용할 LLM을 변경할 수 있습니다. 준비가 되면 토론을 시작하세요.</p>
+            card.innerHTML = `
+                <button data-agent-name-to-remove="${agent.name}" class="remove-agent-btn absolute top-2 right-2 text-gray-400 hover:text-red-500 text-2xl font-bold">&times;</button>
+                <div>
+                    <span class="text-5xl">${agent.icon || '🤖'}</span>
+                    <h4 class="text-xl font-bold mt-2">${agent.name}</h4>
+                    <p class="text-sm text-gray-500">${agent.role || 'Specialized Agent'}</p>
                 </div>
-                <div class="mb-8">
-                    <div class="bg-amber-50 border-2 border-amber-400 p-4 rounded-xl flex flex-col sm:flex-row items-center gap-4">
-                        <span class="text-5xl">${judgeIcon}</span>
-                        <div class="text-center sm:text-left flex-grow">
-                            <h3 class="text-lg font-bold text-amber-800">사회자</h3>
-                            <p class="text-sm text-slate-600 mt-1">${teamData.judge.model}</p>
-                        </div>
+                <div class="mt-4 w-full">
+                    ${createModelSelector(agent)}
+                    <div class="slider-container mt-4">
+                        <label for="length-slider-${safeAgentName}" class="text-xs font-medium text-gray-500 flex justify-between">
+                            <span>발언 길이</span>
+                            <span id="slider-value-${safeAgentName}" class="font-bold text-blue-600">200자</span>
+                        </label>
+                        <input type="range" id="length-slider-${safeAgentName}" min="100" max="2000" value="200" step="100" class="mt-1">
                     </div>
-                </div>
-                <div class="border-2 border-slate-200 bg-slate-50 p-6 rounded-xl">
-                    <h3 class="font-bold text-slate-700 text-center mb-4 text-lg">AI 전문가 에이전트</h3>
-                    <p class="text-center text-sm text-slate-500 mb-4">${teamData.reason}</p>
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">${juryHtml}</div>
-                </div>
-                <button id="start-debate-btn" class="btn btn-primary w-full mt-8">이 구성으로 토론 시작하기</button>
-            `;
-            if (juryContainer) {
-                juryContainer.innerHTML = fullHtml;
+                </div>`;
+            return card;
+        }
+
+        function renderJury(jury) {
+            const grid = document.getElementById('jury-grid');
+            if (!grid) {
+                console.error('Error: jury-grid element not found!');
+                return;
             }
-            
-            document.getElementById('start-debate-btn').addEventListener('click', startDebate);
+            grid.innerHTML = '';
+            jury.forEach(agent => {
+                const card = createAgentCard(agent);
+                grid.appendChild(card);
+                
+                const safeAgentName = sanitizeForId(agent.name);
+                const slider = card.querySelector(`#length-slider-${safeAgentName}`);
+                const valueDisplay = card.querySelector(`#slider-value-${safeAgentName}`);
+
+                if (slider && valueDisplay) {
+                    slider.addEventListener('input', (e) => {
+                        valueDisplay.textContent = `${e.target.value}자`;
+                    });
+                }
+            });
+        }
+
+        function renderJuryScreen(teamData) {
+            const judgeModelEl = document.querySelector('#screen-jury .bg-amber-50 .text-slate-600');
+            if (judgeModelEl && teamData.judge) {
+                judgeModelEl.textContent = getModelNameById(teamData.judge.model);
+            }
+
+            const reasonEl = document.querySelector('#screen-jury .text-center.text-sm.text-slate-500.mb-6');
+            if (reasonEl && teamData.reason) {
+                reasonEl.textContent = teamData.reason;
+            }
+
+            renderJury(teamData.jury);
+
+            const startBtn = document.getElementById('start-debate-btn');
+            if (startBtn) {
+                const newStartBtn = startBtn.cloneNode(true);
+                startBtn.parentNode.replaceChild(newStartBtn, startBtn);
+                newStartBtn.addEventListener('click', startDebate);
+            }
         }
 
         /**
