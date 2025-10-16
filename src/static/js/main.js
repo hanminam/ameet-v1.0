@@ -634,7 +634,7 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
                                     discussion_id: discussionDetail.discussion_id,
                                     judge: discussionDetail.participants.find(p => p.name === '재판관'),
                                     jury: discussionDetail.participants.filter(p => p.name !== '재판관'),
-                                    reason: "오케스트레이션 완료"
+                                    reason: discussionDetail.orchestration_reason || "배심원단 구성이 완료되었습니다."
                                 };
 
                                 setTimeout(() => {

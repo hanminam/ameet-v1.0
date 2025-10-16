@@ -48,6 +48,9 @@ async def run_orchestration_background(discussion_id: str, topic: str, file: Opt
         # 수집된 증거 자료집을 Pydantic 모델에서 dict로 변환하여 DB에 저장합니다.
         discussion_log.evidence_briefing = evidence_briefing.model_dump()
 
+        # 배심원단 선정 이유를 저장합니다.
+        discussion_log.orchestration_reason = debate_team.reason
+
         # 오케스트레이션 완료 후 상태를 'ready'로 변경
         discussion_log.status = "ready"
         await discussion_log.save()

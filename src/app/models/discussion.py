@@ -26,6 +26,9 @@ class DiscussionLog(Document):
 
     # 초기 분석 단계에서 수집된 증거 자료집을 저장할 필드
     evidence_briefing: Optional[Dict[str, Any]] = Field(default=None, description="오케스트레이션 단계에서 수집된 웹/파일 증거 자료집")
+
+    # 오케스트레이션 단계에서 배심원단을 선정한 이유
+    orchestration_reason: Optional[str] = Field(default=None, description="Jury Selector가 배심원단을 선정한 이유")
     
     topic: str
     user_email: Annotated[str, Indexed()]

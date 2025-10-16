@@ -12,6 +12,7 @@ class DiscussionLogItem(BaseModel):
     created_at: datetime
     user_name: str  # 사용자 이름
     user_email: str
+    orchestration_reason: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -28,6 +29,8 @@ class DiscussionLogDetail(DiscussionLogItem):
     
     report_html: Optional[str] = None
     pdf_url: Optional[str] = None
+
+    orchestration_reason: Optional[str] = Field(default=None, description="Jury Selector가 배심원단을 선정한 이유")
 
     # API 응답에 핵심 자료집 필드 추가
     evidence_briefing: Optional[Dict[str, Any]] = None
