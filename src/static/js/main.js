@@ -430,6 +430,52 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
         }
 
         /**
+         * 상태를 초기화하고 주제 입력 화면으로 돌아가는 함수
+         */
+        function goToHome() {
+            console.log("Returning to home screen and resetting state.");
+            currentDiscussionId = null;
+            evidenceDataCache = null;
+            
+            // Reset topic and file inputs
+            topicInput.value = '';
+            fileInput.value = '';
+            fileNameDisplay.textContent = '참고 파일 첨부 (TXT, PDF)';
+
+            // Reset analysis progress UI
+            const progressBar = document.getElementById('progress-bar');
+            if(progressBar) progressBar.style.width = '0%';
+            ['step-1', 'step-2', 'step-3'].forEach((stepId, index) => {
+                const stepDiv = document.getElementById(stepId);
+                const statusP = document.getElementById(`${stepId}-status`);
+                if (stepDiv && statusP) {
+                    statusP.textContent = '대기 중';
+                    if (index > 0) {
+                        stepDiv.classList.add('opacity-50');
+                        stepDiv.querySelector('div').className = 'w-12 h-12 rounded-full bg-white border-2 border-slate-300 flex items-center justify-center mx-auto font-bold text-xl text-slate-400 ring-4 ring-white';
+                        const textP = stepDiv.querySelector('p.text-sm.font-bold');
+                        if(textP) {
+                            textP.classList.add('text-slate-400');
+                            textP.classList.remove('text-slate-800'); // 혹시 모를 클래스 제거
+                        }
+                    } else {
+                        // 1단계는 기본 활성 상태로
+                        stepDiv.classList.remove('opacity-50');
+                        stepDiv.querySelector('div').className = 'w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto font-bold text-xl ring-4 ring-white';
+                        const textP = stepDiv.querySelector('p.text-sm.font-bold');
+                        if(textP) {
+                            textP.classList.remove('text-slate-400');
+                            textP.classList.add('text-slate-800');
+                        }
+                    }
+                }
+            });
+
+            resetDiscussionUI(); // This clears panels and resets variables
+            showScreen('screen-topic');
+        }
+
+        /**
          * 로그인 API를 호출하는 함수
          */
         async function handleLogin() {
@@ -1105,7 +1151,10 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
 
             actionPanel.innerHTML = `
                 <div class="text-center p-4 border rounded-lg bg-green-50 border-green-500 animate-fade-in">
-                    <button id="view-report-btn" class="btn btn-primary w-full">✅ 최종 분석 보고서 보기</button>
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <button id="view-report-btn" class="btn btn-primary w-full">✅ 최종 분석 보고서 보기</button>
+                        <button id="go-home-btn" class="btn btn-secondary w-full">🏠 처음으로</button>
+                    </div>
                 </div>
             `;
             
@@ -1127,6 +1176,7 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
             document.getElementById('view-report-btn').addEventListener('click', () => {
                 toggleModal('report-modal');
             });
+            document.getElementById('go-home-btn').addEventListener('click', goToHome);
         }
 
 
