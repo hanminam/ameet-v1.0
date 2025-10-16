@@ -245,19 +245,12 @@
             
             <!-- Create View -->
             <div id="agent-create-view" class="p-6 flex-grow overflow-y-auto hidden">
-                <p class="text-gray-600 mb-4">새로운 전문가의 역할과 특징을 정의해주세요.</p>
+                <p class="text-gray-600 mb-4">새로운 전문가의 이름을 입력해주세요. 아이콘과 역할은 자동으로 설정됩니다.</p>
                  <div class="space-y-4">
                     <div>
-                        <label class="font-semibold text-gray-700">전문가 이름</label>
+                        <label class="font-semibold text-gray-700">전문가 이름 <span class="text-red-500">*</span></label>
                         <input type="text" id="new-agent-name" placeholder="예: 미래 자동차 기술 전문가" class="w-full mt-1 p-2 border-gray-300 border rounded-lg">
-                    </div>
-                     <div>
-                        <label class="font-semibold text-gray-700">아이콘 (Emoji)</label>
-                        <input type="text" id="new-agent-icon" placeholder="예: 🚗" class="w-full mt-1 p-2 border-gray-300 border rounded-lg">
-                    </div>
-                    <div>
-                        <label class="font-semibold text-gray-700">핵심 역할 (프롬프트)</label>
-                        <textarea id="new-agent-prompt" rows="5" class="w-full mt-1 p-2 border-gray-300 border rounded-lg" placeholder="이 전문가가 어떤 관점에서, 어떤 역할을 수행해야 하는지 구체적으로 작성해주세요."></textarea>
+                        <p class="text-xs text-gray-500 mt-1">이름을 기반으로 적절한 아이콘과 역할이 자동 생성됩니다.</p>
                     </div>
                 </div>
                  <div class="flex justify-end gap-4 mt-6">
@@ -459,6 +452,84 @@
             }
         }
 
+        async function createAndAddAgent() {
+            const agentName = document.getElementById('new-agent-name').value.trim();
+            const token = localStorage.getItem('accessToken');
+
+            // 1. 유효성 검사
+            if (!agentName) {
+                alert('전문가 이름은 필수입니다.');
+                return;
+            }
+
+            if (!token) {
+                alert('로그인이 필요합니다.');
+                return;
+            }
+
+            try {
+                // 2. 에이전트 생성 API 호출
+                const createResponse = await fetch('/api/v1/agents/', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ agent_name: agentName })
+                });
+
+                if (!createResponse.ok) {
+                    const errorData = await createResponse.json();
+                    throw new Error(errorData.detail || '에이전트 생성 실패');
+                }
+
+                const newAgent = await createResponse.json();
+                console.log('새 에이전트 생성 성공:', newAgent);
+
+                // 3. 생성된 에이전트를 토론에 추가
+                const addResponse = await fetch(`/api/v1/discussions/${currentDiscussionId}/participants`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ agent_name: agentName })
+                });
+
+                if (!addResponse.ok) {
+                    const errorData = await addResponse.json();
+                    throw new Error(errorData.detail || '토론에 추가 실패');
+                }
+
+                // 4. 성공: 업데이트된 토론 정보를 받아옴
+                const updatedDiscussion = await addResponse.json();
+
+                // 5. 화면 갱신: DebateTeam 형식으로 변환
+                const debateTeam = {
+                    discussion_id: updatedDiscussion.discussion_id,
+                    judge: updatedDiscussion.participants.find(p => p.name === '재판관'),
+                    jury: updatedDiscussion.participants.filter(p => p.name !== '재판관'),
+                    reason: updatedDiscussion.orchestration_reason || "배심원단 구성이 완료되었습니다."
+                };
+
+                // 6. 배심원단 화면 재렌더링
+                renderJuryScreen(debateTeam);
+
+                // 7. 모달 닫기
+                toggleJuryModal('add-agent-modal');
+
+                // 8. 입력창 초기화
+                document.getElementById('new-agent-name').value = '';
+
+                // 9. 성공 메시지
+                alert(`'${agentName}' 전문가가 생성되고 토론에 추가되었습니다.`);
+
+            } catch (error) {
+                console.error('에이전트 생성 및 추가 오류:', error);
+                alert(`실패: ${error.message}`);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             // Event listener for the main "Add Expert" button
             // This button is added dynamically by main.js, so we use event delegation on a static parent.
@@ -494,18 +565,7 @@
             });
             
             document.getElementById('create-agent-btn').addEventListener('click', () => {
-                const newAgent = {
-                    name: document.getElementById('new-agent-name').value.trim(),
-                    icon: document.getElementById('new-agent-icon').value.trim() || '🤖',
-                    role: document.getElementById('new-agent-prompt').value.trim(),
-                    model: 'gemini-2.5-flash'
-                };
-                if (!newAgent.name || !newAgent.role) {
-                    alert('전문가 이름과 핵심 역할은 필수입니다.');
-                    return;
-                }
-                handleJuryChange('add', newAgent);
-                toggleJuryModal('add-agent-modal');
+                createAndAddAgent();
             });
         });
     </script>
