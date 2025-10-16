@@ -1,6 +1,4 @@
-
-
-        let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
+let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
 
         // --- DOM Elements ---
         const loginScreen = document.getElementById('screen-login');
@@ -785,73 +783,72 @@
             return name.replace(/[^a-zA-Z0-9가-힣]/g, '-');
         }
 
-        function createAgentCard(agent) {
-            const card = document.createElement('div');
-            card.className = 'agent-card relative';
-            const safeAgentName = sanitizeForId(agent.name);
-            
-            card.innerHTML = `
-                <button data-agent-name-to-remove="${agent.name}" class="remove-agent-btn absolute top-2 right-2 text-gray-400 hover:text-red-500 text-2xl font-bold">&times;</button>
-                <div>
-                    <span class="text-5xl">${agent.icon || '🤖'}</span>
-                    <h4 class="text-xl font-bold mt-2">${agent.name}</h4>
-                    <p class="text-sm text-gray-500">${agent.role || 'Specialized Agent'}</p>
-                </div>
-                <div class="mt-4 w-full">
-                    ${createModelSelector(agent)}
-                    <div class="slider-container mt-4">
-                        <label for="length-slider-${safeAgentName}" class="text-xs font-medium text-gray-500 flex justify-between">
-                            <span>발언 길이</span>
-                            <span id="slider-value-${safeAgentName}" class="font-bold text-blue-600">200자</span>
-                        </label>
-                        <input type="range" id="length-slider-${safeAgentName}" min="100" max="2000" value="200" step="100" class="mt-1">
-                    </div>
-                </div>`;
-            return card;
-        }
-
-        function renderJury(jury) {
-            const grid = document.getElementById('jury-grid');
-            if (!grid) {
-                console.error('Error: jury-grid element not found!');
-                return;
-            }
-            grid.innerHTML = '';
-            jury.forEach(agent => {
-                const card = createAgentCard(agent);
-                grid.appendChild(card);
-                
-                const safeAgentName = sanitizeForId(agent.name);
-                const slider = card.querySelector(`#length-slider-${safeAgentName}`);
-                const valueDisplay = card.querySelector(`#slider-value-${safeAgentName}`);
-
-                if (slider && valueDisplay) {
-                    slider.addEventListener('input', (e) => {
-                        valueDisplay.textContent = `${e.target.value}자`;
-                    });
-                }
-            });
-        }
-
         function renderJuryScreen(teamData) {
-            const judgeModelEl = document.querySelector('#screen-jury .bg-amber-50 .text-slate-600');
-            if (judgeModelEl && teamData.judge) {
-                judgeModelEl.textContent = getModelNameById(teamData.judge.model);
-            }
+            const iconMap = { 
+                "사회자": "🧑‍⚖️", "거시경제 전문가": "🌍", "산업 분석가": "🏭", 
+                "재무 분석가": "💹", "SNS 트렌드 분석가": "📱", "비판적 관점": "🤔", 
+                "워렌 버핏": "👴", "피터 린치": "👨‍💼", "스티브 잡스": "💡", 
+                "일론 머스크": "🚀", "심리학 전문가": "🧠", "미래학자": "🔭", "IT 전문가": "💻" 
+            };
+            
+            let juryHtml = '';
+            teamData.jury.forEach(agent => {
+                const icon = agent.icon || iconMap[agent.name] || '🤖';
+                const modelSelectorHtml = createModelSelector(agent); 
+                const safeAgentName = sanitizeForId(agent.name);
 
-            const reasonEl = document.querySelector('#screen-jury .text-center.text-sm.text-slate-500.mb-6');
-            if (reasonEl && teamData.reason) {
-                reasonEl.textContent = teamData.reason;
-            }
+                juryHtml += `
+                    <div class="agent-card-enhanced">
+                        <button data-agent-name-to-remove="${agent.name}" class="remove-agent-btn absolute top-2 right-2 text-gray-400 hover:text-red-500 text-2xl font-bold">&times;</button>
+                        <div>
+                            <span class="text-5xl">${icon}</span>
+                            <h4 class="text-xl font-bold mt-2">${agent.name}</h4>
+                        </div>
+                        <div class="mt-4 w-full">
+                            ${modelSelectorHtml}
+                            <div class="slider-container mt-4">
+                                <label for="length-slider-${safeAgentName}" class="text-xs font-medium text-gray-500 flex justify-between">
+                                    <span>발언 길이</span>
+                                    <span id="slider-value-${safeAgentName}" class="font-bold text-blue-600">200자</span>
+                                </label>
+                                <input type="range" id="length-slider-${safeAgentName}" min="100" max="2000" value="200" step="100" class="mt-1 w-full">
+                            </div>
+                        </div>
+                    </div>`;
+            });
 
-            renderJury(teamData.jury);
-
-            const startBtn = document.getElementById('start-debate-btn');
-            if (startBtn) {
-                const newStartBtn = startBtn.cloneNode(true);
-                startBtn.parentNode.replaceChild(newStartBtn, startBtn);
-                newStartBtn.addEventListener('click', startDebate);
+            const judgeName = teamData.judge.name;
+            const judgeIcon = teamData.judge.icon || iconMap[judgeName] || '🧑';
+            
+            const fullHtml = `
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold text-slate-800">전문가 에이전트 구성이 완료되었습니다.</h2>
+                    <p class="text-slate-600 mt-2">각 전문가가 사용할 LLM, 발언 길이 등을 수정하고, 원치 않는 전문가는 제외할 수 있습니다.</p>
+                </div>
+                <div class="mb-8">
+                    <div class="bg-amber-50 border-2 border-amber-400 p-4 rounded-xl flex flex-col sm:flex-row items-center gap-4">
+                        <span class="text-5xl">${judgeIcon}</span>
+                        <div class="text-center sm:text-left flex-grow">
+                            <h3 class="text-lg font-bold text-amber-800">사회자</h3>
+                            <p class="text-sm text-slate-600 mt-1">${getModelNameById(teamData.judge.model)}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="border-2 border-slate-200 bg-slate-50 p-6 rounded-xl">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-slate-700 text-lg">AI 전문가 에이전트</h3>
+                        <button id="add-agent-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition">＋ 전문가 추가하기</button>
+                    </div>
+                    <p class="text-center text-sm text-slate-500 mb-4">${teamData.reason}</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">${juryHtml}</div>
+                </div>
+                <button id="start-debate-btn" class="btn btn-primary w-full mt-8">이 구성으로 토론 시작하기</button>
+            `;
+            if (juryContainer) {
+                juryContainer.innerHTML = fullHtml;
             }
+            
+            document.getElementById('start-debate-btn').addEventListener('click', startDebate);
         }
 
         /**
@@ -2155,4 +2152,4 @@
                     alert('HTML 복사에 실패했습니다.');
                 });
             });
-                    });
+        });

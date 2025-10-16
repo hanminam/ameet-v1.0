@@ -10,18 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/main.css">
     <style>
-        body {
-            font-family: 'Noto Sans KR', sans-serif;
-            background-color: #f0f4f8;
-        }
-        .screen-card {
-            background-color: white;
-            border-radius: 1.5rem;
-            box-shadow: 0 10px_15px_-3px_rgba(0,0,0,0.07), 0_4px_6px_-2px_rgba(0,0,0,0.05);
-            margin: 2rem auto;
-            overflow: hidden;
-        }
-        .agent-card {
+        .agent-card-enhanced {
             background: white;
             border-radius: 1rem;
             padding: 1.5rem;
@@ -31,6 +20,7 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
+            position: relative;
         }
         .slider-container input[type="range"] {
             -webkit-appearance: none;
@@ -147,45 +137,10 @@
         </div>
     </div>
 
-    <div id="screen-jury" class="screen">
-        <div class="max-w-7xl mx-auto">
-            <header class="text-center mb-12">
-                <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800">
-                    <span class="text-blue-600">배심원단</span> 구성하기
-                </h1>
-                <p class="mt-4 text-lg text-gray-600 max-w-3xl mx-auto">AI가 제안한 전문가 팀을 확인하고, 필요에 맞게 직접 수정하여 최적의 토론을 시작하세요.</p>
-            </header>
-
-            <div class="screen-card">
-                <div class="p-6 md:p-8">
-                    <div class="bg-amber-50 border-2 border-amber-400 p-4 rounded-xl flex flex-col sm:flex-row items-center gap-4 mb-8">
-                        <span class="text-5xl">🧑‍⚖️</span>
-                        <div class="text-center sm:text-left flex-grow">
-                            <h3 class="text-lg font-bold text-amber-800">사회자</h3>
-                            <p class="text-sm text-slate-600 mt-1">Gemini 2.5 Flash</p>
-                        </div>
-                        <p class="text-sm text-slate-500 text-center sm:text-right">토론의 전체 흐름을 관리하고, 사용자 개입을 조율하며, 토론 품질을 유지하는 핵심 역할을 수행합니다.</p>
-                    </div>
-
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="font-bold text-slate-700 text-xl">AI 전문가 에이전트</h3>
-                        <button id="add-agent-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition">＋ 전문가 추가하기</button>
-                    </div>
-                    
-                    <p class="text-center text-sm text-slate-500 mb-6">AI 추천 이유: 자율주행 기술의 다각적 분석을 위해 기술, 재무, 법률, HR, 그리고 비판적 관점의 전문가를 균형있게 배치했습니다.</p>
-                    
-                    <div id="jury-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <!-- Agent Cards will be dynamically inserted here -->
-                    </div>
-
-                    <div class="mt-12 text-center">
-                         <button id="start-debate-btn" class="w-full md:w-auto bg-blue-600 text-white font-bold py-4 px-8 rounded-lg text-xl hover:bg-blue-700 transition transform hover:scale-105">
-                            이 구성으로 토론 시작하기
-                        </button>
-                    </div>
-                </div>
+    <div id="screen-jury" class="screen screen-card">
+        <div class="screen-header"><span>배심원단 구성 완료</span></div>
+        <div id="jury-container" class="screen-body">
             </div>
-        </div>
     </div>
 
     <div id="screen-5" class="screen screen-card" style="max-width: 80rem;">
@@ -264,7 +219,7 @@
             </div>
         </div>
     </div>
-
+    
     <!-- Add Agent Modal -->
     <div id="add-agent-modal" class="modal fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 hidden opacity-0 z-50">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
@@ -313,250 +268,80 @@
 
         </div>
     </div>
-    
-        <script>
-    
-            // --- Functions ---
-    
-    
-    
-            function toggleJuryModal(modalId) {
-    
-                const modal = document.getElementById(modalId);
-    
-                if (modal.classList.contains('hidden')) {
-    
-                    modal.classList.remove('hidden');
-    
-                    setTimeout(() => modal.classList.remove('opacity-0'), 10);
-    
-                } else {
-    
-                    modal.classList.add('opacity-0');
-    
-                    setTimeout(() => modal.classList.add('hidden'), 300);
-    
-                }
-    
+
+    <script>
+        // This script block contains the UI logic for the new features (modal, search, etc.)
+        // It is kept separate from main.js for now.
+
+        function toggleJuryModal(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+                setTimeout(() => modal.classList.remove('opacity-0'), 10);
+            } else {
+                modal.classList.add('opacity-0');
+                setTimeout(() => modal.classList.add('hidden'), 300);
             }
-    
-            
-    
-            function handleSearch() {
-    
-                const searchTerm = document.getElementById('agent-search-input').value.toLowerCase();
-    
-                const resultsContainer = document.getElementById('search-results-container');
-    
-                
-    
-                if (!searchTerm) {
-    
-                    resultsContainer.innerHTML = '<p class="text-center text-gray-500 pt-4">검색어를 입력하세요.</p>';
-    
-                    return;
-    
-                }
-    
-    
-    
-                // TODO: Replace with API call to search agents
-    
-                const expertAgentPool = []; // This is now empty, search will not work until implemented
-    
-                const results = expertAgentPool.filter(agent => agent.name.toLowerCase().includes(searchTerm) || agent.role.toLowerCase().includes(searchTerm));
-    
-    
-    
-                if (results.length === 0) {
-    
-                     resultsContainer.innerHTML = '<p class="text-center text-gray-500 pt-4">검색 결과가 없습니다.</p>';
-    
-                     return;
-    
-                }
-    
-    
-    
-                resultsContainer.innerHTML = '';
-    
-                results.forEach(agent => {
-    
-                    const item = document.createElement('div');
-    
-                    item.className = 'search-result-item flex items-center justify-between p-3 rounded-lg cursor-pointer';
-    
-                    item.innerHTML = `
-    
-                        <div class="flex items-center gap-3">
-    
-                            <span class="text-3xl">${agent.icon}</span>
-    
-                            <div>
-    
-                                <p class="font-bold">${agent.name}</p>
-    
-                                <p class="text-sm text-gray-500">${agent.role}</p>
-    
-                            </div>
-    
-                        </div>
-    
-                        <button class="add-searched-agent-btn bg-blue-100 text-blue-700 font-semibold text-sm py-1 px-3 rounded-full hover:bg-blue-200">추가</button>
-    
-                    `;
-    
-                    item.querySelector('.add-searched-agent-btn').addEventListener('click', (e) => {
-    
-                        e.stopPropagation();
-    
-                        addAgentToJury({ ...agent, model: 'gemini-2.5-flash' }); 
-    
-                        toggleJuryModal('add-agent-modal');
-    
-                    });
-    
-                    resultsContainer.appendChild(item);
-    
-                });
-    
-            }
-    
-    
-    
-            function addAgentToJury(agent) {
-    
-                // TODO: This needs to be reimplemented to update the main jury array
-    
-                // and re-render. For now, it does nothing.
-    
-                console.log("Adding agent (not implemented):", agent);
-    
-            }
-    
-    
-    
-            function removeAgentFromJury(agentNameToRemove) {
-    
-                // TODO: This needs to be reimplemented to update the main jury array
-    
-                // and re-render. For now, it does nothing.
-    
-                console.log("Removing agent (not implemented):", agentNameToRemove);
-    
-            }
-    
-    
-    
-            // --- Event Listeners ---
-    
-            document.addEventListener('DOMContentLoaded', () => {
-    
-                document.getElementById('add-agent-btn').addEventListener('click', () => {
-    
+        }
+
+        function handleJuryChange(action, agent) {
+            console.log(`Jury Change Action: ${action}`, agent);
+            // This is a placeholder. The actual logic will be implemented later.
+            // For 'remove', it should remove the agent from the list and re-render.
+            // For 'add', it should add the agent and re-render.
+            alert(`기능 구현 필요: ${action} - ${agent.name || agent}`); 
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Event listener for the main "Add Expert" button
+            // This button is added dynamically by main.js, so we use event delegation on a static parent.
+            document.getElementById('jury-container').addEventListener('click', (e) => {
+                if (e.target && e.target.id === 'add-agent-btn') {
                     document.getElementById('agent-search-view').classList.remove('hidden');
-    
                     document.getElementById('agent-create-view').classList.add('hidden');
-    
                     document.getElementById('agent-search-input').value = '';
-    
                     document.getElementById('search-results-container').innerHTML = '<p class="text-center text-gray-500 pt-4">검색어를 입력하세요.</p>';
-    
                     toggleJuryModal('add-agent-modal');
-    
-                });
-    
-                
-    
-                document.getElementById('agent-search-btn').addEventListener('click', handleSearch);
-    
-                document.getElementById('agent-search-input').addEventListener('keypress', (e) => {
-    
-                    if (e.key === 'Enter') handleSearch();
-    
-                });
-    
-    
-    
-                document.getElementById('show-create-view-btn').addEventListener('click', () => {
-    
-                    document.getElementById('agent-search-view').classList.add('hidden');
-    
-                    document.getElementById('agent-create-view').classList.remove('hidden');
-    
-                });
-    
-    
-    
-                document.getElementById('back-to-search-btn').addEventListener('click', () => {
-    
-                    document.getElementById('agent-create-view').classList.add('hidden');
-    
-                    document.getElementById('agent-search-view').classList.remove('hidden');
-    
-                });
-    
-                
-    
-                document.getElementById('create-agent-btn').addEventListener('click', () => {
-    
-                    const newAgent = {
-    
-                        name: document.getElementById('new-agent-name').value.trim(),
-    
-                        icon: document.getElementById('new-agent-icon').value.trim() || '🤖',
-    
-                        role: document.getElementById('new-agent-prompt').value.trim(),
-    
-                        model: 'gemini-2.5-flash'
-    
-                    };
-    
-                    if (!newAgent.name || !newAgent.role) {
-    
-                        alert('전문가 이름과 핵심 역할은 필수입니다.');
-    
-                        return;
-    
-                    }
-    
-                    addAgentToJury(newAgent);
-    
-                    toggleJuryModal('add-agent-modal');
-    
-                });
-    
-    
-    
-                document.getElementById('jury-grid').addEventListener('click', (e) => {
-    
-                    if (e.target && e.target.classList.contains('remove-agent-btn')) {
-    
-                        const agentNameToRemove = e.target.dataset.agentNameToRemove;
-    
-                        removeAgentFromJury(agentNameToRemove);
-    
-                    }
-    
-                });
-    
-                
-    
-                document.getElementById('start-debate-btn').addEventListener('click', () => {
-    
-                    // This button's logic is now handled in main.js's startDebate function
-    
-                    // which is attached after the jury is rendered from the backend.
-    
-                    console.log("Start debate button clicked. Logic is in main.js");
-    
-                });
-    
+                }
+
+                if (e.target && e.target.classList.contains('remove-agent-btn')) {
+                    const agentName = e.target.dataset.agentNameToRemove;
+                    handleJuryChange('remove', agentName);
+                }
             });
-    
-    
-    
-        </script>
+
+            // Event listeners for the modal content
+            document.getElementById('agent-search-btn').addEventListener('click', () => alert('검색 기능 구현 필요'));
+            document.getElementById('agent-search-input').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') alert('검색 기능 구현 필요');
+            });
+
+            document.getElementById('show-create-view-btn').addEventListener('click', () => {
+                document.getElementById('agent-search-view').classList.add('hidden');
+                document.getElementById('agent-create-view').classList.remove('hidden');
+            });
+
+            document.getElementById('back-to-search-btn').addEventListener('click', () => {
+                document.getElementById('agent-create-view').classList.add('hidden');
+                document.getElementById('agent-search-view').classList.remove('hidden');
+            });
+            
+            document.getElementById('create-agent-btn').addEventListener('click', () => {
+                const newAgent = {
+                    name: document.getElementById('new-agent-name').value.trim(),
+                    icon: document.getElementById('new-agent-icon').value.trim() || '🤖',
+                    role: document.getElementById('new-agent-prompt').value.trim(),
+                    model: 'gemini-2.5-flash'
+                };
+                if (!newAgent.name || !newAgent.role) {
+                    alert('전문가 이름과 핵심 역할은 필수입니다.');
+                    return;
+                }
+                handleJuryChange('add', newAgent);
+                toggleJuryModal('add-agent-modal');
+            });
+        });
+    </script>
     <script src="/static/js/main.js" defer></script>
 </body>
 </html>
