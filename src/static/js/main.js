@@ -843,7 +843,7 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
                         <p class="font-bold mb-2">🧑‍⚖️ 배심원단 선정 사유</p>
                         <div>${markdownToHtml(teamData.reason)}</div>
                     </blockquote>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">${juryHtml}</div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">${juryHtml}</div>
                 </div>
                 <button id="start-debate-btn" class="btn btn-primary w-full mt-8">이 구성으로 토론 시작하기</button>
             `;
@@ -1348,7 +1348,7 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
             // 이벤트 리스너 연결
             document.getElementById('next-round-btn').addEventListener('click', handleNextRound);
             document.getElementById('end-debate-report-btn').addEventListener('click', handleEndDebate); // 보고서 생성
-            document.getElementById('end-debate-no-report-btn').addEventListener('click', handleEndDebateWithoutReport); // 보고서 없이 종료
+            document.getElementById('end-debate-no-report-btn').addEventListener('click', handleEndDebateWithoutReport);
             
             /* [임시 비활성화] 투표 옵션 컨테이너 이벤트 리스너
             const voteOptionsContainer = document.getElementById('vote-options-container');
@@ -1364,6 +1364,20 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
             }
             */
         }
+
+        /**
+         * 배심원단 화면의 슬라이더 값 표시를 업데이트하는 이벤트 리스너
+         */
+        juryContainer.addEventListener('input', (event) => {
+            if (event.target.type === 'range' && event.target.id.startsWith('length-slider-')) {
+                const slider = event.target;
+                const safeAgentName = slider.id.substring('length-slider-'.length);
+                const valueSpan = document.getElementById(`slider-value-${safeAgentName}`);
+                if (valueSpan) {
+                    valueSpan.textContent = `${slider.value}자`;
+                }
+            }
+        });
 
         /**
          * '다음 라운드 진행' 버튼의 로직을 처리하는 함수
