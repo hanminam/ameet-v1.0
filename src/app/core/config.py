@@ -40,10 +40,8 @@ class Settings(BaseSettings):
     # 로컬에서는 이 값이 없으므로 None이 됩니다.
     INSTANCE_CONNECTION_NAME: str | None = None
 
-    # Cloud Run 환경의 Memorystore Redis IP
-    CLOUD_REDIS_HOST: str = "10.48.219.179"
-    # 로컬 개발 환경의 Redis IP (Docker 또는 로컬 설치)
-    LOCAL_REDIS_HOST: str = "127.0.0.1" # 또는 "localhost"
+    # Redis IP 주소. Cloud Run에서는 환경 변수로, 로컬에서는 .env 또는 기본값으로 설정됩니다.
+    REDIS_HOST: str = "127.0.0.1"
     REDIS_PORT: int = 6379
 
     MONGO_DB_URL: str = "mongodb+srv://root:Kimnc0624!%40@cluster0.6ckqorp.mongodb.net/ameet_db?retryWrites=true&w=majority"
@@ -54,19 +52,7 @@ class Settings(BaseSettings):
     # JWT 서명을 위한 시크릿 키 (실제 운영 시에는 .env에서 관리)
     SECRET_KEY: str = "a_very_secret_key_that_should_be_changed"
 
-    # --- 환경에 따라 Redis 호스트를 동적으로 결정 ---
-    @computed_field
-    @property
-    def REDIS_HOST(self) -> str:
-        # INSTANCE_CONNECTION_NAME은 Cloud Run 환경에만 존재합니다.
-        # 이 변수가 없으면 로컬 환경으로 간주합니다.
-        if self.INSTANCE_CONNECTION_NAME:
-            print("--- [Config] Cloud Run 환경 감지. Cloud Redis를 사용합니다. ---")
-            return self.CLOUD_REDIS_HOST
-        else:
-            print("--- [Config] 로컬 환경 감지. Local Redis를 사용합니다. ---")
-            return self.LOCAL_REDIS_HOST
-    # --- Redis 설정 수정 끝 ---
+
 
     # SQLAlchemy가 사용할 완전한 데이터베이스 접속 URL 생성
     @computed_field
