@@ -86,3 +86,4 @@ logger.info(f"Application Title: {settings.APP_TITLE}")
 loaded_key = settings.TAVILY_API_KEY
 key_display = f"***{loaded_key[-4:]}" if loaded_key and len(loaded_key) > 4 else "Not Set or Too Short"
 logger.info(f"Loaded TAVILY_API_KEY ending with: {key_display}")
+logger.info(f"--- [CONFIG-CHECK] Attempting to use Redis Host: {settings.REDIS_HOST} ---")

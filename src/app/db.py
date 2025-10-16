@@ -16,6 +16,7 @@ async def init_db_connections():
     logger.info("--- [DB-INIT] Initializing database connections (Redis, MongoDB)... ---")
 
     # --- Redis Initialization ---
+    logger.info(f"--- [DB-INIT] Attempting Redis connection to: redis://{settings.REDIS_HOST}:{settings.REDIS_PORT} ---")
     try:
         redis_client = redis.from_url(f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}", decode_responses=True)
         await redis_client.ping()
