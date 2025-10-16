@@ -374,9 +374,10 @@
 
         function createAgentCard(agent) {
             const card = document.createElement('div');
-            card.className = 'agent-card';
+            card.className = 'agent-card relative'; // 'relative' 클래스 추가
             const safeAgentName = sanitizeForId(agent.name); // ID 생성을 위해 이름 변환
             card.innerHTML = `
+                <button data-agent-name-to-remove="${agent.name}" class="remove-agent-btn absolute top-2 right-2 text-gray-400 hover:text-red-500 text-2xl font-bold">&times;</button>
                 <div>
                     <span class="text-5xl">${agent.icon}</span>
                     <h4 class="text-xl font-bold mt-2">${agent.name}</h4>
@@ -502,6 +503,21 @@
                 toggleJuryModal('add-agent-modal');
             });
             
+            function removeAgentFromJury(agentNameToRemove) {
+                const agentIndex = initialJury.findIndex(agent => agent.name === agentNameToRemove);
+                if (agentIndex > -1) {
+                    initialJury.splice(agentIndex, 1);
+                    renderJury(initialJury);
+                }
+            }
+
+            document.getElementById('jury-grid').addEventListener('click', (e) => {
+                if (e.target && e.target.classList.contains('remove-agent-btn')) {
+                    const agentNameToRemove = e.target.dataset.agentNameToRemove;
+                    removeAgentFromJury(agentNameToRemove);
+                }
+            });
+
             document.getElementById('start-debate-btn').addEventListener('click', () => {
                 alert("개선된 구성으로 실시간 토론을 시작합니다!");
             });
