@@ -830,13 +830,31 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
         }
 
         function renderJuryScreen(teamData) {
-            const iconMap = { 
-                "사회자": "🧑‍⚖️", "거시경제 전문가": "🌍", "산업 분석가": "🏭", 
-                "재무 분석가": "💹", "SNS 트렌드 분석가": "📱", "비판적 관점": "🤔", 
-                "워렌 버핏": "👴", "피터 린치": "👨‍💼", "스티브 잡스": "💡", 
-                "일론 머스크": "🚀", "심리학 전문가": "🧠", "미래학자": "🔭", "IT 전문가": "💻" 
+            const iconMap = {
+                "사회자": "🧑‍⚖️", "거시경제 전문가": "🌍", "산업 분석가": "🏭",
+                "재무 분석가": "💹", "SNS 트렌드 분석가": "📱", "비판적 관점": "🤔",
+                "워렌 버핏": "👴", "피터 린치": "👨‍💼", "스티브 잡스": "💡",
+                "일론 머스크": "🚀", "심리학 전문가": "🧠", "미래학자": "🔭", "IT 전문가": "💻"
             };
-            
+
+            // 렌더링 전에 현재 모델 선택 값과 슬라이더 값을 저장합니다.
+            const savedModelSelections = {};
+            const savedLengthValues = {};
+
+            document.querySelectorAll('.agent-model-selector').forEach(selector => {
+                const agentName = selector.dataset.agentName;
+                if (agentName) {
+                    savedModelSelections[agentName] = selector.value;
+                }
+            });
+
+            document.querySelectorAll('input[type="range"][id^="length-slider-"]').forEach(slider => {
+                const agentName = slider.dataset.agentName;
+                if (agentName) {
+                    savedLengthValues[agentName] = parseInt(slider.value, 10);
+                }
+            });
+
             let juryHtml = '';
             teamData.jury.forEach(agent => {
                 const icon = agent.icon || iconMap[agent.name] || '🤖';
@@ -896,7 +914,29 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
             if (juryContainer) {
                 juryContainer.innerHTML = fullHtml;
             }
-            
+
+            // 렌더링 후 저장된 모델 선택 값과 슬라이더 값을 복원합니다.
+            document.querySelectorAll('.agent-model-selector').forEach(selector => {
+                const agentName = selector.dataset.agentName;
+                if (agentName && savedModelSelections[agentName]) {
+                    selector.value = savedModelSelections[agentName];
+                }
+            });
+
+            document.querySelectorAll('input[type="range"][id^="length-slider-"]').forEach(slider => {
+                const agentName = slider.dataset.agentName;
+                const safeAgentName = slider.id.substring('length-slider-'.length);
+                if (agentName && savedLengthValues[agentName]) {
+                    const savedValue = savedLengthValues[agentName];
+                    slider.value = savedValue;
+                    // 슬라이더 옆 표시 값도 업데이트
+                    const valueSpan = document.getElementById(`slider-value-${safeAgentName}`);
+                    if (valueSpan) {
+                        valueSpan.textContent = `${savedValue}자`;
+                    }
+                }
+            });
+
             document.getElementById('start-debate-btn').addEventListener('click', startDebate);
         }
 
