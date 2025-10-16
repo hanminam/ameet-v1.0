@@ -344,6 +344,121 @@
             }
         }
 
+        async function searchAgentsForDiscussion() {
+            const query = document.getElementById('agent-search-input').value.trim();
+            const token = localStorage.getItem('accessToken');
+
+            if (!token) {
+                alert('로그인이 필요합니다.');
+                return;
+            }
+
+            const resultsContainer = document.getElementById('search-results-container');
+            resultsContainer.innerHTML = '<p class="text-center text-gray-500 pt-4">검색 중...</p>';
+
+            try {
+                let apiUrl = '/api/v1/agents/search';
+                if (query) {
+                    apiUrl += `?name_like=${encodeURIComponent(query)}`;
+                }
+
+                const response = await fetch(apiUrl, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) {
+                    throw new Error('검색 실패');
+                }
+
+                const agents = await response.json();
+                renderSearchResults(agents);
+
+            } catch (error) {
+                console.error('검색 오류:', error);
+                resultsContainer.innerHTML = '<p class="text-center text-red-500 pt-4">검색 중 오류가 발생했습니다.</p>';
+            }
+        }
+
+        function renderSearchResults(agents) {
+            const resultsContainer = document.getElementById('search-results-container');
+
+            if (agents.length === 0) {
+                resultsContainer.innerHTML = '<p class="text-center text-gray-500 pt-4">검색 결과가 없습니다.</p>';
+                return;
+            }
+
+            let html = '';
+            agents.forEach(agent => {
+                const icon = agent.config.icon || '🤖';
+                const participationCount = agent.discussion_participation_count || 0;
+
+                html += `
+                    <div class="search-result-item flex items-center justify-between p-3 border-b hover:bg-blue-50 cursor-pointer rounded transition"
+                         onclick="addAgentToDiscussion('${agent.name}')">
+                        <div class="flex items-center gap-3">
+                            <span class="text-2xl">${icon}</span>
+                            <div>
+                                <p class="font-semibold text-gray-800">${agent.name}</p>
+                                <p class="text-xs text-gray-500">참여 횟수: ${participationCount}회</p>
+                            </div>
+                        </div>
+                        <button class="bg-blue-600 text-white text-sm font-bold py-1 px-3 rounded hover:bg-blue-700">추가</button>
+                    </div>
+                `;
+            });
+
+            resultsContainer.innerHTML = html;
+        }
+
+        async function addAgentToDiscussion(agentName) {
+            const token = localStorage.getItem('accessToken');
+
+            if (!token) {
+                alert('로그인이 필요합니다.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/v1/discussions/${currentDiscussionId}/participants`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ agent_name: agentName })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || '에이전트 추가 실패');
+                }
+
+                // 성공: 업데이트된 토론 정보를 받아옴
+                const updatedDiscussion = await response.json();
+
+                // 화면 갱신: DebateTeam 형식으로 변환
+                const debateTeam = {
+                    discussion_id: updatedDiscussion.discussion_id,
+                    judge: updatedDiscussion.participants.find(p => p.name === '재판관'),
+                    jury: updatedDiscussion.participants.filter(p => p.name !== '재판관'),
+                    reason: updatedDiscussion.orchestration_reason || "배심원단 구성이 완료되었습니다."
+                };
+
+                // 배심원단 화면 재렌더링
+                renderJuryScreen(debateTeam);
+
+                // 모달 닫기
+                toggleJuryModal('add-agent-modal');
+
+                // 성공 메시지
+                alert(`'${agentName}' 전문가가 토론에 추가되었습니다.`);
+
+            } catch (error) {
+                console.error('에이전트 추가 오류:', error);
+                alert(`에이전트 추가 실패: ${error.message}`);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             // Event listener for the main "Add Expert" button
             // This button is added dynamically by main.js, so we use event delegation on a static parent.
@@ -363,9 +478,9 @@
             });
 
             // Event listeners for the modal content
-            document.getElementById('agent-search-btn').addEventListener('click', () => alert('검색 기능 구현 필요'));
+            document.getElementById('agent-search-btn').addEventListener('click', () => searchAgentsForDiscussion());
             document.getElementById('agent-search-input').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') alert('검색 기능 구현 필요');
+                if (e.key === 'Enter') searchAgentsForDiscussion();
             });
 
             document.getElementById('show-create-view-btn').addEventListener('click', () => {

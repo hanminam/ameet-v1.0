@@ -17,10 +17,14 @@ from app.models.discussion import DiscussionLog, User
 
 from pydantic import BaseModel
 from app.services.report_generator import generate_report_background
+from app.models.discussion import AgentSettings
 
 class TurnRequest(BaseModel):
     user_vote: Optional[str] = None
     model_overrides: Optional[Dict[str, str]] = None
+
+class AddParticipantRequest(BaseModel):
+    agent_name: str
 
 router = APIRouter(redirect_slashes=False)
 
@@ -410,6 +414,95 @@ async def remove_participant_from_discussion(
     await discussion_log.save()
 
     # 8. 업데이트된 토론 정보 반환
+    user = await User.find_one(User.email == discussion_log.user_email)
+    user_name = user.name if user else "사용자 정보 없음"
+
+    response_data = discussion_log.model_dump()
+    response_data["user_name"] = user_name
+
+    return DiscussionLogDetail(**response_data)
+
+# --- 참가자 추가 API ---
+@router.post(
+    "/{discussion_id}/participants",
+    response_model=DiscussionLogDetail,
+    summary="토론 참가자 추가"
+)
+async def add_participant_to_discussion(
+    discussion_id: str,
+    request: AddParticipantRequest,
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    토론에 기존 에이전트를 추가합니다.
+
+    제약사항:
+    - 토론 상태가 'ready'일 때만 추가 가능
+    - 이미 참여 중인 에이전트는 추가 불가
+    - AgentSettings에 존재하는 active 상태의 expert 에이전트만 추가 가능
+    """
+    # 1. DB에서 토론 찾기
+    discussion_log = await DiscussionLog.find_one(DiscussionLog.discussion_id == discussion_id)
+
+    if not discussion_log:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discussion not found.")
+
+    if discussion_log.user_email != current_user.email:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to modify this discussion.")
+
+    # 2. 토론 상태 확인 (ready 상태에서만 수정 가능)
+    if discussion_log.status != "ready":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot modify participants. Discussion status is '{discussion_log.status}'. Only 'ready' status allows modifications."
+        )
+
+    # 3. participants 초기화 확인
+    if not discussion_log.participants:
+        discussion_log.participants = []
+
+    # 4. 중복 체크
+    for participant in discussion_log.participants:
+        if participant.get("name") == request.agent_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Agent '{request.agent_name}' is already participating in this discussion."
+            )
+
+    # 5. AgentSettings에서 에이전트 찾기
+    agent = await AgentSettings.find_one(
+        AgentSettings.name == request.agent_name,
+        AgentSettings.status == "active"
+    )
+
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{request.agent_name}' not found or not active."
+        )
+
+    # 6. expert 타입만 추가 가능
+    if agent.agent_type != "expert":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Only expert agents can be added to discussions. '{request.agent_name}' is a special agent."
+        )
+
+    # 7. 에이전트를 participants에 추가
+    agent_dict = {
+        "name": agent.name,
+        **agent.config.model_dump()
+    }
+    discussion_log.participants.append(agent_dict)
+
+    # 8. DB 저장
+    await discussion_log.save()
+
+    # 9. 에이전트 참여 카운트 증가
+    agent.discussion_participation_count += 1
+    await agent.save()
+
+    # 10. 업데이트된 토론 정보 반환
     user = await User.find_one(User.email == discussion_log.user_email)
     user_name = user.name if user else "사용자 정보 없음"
 

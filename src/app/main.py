@@ -7,7 +7,7 @@ from fastapi import FastAPI
 
 from app.core.config import settings, logger
 from app import db
-from app.api.v1 import login, users, setup, discussions as discussions_router
+from app.api.v1 import login, users, setup, discussions as discussions_router, agents
 from app.api.v1.admin import (
     agents as admin_agents, 
     discussions as admin_discussions,
@@ -58,6 +58,7 @@ app.include_router(login.router, prefix="/api/v1/login", tags=["login"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(setup.router, prefix="/api/v1/setup", tags=["setup"])
 app.include_router(discussions_router.router, prefix="/api/v1/discussions", tags=["Discussions"])
+app.include_router(agents.router, prefix="/api/v1/agents", tags=["Agents"])
 
 # v1 관리자용 API (여기에 모두 정리)
 app.include_router(admin_agents.router, prefix="/api/v1/admin/agents", tags=["Admin: Agents"])
