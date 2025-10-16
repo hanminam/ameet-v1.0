@@ -839,7 +839,10 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
                         <h3 class="font-bold text-slate-700 text-lg">AI 전문가 에이전트</h3>
                         <button id="add-agent-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition">＋ 전문가 추가하기</button>
                     </div>
-                    <p class="text-center text-sm text-slate-500 mb-4">${teamData.reason}</p>
+                    <blockquote class="bg-blue-50 border-l-4 border-blue-400 text-blue-800 p-4 rounded-r-lg my-4 text-sm">
+                        <p class="font-bold mb-2">🧑‍⚖️ 배심원단 선정 사유</p>
+                        <div>${markdownToHtml(teamData.reason)}</div>
+                    </blockquote>
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">${juryHtml}</div>
                 </div>
                 <button id="start-debate-btn" class="btn btn-primary w-full mt-8">이 구성으로 토론 시작하기</button>
