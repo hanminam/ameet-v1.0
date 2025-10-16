@@ -28,7 +28,7 @@ steps:
     args:
       - 'run'
       - 'deploy'
-      - 'ameet-v1-0' # ◀ 여기에 Cloud Run 서비스 이름을 정확히 입력하세요.
+      - 'ameet-v1-5' # ◀ 여기에 Cloud Run 서비스 이름을 정확히 입력하세요.
       - '--image'
       - 'gcr.io/$PROJECT_ID/ameet-v1:latest'
       - '--region'
