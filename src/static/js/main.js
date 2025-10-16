@@ -825,7 +825,9 @@
                 </div>
                 <button id="start-debate-btn" class="btn btn-primary w-full mt-8">이 구성으로 토론 시작하기</button>
             `;
-            juryContainer.innerHTML = fullHtml;
+            if (juryContainer) {
+                juryContainer.innerHTML = fullHtml;
+            }
             
             document.getElementById('start-debate-btn').addEventListener('click', startDebate);
         }
