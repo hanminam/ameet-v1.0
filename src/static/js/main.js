@@ -857,7 +857,7 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
                                     <span>발언 길이</span>
                                     <span id="slider-value-${safeAgentName}" class="font-bold text-blue-600">200자</span>
                                 </label>
-                                <input type="range" id="length-slider-${safeAgentName}" min="100" max="2000" value="200" step="100" class="mt-1 w-full">
+                                <input type="range" id="length-slider-${safeAgentName}" data-agent-name="${agent.name}" min="100" max="2000" value="200" step="100" class="mt-1 w-full">
                             </div>
                         </div>
                     </div>`;
@@ -1032,6 +1032,17 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
             });
             console.log("사용자가 선택한 모델 구성:", modelOverrides);
 
+            // 각 에이전트별로 선택된 발언 길이 값을 읽어옵니다.
+            const lengthOverrides = {};
+            document.querySelectorAll('input[type="range"][id^="length-slider-"]').forEach(slider => {
+                const agentName = slider.dataset.agentName;
+                const lengthValue = parseInt(slider.value, 10);
+                if (agentName && lengthValue) {
+                    lengthOverrides[agentName] = lengthValue;
+                }
+            });
+            console.log("사용자가 선택한 발언 길이 구성:", lengthOverrides);
+
             try {
                 const response = await authenticatedFetch(`/api/v1/discussions/${currentDiscussionId}/turns`, {
                     method: 'POST',
@@ -1039,10 +1050,11 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
-                    // body에 사용자가 선택한 모델 정보를 포함하여 전송합니다.
+                    // body에 사용자가 선택한 모델 정보와 발언 길이 정보를 포함하여 전송합니다.
                     body: JSON.stringify({
                         user_vote: null, // 첫 턴이므로 user_vote는 null 입니다.
-                        model_overrides: modelOverrides
+                        model_overrides: modelOverrides,
+                        length_overrides: lengthOverrides
                     })
                 });
 

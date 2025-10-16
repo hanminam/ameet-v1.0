@@ -22,6 +22,7 @@ from app.models.discussion import AgentSettings
 class TurnRequest(BaseModel):
     user_vote: Optional[str] = None
     model_overrides: Optional[Dict[str, str]] = None
+    length_overrides: Optional[Dict[str, int]] = None
 
 class AddParticipantRequest(BaseModel):
     agent_name: str
@@ -145,16 +146,23 @@ async def execute_discussion_turn(
             detail=f"Cannot start a new turn. Current status is '{discussion_log.status}'."
         )
 
-    # 4. 토론 상태를 'turn_inprogress'(턴 진행 중)으로 변경하고 DB에 즉시 저장합니다.
+    # 4. length_overrides가 제공된 경우 participants의 max_response_length를 업데이트합니다.
+    if turn_request.length_overrides:
+        for participant in discussion_log.participants:
+            agent_name = participant.get("name")
+            if agent_name in turn_request.length_overrides:
+                participant["max_response_length"] = turn_request.length_overrides[agent_name]
+
+    # 5. 토론 상태를 'turn_inprogress'(턴 진행 중)으로 변경하고 DB에 즉시 저장합니다.
     discussion_log.status = "turn_inprogress"
     await discussion_log.save()
 
-    # 5. 실제 토론을 진행할 함수를 백그라운드 작업으로 추가합니다.
+    # 6. 실제 토론을 진행할 함수를 백그라운드 작업으로 추가합니다.
     # 이 작업은 아래 return 문이 실행된 후에 비동기적으로 처리됩니다.
     # 백그라운드 작업에 user_vote 전달
     background_tasks.add_task(
-        execute_turn, 
-        discussion_log, 
+        execute_turn,
+        discussion_log,
         turn_request.user_vote,
         turn_request.model_overrides
     )
