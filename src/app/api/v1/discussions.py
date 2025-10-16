@@ -322,3 +322,98 @@ async def get_orchestration_progress(
             "message": f"진행 상황을 가져올 수 없습니다: {str(e)}",
             "progress": 0
         }
+
+# --- 참가자 제거 API ---
+@router.delete(
+    "/{discussion_id}/participants/{agent_name}",
+    response_model=DiscussionLogDetail,
+    summary="토론 참가자 제거"
+)
+async def remove_participant_from_discussion(
+    discussion_id: str,
+    agent_name: str,
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    토론에서 특정 에이전트를 제거합니다.
+    주의: MongoDB의 AgentSettings에서 삭제하는 것이 아니라,
+    현재 토론의 participants 배열에서만 제거합니다.
+
+    제약사항:
+    - 토론 상태가 'ready'일 때만 제거 가능
+    - 재판관은 제거 불가
+    - '비판적 관점' 에이전트는 제거 불가
+    - 제거 후 최소 3명의 배심원이 남아야 함
+    """
+    # 1. DB에서 토론 찾기
+    discussion_log = await DiscussionLog.find_one(DiscussionLog.discussion_id == discussion_id)
+
+    if not discussion_log:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discussion not found.")
+
+    if discussion_log.user_email != current_user.email:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to modify this discussion.")
+
+    # 2. 토론 상태 확인 (ready 상태에서만 수정 가능)
+    if discussion_log.status != "ready":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot modify participants. Discussion status is '{discussion_log.status}'. Only 'ready' status allows modifications."
+        )
+
+    # 3. participants가 없으면 오류
+    if not discussion_log.participants:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No participants found in this discussion.")
+
+    # 4. 제거하려는 에이전트 찾기
+    agent_to_remove = None
+    for participant in discussion_log.participants:
+        if participant.get("name") == agent_name:
+            agent_to_remove = participant
+            break
+
+    if not agent_to_remove:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Agent '{agent_name}' is not participating in this discussion."
+        )
+
+    # 5. 제약사항 검증
+    # 5-1. 재판관 제거 불가
+    if agent_name == "재판관":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove the judge (재판관) from the discussion."
+        )
+
+    # 5-2. 비판적 관점 제거 불가
+    if agent_name == "비판적 관점":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove the critical perspective agent (비판적 관점) from the discussion."
+        )
+
+    # 5-3. 제거 후 최소 배심원 수 확인 (재판관 제외)
+    jury_count = sum(1 for p in discussion_log.participants if p.get("name") != "재판관")
+    if jury_count <= 3:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove this agent. At least 3 jury members (excluding the judge) must remain."
+        )
+
+    # 6. 참가자 제거
+    discussion_log.participants = [
+        p for p in discussion_log.participants if p.get("name") != agent_name
+    ]
+
+    # 7. DB 저장
+    await discussion_log.save()
+
+    # 8. 업데이트된 토론 정보 반환
+    user = await User.find_one(User.email == discussion_log.user_email)
+    user_name = user.name if user else "사용자 정보 없음"
+
+    response_data = discussion_log.model_dump()
+    response_data["user_name"] = user_name
+
+    return DiscussionLogDetail(**response_data)

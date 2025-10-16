@@ -284,12 +284,64 @@
             }
         }
 
-        function handleJuryChange(action, agent) {
-            console.log(`Jury Change Action: ${action}`, agent);
-            // This is a placeholder. The actual logic will be implemented later.
-            // For 'remove', it should remove the agent from the list and re-render.
-            // For 'add', it should add the agent and re-render.
-            alert(`기능 구현 필요: ${action} - ${agent.name || agent}`); 
+        async function handleJuryChange(action, agentName) {
+            console.log(`Jury Change Action: ${action}`, agentName);
+
+            if (action === 'remove') {
+                await removeAgentFromDiscussion(agentName);
+            } else if (action === 'add') {
+                // TODO: 추가 기능은 나중에 구현
+                alert(`추가 기능은 아직 구현되지 않았습니다: ${agentName}`);
+            }
+        }
+
+        async function removeAgentFromDiscussion(agentName) {
+            // 1. 확인 메시지
+            const confirmed = confirm(`'${agentName}' 전문가를 이번 토론에서 제외하시겠습니까?`);
+            if (!confirmed) return;
+
+            // 2. 토큰 가져오기
+            const token = localStorage.getItem('accessToken');
+            if (!token) {
+                alert('로그인이 필요합니다.');
+                return;
+            }
+
+            // 3. API 호출
+            try {
+                const response = await fetch(`/api/v1/discussions/${currentDiscussionId}/participants/${encodeURIComponent(agentName)}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || '에이전트 제거 실패');
+                }
+
+                // 4. 성공: 업데이트된 토론 정보를 받아옴
+                const updatedDiscussion = await response.json();
+
+                // 5. 화면 갱신: DebateTeam 형식으로 변환
+                const debateTeam = {
+                    discussion_id: updatedDiscussion.discussion_id,
+                    judge: updatedDiscussion.participants.find(p => p.name === '재판관'),
+                    jury: updatedDiscussion.participants.filter(p => p.name !== '재판관'),
+                    reason: updatedDiscussion.orchestration_reason || "배심원단 구성이 완료되었습니다."
+                };
+
+                // 6. 배심원단 화면 재렌더링
+                renderJuryScreen(debateTeam);
+
+                // 7. 성공 메시지 (선택사항)
+                alert(`'${agentName}' 전문가가 토론에서 제외되었습니다.`);
+
+            } catch (error) {
+                console.error('에이전트 제거 오류:', error);
+                alert(`에이전트 제거 실패: ${error.message}`);
+            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
