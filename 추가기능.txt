@@ -1,14 +1,22 @@
+* 전문가 에이전트 배심원단 구성 완료 화면 기능 수정사항
+
+1. 사용자가 원하는 전문가 에이전트를 추가하는 기능
+1) 기존의 전문가 에이전트 풀에서 검색 추가
+2) 검색 결과 마음에 드는 에이전트가 없으면 사용자가 직접 전문가를 생성
+3) 선정된 전문가 에이전트 중 맘에 들지 않는 에이전트를 사용자가 이번 토론에서 참가 배제 기능
+
+2. 에이전트의 발언 길이를 배심원단 선정 화면에서 에이전트의 사용언어모델 콤보 밑에 슬라이드 UI로 최소 100자에서 2000자까지 설정하는 UI추가(기본값 200자)
+
+* 화면 UI/UX 목업
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AMEET - AI Collective Intelligence Analysis</title>
+    <title>AMEET - 배심원단 구성 (개선안)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/main.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Noto Sans KR', sans-serif;
@@ -64,203 +72,43 @@
         }
     </style>
 </head>
-<body class="antialiased">
+<body class="p-4 md:p-8">
 
-    <div id="screen-login" class="screen active screen-card">
-        <div class="screen-body text-center">
-            <h2 class="text-3xl font-bold text-slate-800">AMEET</h2>
-            <p class="text-slate-600 mt-2 mb-8">로그인 후 AI 집단지성 토론을 시작하세요.</p>
-            <div id="login-form" class="max-w-sm mx-auto space-y-4">
-                <input type="email" id="email-input" placeholder="이메일 주소 (user@example.com)" class="w-full p-3 border-slate-300 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="">
-                <input type="password" id="password-input" placeholder="비밀번호" class="w-full p-3 border-slate-300 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value="">
+    <div class="max-w-7xl mx-auto">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800">
+                <span class="text-blue-600">배심원단</span> 구성하기
+            </h1>
+            <p class="mt-4 text-lg text-gray-600 max-w-3xl mx-auto">AI가 제안한 전문가 팀을 확인하고, 필요에 맞게 직접 수정하여 최적의 토론을 시작하세요.</p>
+        </header>
 
-                <div class="flex items-center justify-start text-sm">
-                    <input type="checkbox" id="remember-me-checkbox" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                    <label for="remember-me-checkbox" class="ml-2 text-gray-600">아이디/비밀번호 기억</label>
-                </div>
-
-                <button id="login-button" class="btn btn-primary w-full">로그인</button>
-                <p id="login-error" class="text-sm text-red-500 h-4"></p>
-            </div>
-        </div>
-    </div>
-
-    <div id="screen-topic" class="screen screen-card">
-        <div class="screen-header">
-            <span class="font-bold">주제 입력</span>
-            <div class="flex items-center gap-4">
-                <span id="user-email-display" class="text-sm font-medium text-slate-600"></span>
-                <button id="logout-button" class="text-sm font-bold text-red-500 hover:underline">로그아웃</button>
-            </div>
-        </div>
-        <div class="screen-body text-center">
-            <h2 class="text-3xl font-bold text-slate-800">무엇에 대해 토론할까요?</h2>
-            <p class="text-slate-600 mt-2 mb-8">AI 집단지성이 깊이 있는 통찰을 제공합니다.</p>
-            <div class="bg-slate-50 p-6 rounded-xl border">
-                <textarea id="topic-input" class="w-full h-28 p-3 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base" placeholder="예: 테슬라의 6개월 뒤 주가 전망"></textarea>
-                <div class="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4">
-                    <label class="flex items-center gap-2 text-sm text-slate-600 hover:text-primary cursor-pointer">
-                        <input type="file" id="file-input" class="hidden">
-                        📎 <span id="file-name-display">참고 파일 첨부 (TXT, PDF)</span>
-                    </label>
-                    <button id="start-analysis-button" class="btn btn-primary w-full sm:w-auto">분석 시작</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="screen-analysis" class="screen screen-card">
-        <div class="screen-header"><span>토론 준비: AI 분석 과정</span></div>
-        <div class="screen-body">
-            <div class="text-center mb-8">
-                <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mx-auto"></div>
-                <h2 id="analysis-status-text" class="text-2xl font-bold text-slate-800 mt-6">주제를 분석하고 있습니다...</h2>
-                <p class="text-slate-600 mt-2">최적의 토론을 위해 AI가 3단계에 걸쳐 준비합니다.</p>
-                <!-- 상세 진행 상황 메시지 추가 -->
-                <div class="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
-                    <p id="detail-progress-text" class="text-sm text-blue-700">
-                        진행 상황을 확인하고 있습니다...
-                    </p>
-                </div>
-            </div>
-            <div class="relative w-full max-w-2xl mx-auto p-4">
-                <div class="absolute top-1/2 left-0 w-full h-1 bg-slate-200 -translate-y-1/2"></div>
-                <div id="progress-bar" class="absolute top-1/2 left-0 h-1 bg-blue-500 -translate-y-1/2 transition-all duration-1000" style="width: 15%;"></div>
-                <div class="relative flex justify-between items-start">
-                    <div id="step-1" class="text-center z-10">
-                        <div class="w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto font-bold text-xl ring-4 ring-white">1</div>
-                        <p class="text-sm font-bold mt-3">주제 분석</p>
-                        <p id="step-1-status" class="text-xs text-slate-500">대기 중</p>
+        <div class="screen-card">
+            <div class="p-6 md:p-8">
+                <div class="bg-amber-50 border-2 border-amber-400 p-4 rounded-xl flex flex-col sm:flex-row items-center gap-4 mb-8">
+                    <span class="text-5xl">🧑‍⚖️</span>
+                    <div class="text-center sm:text-left flex-grow">
+                        <h3 class="text-lg font-bold text-amber-800">사회자</h3>
+                        <p class="text-sm text-slate-600 mt-1">Gemini 2.5 Flash</p>
                     </div>
-                    <div id="step-2" class="text-center z-10 opacity-50">
-                        <div class="w-12 h-12 rounded-full bg-white border-2 border-slate-300 flex items-center justify-center mx-auto font-bold text-xl text-slate-400 ring-4 ring-white">2</div>
-                        <p class="text-sm font-bold mt-3 text-slate-400">자료 수집</p>
-                        <p id="step-2-status" class="text-xs text-slate-500">대기 중</p>
-                    </div>
-                    <div id="step-3" class="text-center z-10 opacity-50">
-                        <div class="w-12 h-12 rounded-full bg-white border-2 border-slate-300 flex items-center justify-center mx-auto font-bold text-xl text-slate-400 ring-4 ring-white">3</div>
-                        <p class="text-sm font-bold mt-3 text-slate-400">패널 선정</p>
-                        <p id="step-3-status" class="text-xs text-slate-500">대기 중</p>
-                    </div>
+                    <p class="text-sm text-slate-500 text-center sm:text-right">토론의 전체 흐름을 관리하고, 사용자 개입을 조율하며, 토론 품질을 유지하는 핵심 역할을 수행합니다.</p>
                 </div>
-            </div>
-        </div>
-    </div>
 
-    <div id="screen-jury" class="screen">
-        <div class="max-w-7xl mx-auto">
-            <header class="text-center mb-12">
-                <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800">
-                    <span class="text-blue-600">배심원단</span> 구성하기
-                </h1>
-                <p class="mt-4 text-lg text-gray-600 max-w-3xl mx-auto">AI가 제안한 전문가 팀을 확인하고, 필요에 맞게 직접 수정하여 최적의 토론을 시작하세요.</p>
-            </header>
-
-            <div class="screen-card">
-                <div class="p-6 md:p-8">
-                    <div class="bg-amber-50 border-2 border-amber-400 p-4 rounded-xl flex flex-col sm:flex-row items-center gap-4 mb-8">
-                        <span class="text-5xl">🧑‍⚖️</span>
-                        <div class="text-center sm:text-left flex-grow">
-                            <h3 class="text-lg font-bold text-amber-800">사회자</h3>
-                            <p class="text-sm text-slate-600 mt-1">Gemini 2.5 Flash</p>
-                        </div>
-                        <p class="text-sm text-slate-500 text-center sm:text-right">토론의 전체 흐름을 관리하고, 사용자 개입을 조율하며, 토론 품질을 유지하는 핵심 역할을 수행합니다.</p>
-                    </div>
-
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="font-bold text-slate-700 text-xl">AI 전문가 에이전트</h3>
-                        <button id="add-agent-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition">＋ 전문가 추가하기</button>
-                    </div>
-                    
-                    <p class="text-center text-sm text-slate-500 mb-6">AI 추천 이유: 자율주행 기술의 다각적 분석을 위해 기술, 재무, 법률, HR, 그리고 비판적 관점의 전문가를 균형있게 배치했습니다.</p>
-                    
-                    <div id="jury-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <!-- Agent Cards will be dynamically inserted here -->
-                    </div>
-
-                    <div class="mt-12 text-center">
-                         <button id="start-debate-btn" class="w-full md:w-auto bg-blue-600 text-white font-bold py-4 px-8 rounded-lg text-xl hover:bg-blue-700 transition transform hover:scale-105">
-                            이 구성으로 토론 시작하기
-                        </button>
-                    </div>
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="font-bold text-slate-700 text-xl">AI 전문가 에이전트</h3>
+                    <button id="add-agent-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition">＋ 전문가 추가하기</button>
                 </div>
-            </div>
-        </div>
-    </div>
+                
+                <p class="text-center text-sm text-slate-500 mb-6">AI 추천 이유: 자율주행 기술의 다각적 분석을 위해 기술, 재무, 법률, HR, 그리고 비판적 관점의 전문가를 균형있게 배치했습니다.</p>
+                
+                <div id="jury-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Agent Cards will be dynamically inserted here -->
+                </div>
 
-    <div id="screen-5" class="screen screen-card" style="max-width: 80rem;">
-        <div class="screen-header">
-            <span>실시간 토론</span>
-            <button id="view-evidence-btn" class="btn btn-subtle text-sm py-2 px-4">📂 핵심 자료집 보기</button>
-        </div>
-
-        <div id="evidence-modal" class="modal fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden opacity-0 z-50">
-            <div class="screen-card w-full max-w-2xl max-h-[80vh] flex flex-col">
-                <div class="screen-header">
-                    <span>📂 핵심 자료집</span>
-                    <button class="text-2xl font-bold" onclick="toggleModal('evidence-modal')">&times;</button>
+                <div class="mt-12 text-center">
+                     <button id="start-debate-btn" class="w-full md:w-auto bg-blue-600 text-white font-bold py-4 px-8 rounded-lg text-xl hover:bg-blue-700 transition transform hover:scale-105">
+                        이 구성으로 토론 시작하기
+                    </button>
                 </div>
-                <div id="evidence-modal-body" class="screen-body overflow-y-auto">
-                    <p>데이터를 불러오는 중입니다...</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 bg-slate-50">
-            <div class="lg:col-span-2 h-[70vh] flex flex-col">
-                <div id="chatbox" class="flex-1 overflow-y-auto space-y-6 p-4 border rounded-lg bg-white shadow-inner">
-                    <div class="text-center text-slate-500">AI 에이전트들의 발언을 기다리고 있습니다...</div>
-                </div>
-                <div id="user-action-panel" class="pt-4"></div>
-            </div>
-
-            <div class="space-y-6">
-                <div id="critical-hit-panel" class="bg-white border p-4 rounded-xl">
-                    <h3 class="font-bold text-slate-700 text-lg mb-2">⚡ 결정적 발언</h3>
-                    <p class="text-sm text-slate-700">진행 중...</p>
-                </div>
-                <div class="bg-white border p-4 rounded-xl">
-                    <h3 class="font-bold text-slate-700 text-lg mb-4">🔄 토론 흐름도</h3>
-                    <div id="flow-diagram-container" class="relative">
-                        <p class="text-sm text-slate-700">진행 중...</p>
-                    </div>
-                </div>
-                <div class="bg-white border p-4 rounded-xl">
-                    <h3 class="font-bold text-slate-700 text-lg mb-4">📊 에이전트 입장 변화</h3>
-                    <div id="stance-tracker" class="space-y-3">
-                        <p class="text-sm text-slate-700">진행 중...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="screen-6" class="screen screen-card">
-        <div class="screen-header"><span>최종 분석 보고서</span></div>
-        <div class="screen-body">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-                <h2 class="text-3xl font-bold text-slate-800">최종 분석 보고서</h2>
-                <!--<button class="btn btn-secondary w-full sm:w-auto">📥 PDF 다운로드</button>-->
-            </div>
-            <div class="text-center p-8 border rounded-lg">
-                <h3 class="text-xl font-bold">보고서 생성 중...</h3>
-                <p class="text-slate-600 mt-2">토론이 종료되었으며, 최종 보고서가 백그라운드에서 생성되고 있습니다. 완료되면 이 화면이 자동으로 업데이트됩니다.</p>
-            </div>
-        </div>
-    </div>
-
-    <div id="report-modal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 hidden z-50">
-        <div class="screen-card w-full max-w-4xl h-[90vh] flex flex-col">
-            <div class="screen-header">
-                <span id="report-modal-title">최종 분석 보고서</span>
-                <div class="flex items-center gap-4">
-                    <button id="copy-report-html-btn" class="btn btn-primary text-sm py-2 px-4">HTML 복사</button>
-                    <!--<a href="#" id="report-pdf-download-btn" target="_blank" class="btn btn-primary text-sm py-2 px-4">📥 PDF 다운로드</a>-->
-                    <button class="text-2xl font-bold" onclick="toggleModal('report-modal')">&times;</button>
-                </div>
-            </div>
-            <div class="screen-body overflow-hidden p-0 flex-1">
-                <iframe id="report-modal-iframe" class="w-full h-full border-0"></iframe>
             </div>
         </div>
     </div>
@@ -270,7 +118,7 @@
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
             <div class="p-4 border-b flex justify-between items-center">
                 <h2 class="text-xl font-bold text-blue-800">전문가 에이전트 추가</h2>
-                <button class="text-2xl font-bold" onclick="toggleJuryModal('add-agent-modal')">&times;</button>
+                <button class="text-2xl font-bold" onclick="toggleModal('add-agent-modal')">&times;</button>
             </div>
             
             <!-- Search View -->
@@ -313,7 +161,8 @@
 
         </div>
     </div>
-    
+
+
     <script>
         // --- Mock Data ---
         const initialJury = [
@@ -352,7 +201,7 @@
             return name.replace(/[^a-zA-Z0-9가-힣]/g, '-');
         }
 
-        function toggleJuryModal(modalId) {
+        function toggleModal(modalId) {
             const modal = document.getElementById(modalId);
             if (modal.classList.contains('hidden')) {
                 modal.classList.remove('hidden');
@@ -453,7 +302,7 @@
                 item.querySelector('.add-searched-agent-btn').addEventListener('click', (e) => {
                     e.stopPropagation();
                     addAgentToJury({ ...agent, model: 'gemini-2.5-flash' }); 
-                    toggleJuryModal('add-agent-modal');
+                    toggleModal('add-agent-modal');
                 });
                 resultsContainer.appendChild(item);
             });
@@ -473,7 +322,7 @@
                 document.getElementById('agent-create-view').classList.add('hidden');
                 document.getElementById('agent-search-input').value = '';
                 document.getElementById('search-results-container').innerHTML = '<p class="text-center text-gray-500 pt-4">검색어를 입력하세요.</p>';
-                toggleJuryModal('add-agent-modal');
+                toggleModal('add-agent-modal');
             });
             
             document.getElementById('agent-search-btn').addEventListener('click', handleSearch);
@@ -503,7 +352,7 @@
                     return;
                 }
                 addAgentToJury(newAgent);
-                toggleJuryModal('add-agent-modal');
+                toggleModal('add-agent-modal');
             });
             
             document.getElementById('start-debate-btn').addEventListener('click', () => {
@@ -512,6 +361,6 @@
         });
 
     </script>
-    <script src="/static/js/main.js" defer></script>
 </body>
 </html>
+
