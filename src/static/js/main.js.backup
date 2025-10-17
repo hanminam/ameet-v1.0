@@ -785,6 +785,42 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
         }
 
         /**
+         * 분석 과정 3단계 애니메이션을 시뮬레이션하는 함수
+         */
+        /*
+        function runAnalysisAnimation() {
+            // UI 요소 가져오기
+            const progressBar = document.getElementById('progress-bar');
+            const analysisStatusText = document.getElementById('analysis-status-text');
+            const steps = {
+                1: { div: document.getElementById('step-1'), status: document.getElementById('step-1-status') },
+                2: { div: document.getElementById('step-2'), status: document.getElementById('step-2-status') },
+                3: { div: document.getElementById('step-3'), status: document.getElementById('step-3-status') }
+            };
+
+            // 2단계 진행
+            setTimeout(() => {
+                progressBar.style.width = '50%';
+                analysisStatusText.textContent = '웹 검색 및 파일 분석 중...';
+                steps[1].status.textContent = '완료';
+                steps[2].div.classList.remove('opacity-50');
+                steps[2].div.querySelector('div').className = 'w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto font-bold text-xl ring-4 ring-white';
+                steps[2].status.textContent = '자료 확보 중';
+            }, 1500); // 1.5초 후
+
+            // 3단계 진행
+            setTimeout(() => {
+                progressBar.style.width = '100%';
+                analysisStatusText.textContent = '최적의 전문가 팀 구성 중...';
+                steps[2].status.textContent = '완료';
+                steps[3].div.classList.remove('opacity-50');
+                steps[3].div.querySelector('div').className = 'w-12 h-12 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto font-bold text-xl ring-4 ring-white';
+                steps[3].status.textContent = '선발 중';
+            }, 3000); // 3초 후
+        }
+        */
+
+        /**
          * API 응답 데이터를 기반으로 배심원단 확인 화면을 동적으로 생성하는 함수
          * @param {object} teamData - /orchestrate API의 응답 데이터 (DebateTeam)
          */
@@ -1151,6 +1187,11 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
                 data: { discussionId, token }
             });
         }
+
+        // 기존 pollDiscussionStatus 함수는 이제 워커가 담당하므로 삭제하거나 주석 처리합니다.
+        /*
+         async function pollDiscussionStatus(discussionId) { ... }
+        */
 
         /**
         * 보고서와 PDF 다운로드 버튼을 화면에 표시하는 함수
@@ -1640,6 +1681,45 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
         }
 
         /**
+         * 대화록 데이터를 받아와 채팅창에 렌더링하는 함수
+         */
+        function renderTranscript(transcript, participants) {
+            const chatbox = document.getElementById('chatbox');
+            if (!chatbox) return;
+
+            // 참가자 목록에서 이름과 아이콘을 매핑
+            const participantMap = {};
+            if (participants) {
+                participants.forEach(p => {
+                    participantMap[p.name] = { icon: p.icon || '🤖' };
+                });
+            }
+
+            let html = '';
+            if (transcript.length === 0) {
+                html = '<div class="text-center text-slate-500">AI 에이전트들의 발언을 기다리고 있습니다...</div>';
+            } else {
+                transcript.forEach(turn => {
+                    const agentName = turn.agent_name;
+                    const message = turn.message.replace(/\n/g, '<br>'); // 줄바꿈 처리
+                    const icon = participantMap[agentName]?.icon || '🤖';
+
+                    html += `
+                        <div class="flex gap-3 my-4 animate-fade-in">
+                            <div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>
+                            <div>
+                                <p class="text-sm font-bold text-slate-800">${agentName}</p>
+                                <div class="bg-slate-100 p-3 rounded-lg mt-1 text-base inline-block">${message}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            chatbox.innerHTML = html;
+            //chatbox.scrollTop = chatbox.scrollHeight; // 자동 스크롤
+        }
+
+        /**
          * Staff 및 시스템 메시지를 위한 통합 렌더링 함수
          */
         function appendSystemMessage(turn) {
@@ -1735,6 +1815,41 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
             
             isRendering = false;
             processMessageQueue(); // After finishing, check if more messages queued up
+        }
+
+        /**
+         * Staff 에이전트 메시지를 위한 렌더링 함수
+         */
+        function appendStaffMessage(turn) {
+            const chatbox = document.getElementById('chatbox');
+            const data = JSON.parse(turn.message);
+            let contentHtml = '';
+            let icon = '';
+            let colorClass = '';
+
+            if (turn.agent_name === 'SNR 전문가') {
+                icon = '📈';
+                colorClass = 'text-blue-600';
+                contentHtml = `<strong>SNR Score:</strong> ${data.snr_score} - ${data.reason}`;
+            } else { // 정보 검증부
+                icon = '✅';
+                colorClass = 'text-green-600';
+                if (data.status === '주의 필요') {
+                    icon = '⚠️';
+                    colorClass = 'text-orange-600';
+                }
+                contentHtml = `<strong>검증 상태:</strong> ${data.reason}`;
+            }
+
+            const staffMessageHtml = `
+                <div class="flex justify-center items-center gap-2 my-2 text-xs font-semibold animate-fade-in ${colorClass}">
+                    <span>${icon}</span>
+                    <span>[${turn.agent_name}]</span>
+                    <span>${contentHtml}</span>
+                </div>
+            `;
+            chatbox.insertAdjacentHTML('beforeend', staffMessageHtml);
+            chatbox.scrollTop = chatbox.scrollHeight;
         }
 
         /**
@@ -1904,12 +2019,169 @@ let evidenceDataCache = null; // 핵심 자료집 데이터를 캐싱할 변수
                             </div>
                         </div>`;
                     chatbox.appendChild(indicator);
+                    //chatbox.scrollTop = chatbox.scrollHeight;
                 }
             } else {
                 if (indicator) {
                     indicator.remove();
                 }
             }
+        }
+
+        /**
+         * 특정 에이전트의 "입력 중..." 인디케이터를 생성하고 반환하는 함수 (수정된 버전)
+         */
+        function showTypingIndicator(turn, participantMap, shouldScroll) {
+            const chatbox = document.getElementById('chatbox');
+            const agentName = turn.agent_name;
+            
+            // participantMap에서 에이전트의 전체 정보를 가져옵니다.
+            const agentDetails = participantMap[agentName] || {};
+            const icon = agentDetails.icon || '🤖';
+            const modelName = agentDetails.model || ''; // 모델 이름 추출
+
+            const alignment = getAlignmentInfo(regularMessageCount);
+            const indicator = document.createElement('div');
+            indicator.className = alignment.containerClasses;
+
+            const iconHtml = `<div class="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center text-xl">${icon}</div>`;
+            
+            // [수정] 에이전트 이름 아래에 모델명을 표시하는 HTML 추가
+            const typingHtml = `
+                <div class="flex flex-col ${alignment.isIconFirst ? '' : 'items-end'}">
+                    <p class="text-sm font-bold text-slate-800">${agentName}</p>
+                    <p class="text-xs text-slate-500 -mt-1">${modelName}</p>
+                    <div class="p-3 rounded-lg mt-1 inline-flex items-center gap-1 ${alignment.bubbleClasses}">
+                        <span class="typing-dot animate-bounce">.</span>
+                        <span class="typing-dot animate-bounce" style="animation-delay: 0.2s">.</span>
+                        <span class="typing-dot animate-bounce" style="animation-delay: 0.4s">.</span>
+                    </div>
+                </div>`;
+            
+            indicator.innerHTML = alignment.isIconFirst ? iconHtml + typingHtml : typingHtml + iconHtml;
+            
+            chatbox.appendChild(indicator);
+            if (shouldScroll) {
+                chatbox.scrollTop = chatbox.scrollHeight;
+            }
+            return indicator;
+        }
+
+        /**
+         * '토론 흐름도' 패널을 원형으로 렌더링하는 새로운 함수
+         */
+        function renderCircularFlowDiagram(interactions, participants) {
+            const container = document.getElementById('flow-diagram-container');
+            
+            // --- [로그 #1: 데이터 수신 확인] ---
+            // 이 로그는 백엔드에서 상호작용 데이터가 정상적으로 넘어왔는지 확인하는 첫 관문입니다.
+            console.log('%c[Flow Diagram] 1. Rendering Started', 'color: blue; font-weight: bold;', {
+                'Received Interactions': interactions,
+                'Received Participants': participants
+            });
+
+            if (!container) {
+                console.error('[Flow Diagram] Error: Container element #flow-diagram-container not found!');
+                return;
+            }
+            // [로그 추가] interactions 데이터가 없거나 비어있는 경우, 명시적으로 로그를 남기고 함수를 종료합니다.
+            if (!interactions || interactions.length === 0) {
+                console.warn('[Flow Diagram] ⚠️ Warning: No interactions data to display. Arrow rendering will be skipped.');
+                container.innerHTML = '<p class="text-sm text-center text-slate-500">이번 라운드에서는 에이전트 간의 직접적인 상호작용이 감지되지 않았습니다.</p>';
+                container.style.height = 'auto'; // 높이 초기화
+                return;
+            }
+
+            container.innerHTML = ''; // 컨테이너 초기화
+            container.style.height = '250px';
+
+            const participantMap = getParticipantMap(participants);
+            const juryNames = participants
+                .filter(p => p.name !== '재판관')
+                .map(p => p.name);
+
+            const agentNodes = {};
+            const radius = 100;
+            const centerX = container.offsetWidth / 2;
+            const centerY = container.offsetHeight / 2;
+
+            // 에이전트 아이콘을 원형으로 배치 (이 부분은 정상 동작하므로 로그 생략)
+            juryNames.forEach((name, i) => {
+                const angle = (i / juryNames.length) * 2 * Math.PI - (Math.PI / 2);
+                const x = centerX + radius * Math.cos(angle) - 24;
+                const y = centerY + radius * Math.sin(angle) - 24;
+
+                const agentNode = document.createElement('div');
+                agentNode.id = `agent-node-${name.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                agentNode.className = 'flex flex-col items-center text-center cursor-pointer absolute';
+                agentNode.style.left = `${x}px`;
+                agentNode.style.top = `${y}px`;
+                agentNode.innerHTML = `
+                    <div class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-2xl">${participantMap[name].icon}</div>
+                    <p class="text-xs font-bold mt-1 w-20 truncate">${name}</p>
+                `;
+                container.appendChild(agentNode);
+                agentNodes[name] = agentNode;
+            });
+
+            // DOM 렌더링 후 화살표 그리기
+            setTimeout(() => {
+                const lines = [];
+                
+                // --- [로그 #2: 상호작용 루프 실행 확인] ---
+                // 이 로그는 수신된 interactions 배열을 순회하며 화살표를 그리려는 시도가 시작되었음을 보여줍니다.
+                console.log('%c[Flow Diagram] 2. Starting to draw arrows...', 'color: blue;');
+
+                interactions.forEach((flow, index) => {
+                    const fromNode = agentNodes[flow.from];
+                    const toNode = agentNodes[flow.to];
+                    
+                    // --- [로그 #3: 노드 존재 여부 확인] ---
+                    // 이 로그는 화살표를 그릴 시작점(from)과 끝점(to)이 DOM에 실제로 존재하는지 확인합니다.
+                    if (fromNode && toNode) {
+                        console.log(`[Flow Diagram] 2.1. Drawing arrow #${index + 1}: ${flow.from} -> ${flow.to}`);
+                        const colorClass = `flow-line-color-${juryNames.indexOf(flow.from) % 7}`;
+                        const line = createFlowLine(fromNode, toNode, colorClass);
+                        line.dataset.fromAgent = flow.from;
+                        container.appendChild(line);
+                        lines.push(line);
+                    } else {
+                        // 만약 노드를 찾지 못했다면, 왜 실패했는지 상세한 정보를 로그로 남깁니다.
+                        console.error(`[Flow Diagram] ❌ Error: Could not find nodes for flow: ${flow.from} -> ${flow.to}`,
+                            {
+                                'From Node Found': !!fromNode,
+                                'To Node Found': !!toNode,
+                                'Agent Nodes Map': agentNodes
+                            });
+                    }
+                });
+
+                // --- [로그 #4: 마우스 이벤트 리스너 추가 확인] ---
+                console.log('%c[Flow Diagram] 3. Adding mouse event listeners to agent nodes.', 'color: blue;');
+
+                // 모든 에이전트 노드에 마우스 이벤트 리스너 추가
+                Object.values(agentNodes).forEach(node => {
+                    node.addEventListener('mouseenter', () => {
+                        const agentName = node.querySelector('p').textContent;
+                        lines.forEach(line => {
+                            if (line.dataset.fromAgent === agentName) {
+                                line.classList.add('highlighted');
+                                line.classList.remove('dimmed');
+                            } else {
+                                line.classList.add('dimmed');
+                                line.classList.remove('highlighted');
+                            }
+                        });
+                    });
+
+                    node.addEventListener('mouseleave', () => {
+                        lines.forEach(line => {
+                            line.classList.remove('highlighted', 'dimmed');
+                        });
+                    });
+                });
+
+            }, 100); // DOM이 렌더링될 시간을 줍니다.
         }
 
         // --- Event Listeners ---
